@@ -7,7 +7,22 @@ window.openReader = async function(bookId) {
     window.book = ePub(bookData.buffer);
     document.getElementById('reader-container').style.display = 'flex';
     
-    window.rendition = window.book.renderTo("viewer", { width: "100%", height: "100%", spread: "none" });
+    // Detect if the user is on a PC/Desktop (checks screen width and user agent)
+    const isPC = window.innerWidth > 768 && !(/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent));
+    
+    let renderOptions = { 
+        width: "100%", 
+        height: "100%", 
+        spread: "none" 
+    };
+
+    // If on PC, enable Web Novel style continuous vertical scrolling
+    if (isPC) {
+        renderOptions.manager = "continuous";
+        renderOptions.flow = "scrolled";
+    }
+    
+    window.rendition = window.book.renderTo("viewer", renderOptions);
     
     // Set Pure Black Dark Theme
     window.rendition.themes.register("dark", { "body": { "background": "#000000", "color": "#e4e4e7" }});
@@ -28,12 +43,34 @@ window.openReader = async function(bookId) {
             localStorage.setItem('bookmark-' + bookId, location.start.cfi);
         });
 
+        // --- MOBILE SWIPE GESTURES (Only triggers on touch devices) ---
+        window.rendition.hooks.content.register(function(contents) {
+            let touchStartX = 0;
+            let touchEndX = 0;
+
+            contents.document.addEventListener('touchstart', e => {
+                touchStartX = e.changedTouches[0].screenX;
+            }, { passive: true });
+
+            contents.document.addEventListener('touchend', e => {
+                touchEndX = e.changedTouches[0].screenX;
+                handleSwipe();
+            }, { passive: true });
+
+            function handleSwipe() {
+                const threshold = 60; // Minimum pixels needed to trigger a swipe
+                // On PC continuous scroll, swipe left/right won't break anything, 
+                // but usually PCs don't trigger touch events anyway.
+                if (touchEndX < touchStartX - threshold) window.rendition.next();
+                if (touchEndX > touchStartX + threshold) window.rendition.prev();
+            }
+        });
+
         // Generate Table of Contents with Page Numbers
         window.book.loaded.navigation.then(function(toc) {
             const tocList = document.getElementById('toc-list');
             tocList.innerHTML = '';
             
-            // 1. Draw TOC instantly to not block the UI
             toc.forEach(function(chapter, index) {
                 let li = document.createElement('li');
                 li.className = 'list-item';
@@ -46,7 +83,6 @@ window.openReader = async function(bookId) {
                 tocList.appendChild(li);
             });
 
-            // 2. Generate locations asynchronously in background to find page numbers
             window.book.locations.generate(1024).then(() => {
                 toc.forEach(function(chapter, index) {
                     let spineItem = window.book.spine.get(chapter.href);
@@ -59,8 +95,10 @@ window.openReader = async function(bookId) {
                     if(pageSpan) pageSpan.innerText = pageNum ? `Pg. ${pageNum}` : '';
                 });
             }).catch(() => {
-                // If it fails, clear the '...' dots
-                toc.forEach((c, i) => document.getElementById('toc-page-' + i).innerText = '');
+                toc.forEach((c, i) => {
+                    let el = document.getElementById('toc-page-' + i);
+                    if (el) el.innerText = '';
+                });
             });
         });
     });
@@ -88,8 +126,6 @@ window.updateSettings = function() {
 
     window.rendition.themes.fontSize(fontSize);
     window.rendition.themes.font(fontFamily);
-    
-    // Instead of overriding the theme completely, inject the CSS rule safely
     window.rendition.themes.override('line-height', lineHeight + ' !important');
     window.rendition.themes.override('color', textColor + ' !important');
 };

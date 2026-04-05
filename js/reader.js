@@ -21,12 +21,10 @@ window.openReader = async function(bookId, pushHistory = true) {
     const pinTaskbar = localStorage.getItem('pin-taskbar') !== 'false';
     document.getElementById('set-pin-taskbar').checked = pinTaskbar;
 
-    // -------------------------------------------------------------
-    // FIXED: EXACT PIXEL DIMENSIONS FIXES THE BLACK PAGE BUG
-    // -------------------------------------------------------------
+    // Use 100% so the iframe perfectly hugs the container without breaking math
     let renderOptions = { 
-        width: window.innerWidth, 
-        height: window.innerHeight, 
+        width: "100%", 
+        height: "100%", 
         spread: "none" 
     };
     
@@ -40,22 +38,14 @@ window.openReader = async function(bookId, pushHistory = true) {
     
     window.rendition = window.book.renderTo("viewer", renderOptions);
     
-    // Auto-resize the reader when rotating the phone to prevent text clipping
-    window.addEventListener("resize", () => {
-        if (window.rendition) {
-            window.rendition.resize(window.innerWidth, window.innerHeight);
-        }
-    });
-    
     // -------------------------------------------------------------
-    // FIXED: IMAGE SIZING AND STRICT OVERFLOW CSS
+    // FIXED: STRIPPED AGGRESSIVE CSS THAT WAS DELETING PAGES
     // -------------------------------------------------------------
     let themeCSS = {
         "img": { 
             "max-width": "100% !important", 
-            "max-height": "90vh !important", /* Stops giant covers from creating blank columns */
+            "max-height": "90vh !important", 
             "object-fit": "contain !important",
-            "break-inside": "avoid !important",
             "display": "block !important", 
             "margin": "0 auto !important" 
         },
@@ -65,22 +55,20 @@ window.openReader = async function(bookId, pushHistory = true) {
     };
 
     if (savedMode === 'continuous' || savedMode === 'scrolled') {
+        // Continuous mode gets centered and constrained
         themeCSS["html"] = { "overflow-x": "hidden" };
         themeCSS["body"] = { 
             "max-width": "900px !important", 
             "margin": "0 auto !important", 
-            "padding": "0 20px !important",
-            "padding-bottom": "80px !important", 
+            "padding": "0 20px 80px 20px !important",
             "overflow-x": "hidden" 
         };
     } else {
-        // STRICT rules for paginated mode
-        themeCSS["html"] = { "overflow": "hidden !important" };
+        // Paginated mode gets NOTHING except the command to block native swipe-backs
         themeCSS["body"] = { 
             "margin": "0 !important", 
-            "padding": "0 10px !important", /* Small breathing room */
-            "overflow": "hidden !important",
-            "box-sizing": "border-box !important"
+            "padding": "0 !important",
+            "touch-action": "pan-y !important"
         };
     }
 
@@ -127,44 +115,41 @@ window.openReader = async function(bookId, pushHistory = true) {
             });
         });
 
-        // -------------------------------------------------------------
-        // FIXED: HIGH-CATCH SWIPE DETECTOR (Double Bound)
-        // -------------------------------------------------------------
-        let touchStartX = 0;
-        let touchStartTime = 0;
-
-        const handleTouchStart = (e) => {
-            let touch = e.changedTouches ? e.changedTouches[0] : e.touches[0];
-            touchStartX = touch.screenX; // screenX is immune to iframe boundary bugs
-            touchStartTime = Date.now();
-        };
-
-        const handleTouchEnd = (e) => {
-            let touch = e.changedTouches ? e.changedTouches[0] : e.touches[0];
-            let touchEndX = touch.screenX;
-            let diffX = touchStartX - touchEndX; 
-            let timeTaken = Date.now() - touchStartTime;
-
-            // Highly forgiving swipe logic: Just needs to be fast (<800ms) and intentional (>40px)
-            if (timeTaken < 800 && Math.abs(diffX) > 40) {
-                if (diffX > 0) window.rendition.next();
-                else window.rendition.prev();
-            }
-        };
-
-        // Bind to outer wrapper
-        window.rendition.on('touchstart', handleTouchStart);
-        window.rendition.on('touchend', handleTouchEnd);
-
         window.rendition.hooks.content.register(function(contents) {
             const taskbar = document.getElementById('bottom-taskbar');
             const pinCheckbox = document.getElementById('set-pin-taskbar');
 
-            // Bind to inner wrapper
-            contents.window.addEventListener('touchstart', handleTouchStart, { passive: true });
-            contents.window.addEventListener('touchend', handleTouchEnd, { passive: true });
+            // -------------------------------------------------------------
+            // FIXED: CLEAN AND HIGHLY RESPONSIVE SWIPE
+            // -------------------------------------------------------------
+            let startX = 0;
+            let startY = 0;
+            let startTime = 0;
 
-            // Auto-hide scroll logic
+            contents.document.addEventListener('touchstart', e => {
+                startX = e.changedTouches[0].clientX;
+                startY = e.changedTouches[0].clientY;
+                startTime = Date.now();
+            }, { passive: true });
+
+            contents.document.addEventListener('touchend', e => {
+                let endX = e.changedTouches[0].clientX;
+                let endY = e.changedTouches[0].clientY;
+                let diffX = startX - endX; // Positive if swiping left
+                let diffY = Math.abs(startY - endY);
+                let timeTaken = Date.now() - startTime;
+
+                // If swipe is fast (<600ms), long enough (>30px), and horizontal
+                if (timeTaken < 600 && Math.abs(diffX) > 30 && Math.abs(diffX) > diffY) {
+                    if (diffX > 0) {
+                        window.rendition.next();
+                    } else {
+                        window.rendition.prev();
+                    }
+                }
+            }, { passive: true });
+
+            // Auto-hide scroll logic (only runs in continuous)
             let lastScrollTop = 0;
             contents.window.addEventListener('scroll', function() {
                 if (pinCheckbox.checked) {
@@ -180,7 +165,7 @@ window.openReader = async function(bookId, pushHistory = true) {
                 lastScrollTop = st <= 0 ? 0 : st;
             }, { passive: true });
 
-            // Tap screen to show menu
+            // Tap screen to show/hide menu
             contents.document.addEventListener('click', function(e) {
                 if (e.target.tagName.toLowerCase() === 'a') return;
                 const selection = contents.window.getSelection();
@@ -191,7 +176,7 @@ window.openReader = async function(bookId, pushHistory = true) {
             });
         });
 
-        // Recursive TOC Generation
+        // TOC Generation
         window.book.loaded.navigation.then(function(toc) {
             const tocList = document.getElementById('toc-list');
             tocList.innerHTML = '';

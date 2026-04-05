@@ -33,7 +33,7 @@ window.openReader = async function(bookId, pushHistory = true) {
     
     window.rendition = window.book.renderTo("viewer", renderOptions);
     
-    // Conditional Themes to stop the Black Pages bug
+    // Strict Conditional CSS Injection
     let themeCSS = {
         "img": { "max-width": "100% !important", "height": "auto !important", "display": "block !important", "margin": "0 auto !important" },
         "::-webkit-scrollbar": { "width": "6px", "height": "6px" },
@@ -72,11 +72,33 @@ window.openReader = async function(bookId, pushHistory = true) {
         if (savedCfi) window.rendition.display(savedCfi);
         else window.rendition.display();
 
+        // -------------------------------------------------------------
+        // FIXED: TOC MATCHING LOGIC (Strips Anchor Tags)
+        // -------------------------------------------------------------
         window.rendition.on('relocated', function(location) {
-            const navItem = window.book.navigation.get(location.start.href);
-            document.getElementById('chapter-title').innerText = navItem ? navItem.label : bookData.title;
+            let currentHref = location.start.href;
+            let navItem = window.book.navigation.get(currentHref);
+            
+            // Fallback Search: Manually iterate the TOC and strip '#' anchors to find a match
+            if (!navItem) {
+                const findNavItem = (items) => {
+                    for (let item of items) {
+                        let baseHref = item.href.split('#')[0];
+                        if (baseHref === currentHref || currentHref.includes(baseHref)) return item;
+                        if (item.subitems && item.subitems.length > 0) {
+                            let subMatch = findNavItem(item.subitems);
+                            if (subMatch) return subMatch;
+                        }
+                    }
+                    return null;
+                };
+                navItem = findNavItem(window.book.navigation.toc);
+            }
+
+            document.getElementById('chapter-title').innerText = navItem ? navItem.label.trim() : bookData.title;
             localStorage.setItem('bookmark-' + bookId, location.start.cfi);
 
+            // Highlight active TOC item
             document.querySelectorAll('#toc-list .list-item').forEach(li => {
                 li.classList.remove('active-toc');
                 if (navItem && li.dataset.href === navItem.href) {
@@ -85,42 +107,37 @@ window.openReader = async function(bookId, pushHistory = true) {
             });
         });
 
+        // -------------------------------------------------------------
+        // FIXED: IFRAME-BOUND SWIPE LOGIC
+        // -------------------------------------------------------------
         window.rendition.hooks.content.register(function(contents) {
             const taskbar = document.getElementById('bottom-taskbar');
             const pinCheckbox = document.getElementById('set-pin-taskbar');
 
-            // -------------------------------------------------------------
-            // FIXED: IPHONE-SPECIFIC SWIPE LOGIC
-            // -------------------------------------------------------------
             let touchStartX = 0;
             let touchStartY = 0;
             let touchStartTime = 0;
 
-            // Step 1: Force iOS to recognize iframe touch boundaries
+            // Block Safari horizontal gesture history
             contents.document.documentElement.style.touchAction = 'pan-y';
             if (contents.document.body) contents.document.body.style.touchAction = 'pan-y';
 
-            // Step 2: Use clientX instead of screenX
             contents.document.addEventListener('touchstart', e => {
                 touchStartX = e.touches[0].clientX;
                 touchStartY = e.touches[0].clientY;
                 touchStartTime = Date.now();
             }, { passive: true });
 
-            // Step 3: THE MOST IMPORTANT IPHONE FIX - Kill Safari's gesture hijacking
             contents.document.addEventListener('touchmove', e => {
                 let currentX = e.touches[0].clientX;
                 let currentY = e.touches[0].clientY;
                 let diffX = touchStartX - currentX;
-                let diffY = touchStartY - currentY;
-
-                // If the user is swiping horizontally, explicitly block Safari from navigating back/forward
-                if (Math.abs(diffX) > Math.abs(diffY)) {
+                let diffY = Math.abs(touchStartY - currentY);
+                if (Math.abs(diffX) > diffY) {
                     e.preventDefault(); 
                 }
-            }, { passive: false }); // MUST be false to allow preventDefault on iOS
+            }, { passive: false }); 
 
-            // Step 4: Execute the page turn
             contents.document.addEventListener('touchend', e => {
                 let touchEndX = e.changedTouches[0].clientX;
                 let touchEndY = e.changedTouches[0].clientY;
@@ -134,7 +151,6 @@ window.openReader = async function(bookId, pushHistory = true) {
                     else window.rendition.prev();
                 }
             }, { passive: true });
-
 
             // Auto-hide scroll logic
             let lastScrollTop = 0;
@@ -163,7 +179,9 @@ window.openReader = async function(bookId, pushHistory = true) {
             });
         });
 
-        // Recursive TOC Generation
+        // -------------------------------------------------------------
+        // FIXED: RECURSIVE TOC DISPLAY
+        // -------------------------------------------------------------
         window.book.loaded.navigation.then(function(toc) {
             const tocList = document.getElementById('toc-list');
             tocList.innerHTML = '';

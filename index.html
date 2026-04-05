@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Modern Web Reader</title>
+    <title>Epub Reader</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js"></script>
@@ -11,7 +11,6 @@
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-    
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -57,7 +56,7 @@
 
     <div id="reader-container">
         <div id="viewer"></div>
-        <div class="bottom-bar">
+        <div class="bottom-bar" id="bottom-taskbar">
             <div class="bar-group">
                 <button class="icon-btn" onclick="closeReader()" title="Back to Library"><i class="ph ph-house"></i></button>
                 <button class="icon-btn" onclick="rendition.prev()"><i class="ph ph-caret-left"></i></button>
@@ -134,13 +133,19 @@
                 <option value="Georgia, serif">Georgia</option>
                 <option value="'Times New Roman', Times, serif">Times New Roman</option>
                 <option value="Arial, Helvetica, sans-serif">Arial</option>
-                <option value="Verdana, Geneva, sans-serif">Verdana</option>
-                <option value="'Courier New', Courier, monospace">Courier New</option>
             </select>
         </div>
-        <div class="setting-group" style="display: flex; align-items: center; justify-content: space-between;">
-            <label style="margin-bottom: 0;">Text Color</label>
-            <input type="color" id="set-text-color" value="#e4e4e7" onchange="updateSettings()" style="width: 40px; height: 30px;">
+        <div class="setting-group">
+            <label>Text Color
+                <input type="color" id="set-text-color" value="#e4e4e7" onchange="updateSettings()" style="width: 30px; height: 30px;">
+            </label>
+        </div>
+        
+        <div class="setting-group" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);">
+            <label style="cursor: pointer;">
+                Pin Taskbar (Don't Hide)
+                <input type="checkbox" id="set-pin-taskbar" onchange="updateSettings()" style="width: auto;">
+            </label>
         </div>
     </div>
 

@@ -1,3 +1,4 @@
+// Added "pushHistory" parameter for browser back/forward buttons
 window.openReader = async function(bookId, pushHistory = true) {
     if (pushHistory) {
         history.pushState({ view: 'reader', bookId: bookId }, '', '#reader');
@@ -11,6 +12,7 @@ window.openReader = async function(bookId, pushHistory = true) {
     window.book = ePub(bookData.buffer);
     document.getElementById('reader-container').style.display = 'flex';
     
+    // Detect if user is on PC for continuous vertical scrolling
     const isPC = window.innerWidth > 768 && !(/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent));
     let renderOptions = { width: "100%", height: "100%", spread: "none" };
 
@@ -21,9 +23,12 @@ window.openReader = async function(bookId, pushHistory = true) {
     
     window.rendition = window.book.renderTo("viewer", renderOptions);
     
+    // Default formatting rules injected directly into the EPUB iframe
     window.rendition.themes.default({
         "img": {
             "max-width": "100% !important",
+            "max-height": "90vh !important", /* Prevents image from blocking scroll */
+            "object-fit": "contain !important",
             "height": "auto !important",
             "display": "block",
             "margin": "0 auto"
@@ -51,6 +56,7 @@ window.openReader = async function(bookId, pushHistory = true) {
             localStorage.setItem('bookmark-' + bookId, location.start.cfi);
         });
 
+        // Mobile swipe gestures
         window.rendition.hooks.content.register(function(contents) {
             let touchStartX = 0; let touchEndX = 0;
             contents.document.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; }, { passive: true });
@@ -62,6 +68,7 @@ window.openReader = async function(bookId, pushHistory = true) {
             }, { passive: true });
         });
 
+        // Table of contents with background page calculation
         window.book.loaded.navigation.then(function(toc) {
             const tocList = document.getElementById('toc-list');
             tocList.innerHTML = '';

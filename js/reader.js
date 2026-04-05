@@ -21,12 +21,11 @@ window.openReader = async function(bookId, pushHistory = true) {
     const pinTaskbar = localStorage.getItem('pin-taskbar') !== 'false';
     document.getElementById('set-pin-taskbar').checked = pinTaskbar;
 
-    // FIXED: Added manager: "continuous" to enable cross-chapter scrolling natively
     let renderOptions = { 
         width: "100%", 
         height: "100%", 
         spread: "none",
-        manager: savedMode === 'continuous' ? "continuous" : "default",
+        manager: "default",
         flow: savedMode === 'continuous' || savedMode === 'scrolled' ? "scrolled-doc" : "paginated"
     };
     
@@ -37,12 +36,12 @@ window.openReader = async function(bookId, pushHistory = true) {
     });
     
     // -------------------------------------------------------------
-    // CSS THEME INJECTION (Stored globally so Settings can update it)
+    // CSS THEME INJECTION
     // -------------------------------------------------------------
-    window.baseThemeCSS = {
+    window.currentThemeCSS = {
         "img": { 
             "max-width": "100% !important", 
-            "height": "auto !important", // FIXED: Removed vh units to prevent tiny image bugs
+            "max-height": "90vh !important",
             "object-fit": "contain !important",
             "display": "block !important", 
             "margin": "0 auto !important" 
@@ -53,21 +52,23 @@ window.openReader = async function(bookId, pushHistory = true) {
     };
 
     if (savedMode === 'continuous' || savedMode === 'scrolled') {
-        window.baseThemeCSS["html"] = { "overflow-x": "hidden" };
-        window.baseThemeCSS["body"] = { 
+        window.currentThemeCSS["html"] = { "overflow-x": "hidden" };
+        window.currentThemeCSS["body"] = { 
             "max-width": "900px !important", 
             "margin": "0 auto !important", 
             "padding": "0 20px 80px 20px !important",
             "overflow-x": "hidden" 
         };
     } else {
-        window.baseThemeCSS["body"] = { 
+        window.currentThemeCSS["html"] = { "touch-action": "pan-y !important" };
+        window.currentThemeCSS["body"] = { 
             "padding": "0 !important",
             "margin": "0 !important",
+            "touch-action": "pan-y !important"
         };
     }
 
-    window.rendition.themes.default(window.baseThemeCSS);
+    window.rendition.themes.default(window.currentThemeCSS);
     window.rendition.themes.register("dark", { "body": { "background": "#000000", "color": "#e4e4e7" }});
     window.rendition.themes.register("light", { "body": { "background": "#ffffff", "color": "#18181b" }});
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
@@ -99,8 +100,21 @@ window.openReader = async function(bookId, pushHistory = true) {
                 navItem = findNavItem(window.book.navigation.toc);
             }
 
-            document.getElementById('chapter-title').innerText = navItem ? navItem.label.trim() : bookData.title;
+            let chapterLabel = navItem ? navItem.label.trim() : bookData.title;
+            document.getElementById('chapter-title').innerText = chapterLabel;
             localStorage.setItem('bookmark-' + bookId, location.start.cfi);
+
+            // FIXED: Calculate percentage and save it as a JSON object for the Library to read
+            let percent = 0;
+            if (window.book.locations && window.book.locations.total > 0) {
+                let percentageFloat = window.book.locations.percentageFromCfi(location.start.cfi);
+                percent = Math.max(0, Math.min(100, Math.round(percentageFloat * 100)));
+            }
+            
+            localStorage.setItem('progress-' + bookId, JSON.stringify({
+                chapter: chapterLabel,
+                percentage: percent
+            }));
 
             document.querySelectorAll('#toc-list .list-item').forEach(li => {
                 li.classList.remove('active-toc');
@@ -111,7 +125,7 @@ window.openReader = async function(bookId, pushHistory = true) {
         });
 
         // -------------------------------------------------------------
-        // HOOKS: SWIPE (Paginated Only), CLICK, & SCROLL
+        // HOOKS: Mobile Swipe & Standard Interactions
         // -------------------------------------------------------------
         window.rendition.hooks.content.register(function(contents) {
             let startX = 0;
@@ -120,16 +134,14 @@ window.openReader = async function(bookId, pushHistory = true) {
             const iframeDoc = contents.document;
             
             iframeDoc.addEventListener('touchstart', e => {
-                startX = e.changedTouches[0].screenX;
-                startY = e.changedTouches[0].screenY;
+                startX = e.changedTouches[0].clientX;
+                startY = e.changedTouches[0].clientY;
                 isSwiping = false; 
             }, { passive: true });
 
-            const isPassive = savedMode === 'continuous' ? true : false;
-
             iframeDoc.addEventListener('touchmove', e => {
-                let currentX = e.changedTouches[0].screenX;
-                let currentY = e.changedTouches[0].screenY;
+                let currentX = e.changedTouches[0].clientX;
+                let currentY = e.changedTouches[0].clientY;
                 let diffX = Math.abs(startX - currentX);
                 let diffY = Math.abs(startY - currentY);
 
@@ -137,12 +149,10 @@ window.openReader = async function(bookId, pushHistory = true) {
                     isSwiping = true;
                 }
 
-                if (savedMode === 'paginated') {
-                    if (diffX > diffY && diffX > 10) {
-                        if (e.cancelable) e.preventDefault();
-                    }
+                if (savedMode === 'paginated' && diffX > diffY && diffX > 10) {
+                    if (e.cancelable) e.preventDefault();
                 }
-            }, { passive: isPassive });
+            }, { passive: savedMode === 'paginated' ? false : true });
 
             iframeDoc.addEventListener('touchcancel', e => {
                 isSwiping = false;
@@ -151,12 +161,12 @@ window.openReader = async function(bookId, pushHistory = true) {
             iframeDoc.addEventListener('touchend', e => {
                 if (!isSwiping) return;
 
-                let endX = e.changedTouches[0].screenX;
-                let endY = e.changedTouches[0].screenY;
+                let endX = e.changedTouches[0].clientX;
+                let endY = e.changedTouches[0].clientY;
                 let diffX = startX - endX; 
                 let diffY = Math.abs(startY - endY);
 
-                if (savedMode === 'paginated' && Math.abs(diffX) > 40 && Math.abs(diffX) > diffY) {
+                if (savedMode === 'paginated' && Math.abs(diffX) > 40 && Math.abs(diffX) > diffY * 1.5) {
                     if (diffX > 0) window.rendition.next();
                     else window.rendition.prev();
                 }
@@ -199,7 +209,7 @@ window.openReader = async function(bookId, pushHistory = true) {
         });
 
         // -------------------------------------------------------------
-        // TOC FLATTENING
+        // TOC FLATTENING & LOCATIONS GENERATION
         // -------------------------------------------------------------
         window.book.loaded.navigation.then(function(toc) {
             const tocList = document.getElementById('toc-list');
@@ -247,6 +257,20 @@ window.openReader = async function(bookId, pushHistory = true) {
                         span.innerText = '';
                     }
                 });
+
+                // FIXED: Update progress bar immediately after locations finish generating
+                const currentLocation = window.rendition.currentLocation();
+                if (currentLocation && currentLocation.start) {
+                    let chapterLabel = document.getElementById('chapter-title').innerText;
+                    let percentageFloat = window.book.locations.percentageFromCfi(currentLocation.start.cfi);
+                    let percent = Math.max(0, Math.min(100, Math.round(percentageFloat * 100)));
+                    
+                    localStorage.setItem('progress-' + bookId, JSON.stringify({
+                        chapter: chapterLabel,
+                        percentage: percent
+                    }));
+                }
+
             }).catch(() => {
                 document.querySelectorAll('.toc-page-num').forEach(span => span.innerText = '');
             });
@@ -278,7 +302,6 @@ window.updateSettings = function() {
     const fontFamily = document.getElementById('set-font-family').value;
     const textColor = document.getElementById('set-text-color').value;
     
-    // Process paragraph spacing
     const paraSpacingEl = document.getElementById('set-para-spacing');
     const paraSpacing = paraSpacingEl ? paraSpacingEl.value + 'em' : '0em';
     
@@ -288,11 +311,10 @@ window.updateSettings = function() {
         document.getElementById('val-para-spacing').innerText = paraSpacing;
     }
 
-    // Combine base theme with dynamic paragraph spacing
-    let dynamicTheme = Object.assign({}, window.baseThemeCSS, {
-        "p": { "margin-bottom": paraSpacing + " !important" }
-    });
-    window.rendition.themes.default(dynamicTheme);
+    if (window.currentThemeCSS) {
+        window.currentThemeCSS["p"] = { "margin-bottom": paraSpacing + " !important" };
+        window.rendition.themes.default(window.currentThemeCSS);
+    }
 
     window.rendition.themes.fontSize(fontSize);
     window.rendition.themes.font(fontFamily);
@@ -325,6 +347,20 @@ window.saveBookmark = function() {
     if(!window.rendition || !window.currentBookId) return;
     const location = window.rendition.currentLocation();
     if(!location) return;
+    
     localStorage.setItem('bookmark-' + window.currentBookId, location.start.cfi);
+    
+    // Ensure manual bookmark saves JSON progress too
+    let chapterLabel = document.getElementById('chapter-title').innerText;
+    let percent = 0;
+    if (window.book.locations && window.book.locations.total > 0) {
+        let percentageFloat = window.book.locations.percentageFromCfi(location.start.cfi);
+        percent = Math.max(0, Math.min(100, Math.round(percentageFloat * 100)));
+    }
+    localStorage.setItem('progress-' + window.currentBookId, JSON.stringify({
+        chapter: chapterLabel,
+        percentage: percent
+    }));
+
     alert('Progress manually bookmarked!');
 };

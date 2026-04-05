@@ -25,7 +25,6 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', system-ui, sans-serif; }
 
-/* FIXED: Prevent native browser pull-to-refresh and back-swipe navigation */
 body { 
     background: var(--bg-color); 
     color: var(--text-color); 
@@ -78,7 +77,7 @@ body {
 .btn-primary { background: var(--accent); color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; }
 .btn-secondary { background: transparent; color: var(--text-color); border: 1px solid var(--border); padding: 10px 16px; border-radius: 8px; cursor: pointer; }
 
-/* UPLOAD NOVEL BUTTON (Glass Blue Style) */
+/* UPLOAD NOVEL BUTTON */
 .upload-btn {
     background-color: rgba(59, 130, 246, 0.15) !important;
     color: var(--text-color) !important;
@@ -93,9 +92,7 @@ body {
     align-items: center;
     gap: 10px;
 }
-.upload-btn:hover {
-    background-color: rgba(59, 130, 246, 0.25) !important;
-}
+.upload-btn:hover { background-color: rgba(59, 130, 246, 0.25) !important; }
 
 /* LIBRARY GRID & DELETE MODE */
 .library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 25px; }
@@ -136,7 +133,6 @@ body {
 }
 #viewer iframe { width: 100% !important; height: 100% !important; border: none; }
 
-/* Left-Aligned Flexible Taskbar */
 .bottom-bar { 
     position: fixed; 
     bottom: 24px; 
@@ -157,33 +153,17 @@ body {
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s; 
 }
 
-.bottom-bar.hidden { 
-    transform: translate(-50%, 150%); 
-    opacity: 0;
-    pointer-events: none;
-}
-
+.bottom-bar.hidden { transform: translate(-50%, 150%); opacity: 0; pointer-events: none; }
 .bar-group { display: flex; gap: 5px; align-items: center; flex-shrink: 0; }
-
-.chapter-title { 
-    flex: 1 1 auto; 
-    min-width: 0; 
-    margin: 0 15px; 
-    font-size: 14px; 
-    font-weight: 600; 
-    color: var(--text-color); 
-    text-align: left; 
-    white-space: nowrap; 
-    overflow: hidden; 
-    text-overflow: ellipsis; 
-    line-height: 1; 
-}
+.chapter-title { flex: 1 1 auto; min-width: 0; margin: 0 15px; font-size: 14px; font-weight: 600; color: var(--text-color); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1; }
 
 /* MODALS */
 .modal { display: none; position: fixed; background: var(--glass-surface); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--border); border-radius: 12px; padding: 25px; box-shadow: var(--shadow); z-index: 600; flex-direction: column; }
 .modal.active { display: flex; }
 .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-.right-modal { bottom: 70px; right: 20px; width: 320px; }
+
+/* FIXED: Allow the right modal to scroll if there are too many options */
+.right-modal { bottom: 70px; right: 20px; width: 320px; max-height: 70vh; overflow-y: auto; }
 .center-modal { top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 500px; max-height: 80vh; }
 .large-modal { max-width: 800px; height: 80vh; }
 
@@ -258,6 +238,6 @@ mark { background: rgba(59, 130, 246, 0.3); color: var(--text-color); border-rad
     
     .icon-btn { font-size: 22px; padding: 6px; } 
     
-    .right-modal { width: 90%; left: 5%; right: 5%; bottom: 80px; }
+    .right-modal { width: 90%; left: 5%; right: 5%; bottom: 80px; max-height: 70vh; overflow-y: auto;}
     .large-modal { width: 95%; max-height: 85vh; padding: 15px; }
 }

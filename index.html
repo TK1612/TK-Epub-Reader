@@ -57,23 +57,18 @@
     <div id="reader-container">
         <div id="viewer"></div>
         <div class="bottom-bar" id="bottom-taskbar">
-            <div class="progress-container">
-                <input type="range" id="progress-slider" min="0" max="100" value="0" step="1" title="Reading Progress">
+            <div class="bar-group">
+                <button class="icon-btn" onclick="closeReader()" title="Back to Library"><i class="ph ph-house"></i></button>
+                <button class="icon-btn" onclick="rendition.prev()"><i class="ph ph-caret-left"></i></button>
             </div>
-            <div class="taskbar-content">
-                <div class="bar-group">
-                    <button class="icon-btn" onclick="closeReader()" title="Back to Library"><i class="ph ph-house"></i></button>
-                    <button class="icon-btn" onclick="rendition.prev()"><i class="ph ph-caret-left"></i></button>
-                </div>
-                <div class="chapter-title" id="chapter-title">Loading...</div>
-                <div class="bar-group">
-                    <button class="icon-btn" onclick="toggleTOC()" title="Table of Contents"><i class="ph ph-list-bullets"></i></button>
-                    <button class="icon-btn" onclick="saveBookmark()" title="Save Bookmark"><i class="ph ph-heart"></i></button>
-                    <button class="icon-btn" onclick="toggleSearch()" title="Global Search"><i class="ph ph-magnifying-glass"></i></button>
-                    <button class="icon-btn" onclick="toggleEditMode()" title="Edit HTML"><i class="ph ph-code"></i></button>
-                    <button class="icon-btn" onclick="toggleSettings()" title="Settings"><i class="ph ph-faders"></i></button>
-                    <button class="icon-btn" onclick="rendition.next()"><i class="ph ph-caret-right"></i></button>
-                </div>
+            <div class="chapter-title" id="chapter-title">Loading...</div>
+            <div class="bar-group">
+                <button class="icon-btn" onclick="toggleTOC()" title="Table of Contents"><i class="ph ph-list-bullets"></i></button>
+                <button class="icon-btn" onclick="saveBookmark()" title="Save Bookmark"><i class="ph ph-heart"></i></button>
+                <button class="icon-btn" onclick="toggleSearch()" title="Global Search"><i class="ph ph-magnifying-glass"></i></button>
+                <button class="icon-btn" onclick="toggleEditMode()" title="Edit HTML"><i class="ph ph-code"></i></button>
+                <button class="icon-btn" onclick="toggleSettings()" title="Settings"><i class="ph ph-faders"></i></button>
+                <button class="icon-btn" onclick="rendition.next()"><i class="ph ph-caret-right"></i></button>
             </div>
         </div>
     </div>
@@ -146,10 +141,10 @@
             </label>
         </div>
         
-        <div class="setting-group" style="margin-top: 10px; padding-top: 15px; border-top: 1px solid var(--border);">
-            <label style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 15px; font-weight: 600; color: var(--text-color);">
+        <div class="setting-group" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);">
+            <label style="cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
                 Pin Taskbar (Don't Hide)
-                <input type="checkbox" id="set-pin-taskbar" onchange="updateSettings()">
+                <input type="checkbox" id="set-pin-taskbar" onchange="updateSettings()" style="width: 25px; height: 25px; cursor: pointer;">
             </label>
         </div>
     </div>

@@ -130,9 +130,10 @@ body { background: var(--bg-color); color: var(--text-color); overflow: hidden; 
     padding: 12px 24px; background: var(--surface); border: 1px solid var(--border); 
     border-radius: 20px; box-shadow: var(--shadow);
     backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
-    z-index: 500; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); 
+    z-index: 500; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+    will-change: transform, opacity;
 }
-.bottom-bar.hidden { transform: translate(-50%, 150%); opacity: 0; }
+.bottom-bar.hidden { transform: translate(-50%, 150%); opacity: 0; pointer-events: none;}
 
 .bar-group { display: flex; gap: 8px; }
 .chapter-title { font-size: 14px; font-weight: 600; text-align: center; color: var(--text-color); flex: 1; padding: 0 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
@@ -172,7 +173,16 @@ select option {
 
 input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; }
 input[type="color"] { border: none; border-radius: 8px; cursor: pointer; padding: 0; background: transparent; }
-input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent); cursor: pointer; }
+
+/* --- MODIFIED: Larger checkbox size for mobile --- */
+input[type="checkbox"] { 
+    width: 24px; 
+    height: 24px; 
+    accent-color: var(--accent); 
+    cursor: pointer; 
+    border: 2px solid var(--border);
+    border-radius: 4px;
+}
 
 textarea { flex: 1; font-family: monospace; resize: none; }
 .replace-bar { display: flex; gap: 12px; margin-bottom: 20px; }
@@ -200,10 +210,45 @@ mark { background: rgba(59, 130, 246, 0.4); color: var(--text-color); border-rad
     .book-cover { height: 210px; }
     .delete-overlay { height: 210px; }
     .view { padding: 20px; }
-    .bottom-bar { bottom: 10px; width: 95%; flex-wrap: wrap; justify-content: center; padding: 12px; gap: 10px; border-radius: 16px;}
-    .chapter-title { width: 100%; order: -1; margin-bottom: 5px; font-size: 13px; }
-    .bar-group { justify-content: center; gap: 12px; }
-    .icon-btn { font-size: 24px; padding: 10px; } 
+
+    /* --- MODIFIED: Redesigned Mobile Taskbar --- */
+    .bottom-bar { 
+        bottom: 10px; 
+        width: 95%; 
+        flex-direction: column; /* Stack vertically */
+        padding: 12px; 
+        gap: 10px; 
+        border-radius: 16px;
+        height: auto;
+    }
+
+    /* Chapter title full width on top */
+    .chapter-title { 
+        width: 100%; 
+        order: -1; /* Place on top */
+        margin-bottom: 5px; 
+        font-size: 13px; 
+        text-align: center;
+        padding: 0;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 5px;
+    }
+
+    /* Consolidate action icons into one fitting row below */
+    .bar-group { 
+        justify-content: space-evenly; /* Spread icons evenly */
+        gap: 0; /* Let space-evenly handle it */
+        width: 100%;
+        display: flex;
+        flex-wrap: nowrap; /* Do not wrap, make them fit */
+    }
+
+    /* Small padding adjustments to fit all icons */
+    .icon-btn { 
+        font-size: 20px; 
+        padding: 8px; 
+    } 
+
     .right-modal { width: 95%; left: 2.5%; right: 2.5%; bottom: 100px; animation: zoomIn 0.3s; }
     .large-modal { width: 95%; max-height: 85vh; padding: 20px; }
 }

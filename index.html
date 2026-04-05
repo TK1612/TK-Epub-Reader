@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TK Reader</title>
+    <title>Modern Web Reader</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js"></script>
@@ -11,6 +11,7 @@
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -47,6 +48,7 @@
             <div id="library-view" class="view active">
                 <div class="library-grid" id="library-grid"></div>
             </div>
+
             <div id="bookmarks-view" class="view">
                 <ul id="bookmarks-list" class="scroll-list"></ul>
             </div>
@@ -148,6 +150,8 @@
     
     <script>
         window.onload = () => {
+            // Setup initial history state
+            history.replaceState({ view: 'library' }, '', '#library');
             loadLibrary();
         };
     </script>

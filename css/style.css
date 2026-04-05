@@ -23,6 +23,12 @@
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', system-ui, sans-serif; }
 body { background: var(--bg-color); color: var(--text-color); overflow: hidden; }
 
+/* --- CUSTOM iPHONE STYLE SCROLLBAR --- */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(150, 150, 150, 0.4); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(150, 150, 150, 0.7); }
+
 /* --- APP LAYOUT --- */
 #app { display: flex; flex-direction: row; height: 100vh; width: 100vw; position: relative; }
 
@@ -108,15 +114,12 @@ mark { background: rgba(59, 130, 246, 0.3); color: var(--text-color); border-rad
     .book-cover { height: 170px; }
     .view { padding: 15px; }
     
-    /* Rearrange Bottom Bar for Mobile */
     .bottom-bar { flex-wrap: wrap; justify-content: center; padding: 10px; gap: 10px; }
     .chapter-title { width: 100%; order: -1; margin-bottom: 5px; font-size: 12px; }
     .bar-group { justify-content: center; gap: 10px; }
     
-    /* Make touch targets bigger */
     .icon-btn { font-size: 26px; padding: 12px; } 
     
-    /* Center Settings Modal on Mobile */
     .right-modal { width: 90%; left: 5%; right: 5%; bottom: 80px; }
     .large-modal { width: 95%; max-height: 85vh; padding: 15px; }
 }

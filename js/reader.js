@@ -35,9 +35,7 @@ window.openReader = async function(bookId, pushHistory = true) {
     
     window.rendition = window.book.renderTo("viewer", renderOptions);
     
-    // -------------------------------------------------------------
-    // FIXED: DYNAMIC CSS THEME INJECTION
-    // -------------------------------------------------------------
+    // FIX: Force static positioning on images to prevent them from breaking the iframe layout
     let themeCSS = {
         "img": {
             "max-width": "100% !important",
@@ -54,7 +52,6 @@ window.openReader = async function(bookId, pushHistory = true) {
         "::-webkit-scrollbar-thumb": { "background": "rgba(150, 150, 150, 0.4)", "border-radius": "10px" }
     };
 
-    // Apply specific styles based on mode so images don't break either view
     if (savedMode === 'continuous' || savedMode === 'scrolled') {
         themeCSS["img"]["height"] = "auto !important"; 
         themeCSS["body"] = {
@@ -63,7 +60,6 @@ window.openReader = async function(bookId, pushHistory = true) {
             "overflow-x": "hidden !important"
         };
     } else {
-        // Paginated Mode: Constrain height to viewport to prevent image cutoff bugs
         themeCSS["img"]["max-height"] = "95vh !important";
         themeCSS["img"]["height"] = "auto !important";
         themeCSS["body"] = {
@@ -90,6 +86,14 @@ window.openReader = async function(bookId, pushHistory = true) {
             const navItem = window.book.navigation.get(location.start.href);
             document.getElementById('chapter-title').innerText = navItem ? navItem.label : bookData.title;
             localStorage.setItem('bookmark-' + bookId, location.start.cfi);
+
+            // FIXED: Dynamically apply the 'active-toc' class on page turn
+            document.querySelectorAll('#toc-list .list-item').forEach(li => {
+                li.classList.remove('active-toc');
+                if (navItem && li.dataset.href === navItem.href) {
+                    li.classList.add('active-toc');
+                }
+            });
         });
 
         window.rendition.hooks.content.register(function(contents) {
@@ -139,6 +143,7 @@ window.openReader = async function(bookId, pushHistory = true) {
             toc.forEach(function(chapter, index) {
                 let li = document.createElement('li');
                 li.className = 'list-item';
+                li.dataset.href = chapter.href; // FIXED: Re-added dataset.href so the blue highlight works!
                 li.innerHTML = `
                     <div style="display:flex; justify-content:space-between; align-items:center;">
                         <span>${chapter.label}</span>
@@ -223,9 +228,18 @@ window.changeReadMode = function() {
     }, 100);
 };
 
+// FIXED: Added Auto-Scroll logic to snap to the current active chapter when opened
 window.toggleTOC = function() {
     window.closeAllModals();
     document.getElementById('toc-modal').classList.add('active');
+    
+    // Slight delay to ensure the modal is visible before calculating scroll position
+    setTimeout(() => {
+        const activeItem = document.querySelector('#toc-list .active-toc');
+        if (activeItem) {
+            activeItem.scrollIntoView({ behavior: 'auto', block: 'center' });
+        }
+    }, 10);
 };
 
 window.saveBookmark = function() {

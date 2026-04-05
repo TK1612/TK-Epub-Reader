@@ -23,26 +23,33 @@ window.openReader = async function(bookId, pushHistory = true) {
     document.getElementById('set-pin-taskbar').checked = pinTaskbar;
 
     let renderOptions = { width: "100%", height: "100%", spread: "none" };
+    
+    // FIX: Changed "scrolled" to "scrolled-doc" to fix the frozen scrollbar bug natively
     if (savedMode === 'continuous') {
-        renderOptions.manager = "continuous"; renderOptions.flow = "scrolled";
+        renderOptions.manager = "continuous"; renderOptions.flow = "scrolled-doc";
     } else if (savedMode === 'scrolled') {
-        renderOptions.manager = "default"; renderOptions.flow = "scrolled";
+        renderOptions.manager = "default"; renderOptions.flow = "scrolled-doc";
     } else {
         renderOptions.manager = "default"; renderOptions.flow = "paginated";
     }
     
     window.rendition = window.book.renderTo("viewer", renderOptions);
     
-    // Default Themes injected into EPUB
+    // FIX: Force static positioning on images to prevent them from breaking the iframe layout
     window.rendition.themes.default({
         "img": {
             "max-width": "100% !important",
             "height": "auto !important",
-            "display": "block",
-            "margin": "0 auto"
+            "display": "block !important",
+            "margin": "0 auto !important",
+            "position": "static !important" /* Stops EPUB covers from using absolute positioning to trap the screen */
+        },
+        "div": {
+            "position": "static !important" /* Prevents image wrapper divs from overflowing */
         },
         "body": {
-            "padding-bottom": "80px !important" // Ensures bottom text isn't hidden under the taskbar
+            "padding-bottom": "80px !important",
+            "overflow-y": "auto !important"
         },
         "::-webkit-scrollbar": { "width": "6px", "height": "6px" },
         "::-webkit-scrollbar-track": { "background": "transparent" },
@@ -67,7 +74,6 @@ window.openReader = async function(bookId, pushHistory = true) {
             localStorage.setItem('bookmark-' + bookId, location.start.cfi);
         });
 
-        // --- SCROLL & SWIPE LISTENERS ---
         window.rendition.hooks.content.register(function(contents) {
             let touchStartX = 0; let touchEndX = 0;
             let lastScrollTop = 0;
@@ -82,7 +88,7 @@ window.openReader = async function(bookId, pushHistory = true) {
                 }
 
                 let st = contents.window.pageYOffset || contents.document.documentElement.scrollTop;
-                if (st > lastScrollTop && st > 50) {
+                if (st > lastScrollTop && st > 20) {
                     taskbar.classList.add('hidden'); // Scrolling down
                 } else if (st < lastScrollTop) {
                     taskbar.classList.remove('hidden'); // Scrolling up
@@ -90,8 +96,8 @@ window.openReader = async function(bookId, pushHistory = true) {
                 lastScrollTop = st <= 0 ? 0 : st;
             }, { passive: true });
 
-            // Click middle of screen to force-show taskbar
-            contents.document.addEventListener('click', function(e) {
+            // Fail-safe: Click anywhere (including on massive images) to bring taskbar back
+            contents.document.addEventListener('click', function() {
                 if (!document.getElementById('set-pin-taskbar').checked) {
                     taskbar.classList.remove('hidden');
                 }
@@ -161,7 +167,6 @@ window.toggleSettings = function() {
 };
 
 window.updateSettings = function() {
-    // Save pin taskbar preference
     const isPinned = document.getElementById('set-pin-taskbar').checked;
     localStorage.setItem('pin-taskbar', isPinned);
     if (isPinned) document.getElementById('bottom-taskbar').classList.remove('hidden');

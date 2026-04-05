@@ -127,6 +127,12 @@
             <label>Line Height <span id="val-line">1.5</span></label>
             <input type="range" id="set-line" min="1" max="3" step="0.1" value="1.5" oninput="updateSettings()">
         </div>
+        
+        <div class="setting-group">
+            <label>Paragraph Spacing <span id="val-para-spacing">0em</span></label>
+            <input type="range" id="set-para-spacing" min="0" max="5" step="0.5" value="0" oninput="updateSettings()">
+        </div>
+
         <div class="setting-group">
             <label>Font Family</label>
             <select id="set-font-family" onchange="updateSettings()">

@@ -33,10 +33,17 @@ window.openReader = async function(bookId, pushHistory = true) {
     
     window.rendition = window.book.renderTo("viewer", renderOptions);
     
+    // FIXED: Pushes scrollbar to the edge while constraining the text reading width to 900px
     window.rendition.themes.default({
+        "html": { "overflow-x": "hidden" },
+        "body": { 
+            "max-width": "900px !important", 
+            "margin": "0 auto !important", 
+            "padding-bottom": "80px !important", 
+            "overflow-x": "hidden" 
+        },
         "img": { "max-width": "100% !important", "height": "auto !important", "display": "block !important", "margin": "0 auto !important", "position": "static !important" },
         "div": { "position": "static !important" },
-        "body": { "padding-bottom": "80px !important", "overflow-y": "auto !important" },
         "::-webkit-scrollbar": { "width": "6px", "height": "6px" },
         "::-webkit-scrollbar-track": { "background": "transparent" },
         "::-webkit-scrollbar-thumb": { "background": "rgba(150, 150, 150, 0.4)", "border-radius": "10px" }
@@ -67,43 +74,32 @@ window.openReader = async function(bookId, pushHistory = true) {
             });
         });
 
-        // --- FIXED: BULLETPROOF SWIPE LOGIC ---
-        let touchStartX = 0;
-        let touchStartY = 0;
-        let touchTime = 0;
-
-        const handleTouchStart = (e) => {
-            let touch = e.changedTouches ? e.changedTouches[0] : e;
-            touchStartX = touch.screenX;
-            touchStartY = touch.screenY;
-            touchTime = Date.now();
-        };
-
-        const handleTouchEnd = (e) => {
-            let touch = e.changedTouches ? e.changedTouches[0] : e;
-            let deltaX = touch.screenX - touchStartX;
-            let deltaY = Math.abs(touch.screenY - touchStartY);
-            let timeTaken = Date.now() - touchTime;
-
-            // Trigger if fast swipe (<500ms), long enough (>40px), and mostly horizontal
-            if (timeTaken < 500 && Math.abs(deltaX) > 40 && Math.abs(deltaX) > deltaY * 1.5) {
-                if (deltaX < 0) window.rendition.next(); // Swipe Left
-                else window.rendition.prev(); // Swipe Right
-            }
-        };
-
-        // Bind to external wrapper just in case
-        window.rendition.on('touchstart', handleTouchStart);
-        window.rendition.on('touchend', handleTouchEnd);
-
         window.rendition.hooks.content.register(function(contents) {
             let lastScrollTop = 0;
             const taskbar = document.getElementById('bottom-taskbar');
             const pinCheckbox = document.getElementById('set-pin-taskbar');
 
-            // Bind swipe logic securely to internal iframe
-            contents.document.addEventListener('touchstart', handleTouchStart, { passive: true });
-            contents.document.addEventListener('touchend', handleTouchEnd, { passive: true });
+            // --- FIXED: CROSS-ORIGIN BULLETPROOF SWIPE ---
+            // Uses clientX on the iframe window directly
+            let startX = 0;
+            let startY = 0;
+
+            contents.window.addEventListener('touchstart', e => {
+                startX = e.touches[0].clientX;
+                startY = e.touches[0].clientY;
+            }, { passive: true });
+
+            contents.window.addEventListener('touchend', e => {
+                let endX = e.changedTouches[0].clientX;
+                let endY = e.changedTouches[0].clientY;
+                let diffX = startX - endX;
+                let diffY = startY - endY;
+
+                if (Math.abs(diffX) > 50 && Math.abs(diffX) > Math.abs(diffY)) {
+                    if (diffX > 0) window.rendition.next();
+                    else window.rendition.prev();
+                }
+            }, { passive: true });
 
             // Auto-hide scroll logic
             contents.window.addEventListener('scroll', function() {
@@ -120,7 +116,6 @@ window.openReader = async function(bookId, pushHistory = true) {
                 lastScrollTop = st <= 0 ? 0 : st;
             }, { passive: true });
 
-            // Tap to toggle menu
             contents.document.addEventListener('click', function(e) {
                 if (e.target.tagName.toLowerCase() === 'a') return;
                 const selection = contents.window.getSelection();

@@ -1,62 +1,107 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web Novel Reader</title>
+    <title>Modern Web Reader</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
-
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
     <div id="app">
-        <header>
-            <div class="nav-links">
-                <button onclick="showView('library')">Library</button>
-                <button onclick="showView('bookmarks')">Bookmarks</button>
+        <aside id="sidebar" class="collapsed">
+            <div class="sidebar-header">
+                <h3>Menu</h3>
+                <button class="icon-btn" onclick="toggleSidebar()"><i class="ph ph-x"></i></button>
             </div>
-            <div>
+            <nav class="sidebar-nav">
+                <button onclick="showView('library')"><i class="ph ph-books"></i> Library</button>
+                <button onclick="showView('bookmarks')"><i class="ph ph-bookmarks"></i> Bookmarks</button>
+                <div class="divider"></div>
                 <input type="file" id="upload-input" accept=".epub" style="display: none;" onchange="handleUpload(event)">
-                <button class="upload-btn" onclick="document.getElementById('upload-input').click()"><i class="ph ph-upload-simple"></i> Add Novel</button>
+                <button class="upload-btn" onclick="document.getElementById('upload-input').click()"><i class="ph ph-upload-simple"></i> Upload Novel</button>
+            </nav>
+        </aside>
+
+        <main id="main-content">
+            <header class="top-bar">
+                <button class="icon-btn" onclick="toggleSidebar()"><i class="ph ph-list"></i></button>
+                <h2 id="page-title">Library</h2>
+                <button class="icon-btn" onclick="toggleDarkMode()"><i class="ph ph-moon"></i></button>
+            </header>
+
+            <div id="library-view" class="view active">
+                <div class="library-grid" id="library-grid"></div>
             </div>
-        </header>
 
-        <div id="library-view" class="view active">
-            <h2>My Library</h2><br>
-            <div class="library-grid" id="library-grid"></div>
-        </div>
-
-        <div id="bookmarks-view" class="view">
-            <h2>Saved Bookmarks</h2><br>
-            <ul id="bookmarks-list"></ul>
-        </div>
+            <div id="bookmarks-view" class="view">
+                <ul id="bookmarks-list"></ul>
+            </div>
+        </main>
     </div>
 
     <div id="reader-container">
         <div id="viewer"></div>
         <div class="bottom-bar">
             <div class="bar-group">
-                <button class="icon-btn" onclick="rendition.prev()"><i class="ph ph-caret-left"></i></button>
                 <button class="icon-btn" onclick="closeReader()"><i class="ph ph-house"></i></button>
+                <button class="icon-btn" onclick="rendition.prev()"><i class="ph ph-caret-left"></i></button>
             </div>
             <div class="chapter-title" id="chapter-title">Loading...</div>
             <div class="bar-group">
-                <button class="icon-btn" onclick="saveBookmark()"><i class="ph ph-heart"></i></button>
-                <button class="icon-btn" onclick="toggleEditMode()"><i class="ph ph-code"></i></button>
-                <button class="icon-btn" onclick="toggleDarkMode()"><i class="ph ph-moon"></i></button>
-                <button class="icon-btn" onclick="toggleSettings()"><i class="ph ph-faders"></i></button>
+                <button class="icon-btn" onclick="saveBookmark()" title="Bookmark"><i class="ph ph-heart"></i></button>
+                <button class="icon-btn" onclick="toggleSearch()" title="Global Search"><i class="ph ph-magnifying-glass"></i></button>
+                <button class="icon-btn" onclick="toggleEditMode()" title="Edit HTML"><i class="ph ph-code"></i></button>
+                <button class="icon-btn" onclick="toggleSettings()" title="Settings"><i class="ph ph-faders"></i></button>
                 <button class="icon-btn" onclick="rendition.next()"><i class="ph ph-caret-right"></i></button>
             </div>
         </div>
     </div>
 
-    <div id="settings-modal" class="modal">
-        <h3 style="margin-bottom: 15px;">Reader Settings</h3>
+    <div id="search-modal" class="modal center-modal">
+        <div class="modal-header">
+            <h3>Search Novel</h3>
+            <button class="icon-btn" onclick="toggleSearch()"><i class="ph ph-x"></i></button>
+        </div>
+        <div class="search-controls">
+            <input type="text" id="global-search-input" placeholder="Type word or phrase...">
+            <button class="btn-primary" onclick="runGlobalSearch()">Search</button>
+        </div>
+        <div id="search-results" class="search-results-container">
+            <p style="color: gray; font-size: 14px;">Results will appear here...</p>
+        </div>
+    </div>
+
+    <div id="html-editor" class="modal center-modal large-modal">
+        <div class="modal-header">
+            <h3>Edit Current Page HTML</h3>
+            <button class="icon-btn" onclick="closeEditor()"><i class="ph ph-x"></i></button>
+        </div>
+        
+        <div class="replace-bar">
+            <input type="text" id="find-input" placeholder="Find (Regex supported)">
+            <input type="text" id="replace-input" placeholder="Replace with">
+            <button class="btn-secondary" onclick="executeReplace()">Replace All</button>
+        </div>
+
+        <textarea id="html-textarea" spellcheck="false"></textarea>
+        
+        <div class="editor-controls">
+            <button class="btn-secondary" onclick="closeEditor()">Cancel</button>
+            <button class="btn-primary" onclick="applyHTML()">Apply Changes</button>
+        </div>
+    </div>
+
+    <div id="settings-modal" class="modal right-modal">
+        <h3>Reader Settings</h3><br>
         <div class="setting-group">
             <label>Font Size <span id="val-font">18px</span></label>
             <input type="range" id="set-font" min="12" max="36" value="18" oninput="updateSettings()">
@@ -64,24 +109,6 @@
         <div class="setting-group">
             <label>Line Height <span id="val-line">1.5</span></label>
             <input type="range" id="set-line" min="1" max="3" step="0.1" value="1.5" oninput="updateSettings()">
-        </div>
-        <div class="setting-group">
-            <label>Font Family</label>
-            <select id="set-font-family" onchange="updateSettings()">
-                <option value="system-ui">System UI</option>
-                <option value="serif">Serif</option>
-                <option value="sans-serif">Sans-Serif</option>
-            </select>
-        </div>
-    </div>
-
-    <div id="html-editor">
-        <h3>Edit Current Page HTML</h3>
-        <p style="font-size:12px; color:gray; margin-bottom:10px;">Note: Changes apply temporarily to the view.</p>
-        <textarea id="html-textarea"></textarea>
-        <div class="editor-controls">
-            <button class="upload-btn" onclick="closeEditor()">Cancel</button>
-            <button class="upload-btn" onclick="applyHTML()">Apply Temporary Changes</button>
         </div>
     </div>
 

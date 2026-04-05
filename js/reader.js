@@ -33,7 +33,7 @@ window.openReader = async function(bookId, pushHistory = true) {
     
     window.rendition = window.book.renderTo("viewer", renderOptions);
     
-    const chapterGap = savedMode === 'continuous' ? "35vh !important" : "120px !important";
+    const chapterGap = savedMode === 'continuous' ? "35vh !important" : "0px !important";
 
     window.rendition.themes.default({
         "img, image, svg": {
@@ -56,12 +56,17 @@ window.openReader = async function(bookId, pushHistory = true) {
             "min-height": "auto !important",
             "overflow-y": "auto !important"
         },
+        "body::after": {
+            "content": "'' !important",
+            "display": "block !important",
+            "height": chapterGap 
+        },
         "body": {
             "max-width": "900px !important", 
             "margin": "0 auto !important", 
             "padding-left": "24px !important",
             "padding-right": "24px !important",
-            "padding-bottom": chapterGap, 
+            "padding-bottom": "120px !important", 
             "padding-top": "40px !important",
             "height": "auto !important",
             "min-height": "auto !important",
@@ -90,7 +95,6 @@ window.openReader = async function(bookId, pushHistory = true) {
             const spineItem = window.book.spine.get(location.start.cfi);
             let navItem = window.book.navigation.get(location.start.href);
 
-            // Robust fallback to find actual chapter name
             if (!navItem && spineItem) {
                 navItem = window.book.navigation.toc.find(item => item.href.split('#')[0] === spineItem.href.split('#')[0]);
             }
@@ -106,23 +110,25 @@ window.openReader = async function(bookId, pushHistory = true) {
             document.getElementById('chapter-title').innerText = chapterTitle;
             localStorage.setItem('bookmark-' + bookId, location.start.cfi);
 
-            // Highlight Active TOC Item
-            document.querySelectorAll('#toc-list .list-item').forEach(el => el.classList.remove('active-toc'));
-            if (navItem || spineItem) {
-                const matchHref = navItem ? navItem.href.split('#')[0] : spineItem.href.split('#')[0];
-                const activeEl = document.querySelector(`.toc-item[data-href^="${matchHref}"]`);
+            document.querySelectorAll('.toc-item').forEach(el => el.classList.remove('active-toc'));
+            if (navItem && navItem.href) {
+                const activeEl = Array.from(document.querySelectorAll('.toc-item')).find(el => el.dataset.href === navItem.href);
                 if (activeEl) activeEl.classList.add('active-toc');
+            } else if (spineItem) {
+                 const activeEl = Array.from(document.querySelectorAll('.toc-item')).find(el => el.dataset.href.includes(spineItem.href));
+                 if (activeEl) activeEl.classList.add('active-toc');
             }
             
-            // Reliable Progress Percentage (Spine-based fallback)
+            // FIX: Reliable Progress Percentage based strictly on Total Chapters
             let percentage = 0;
-            if (window.book.locations && window.book.locations.length() > 0) {
+            if (spineItem && window.book.spine && window.book.spine.length) {
+                // Calculate based on: (Current Chapter Index + 1) / Total Chapters
+                percentage = Math.floor(((spineItem.index + 1) / window.book.spine.length) * 100);
+            } else if (window.book.locations && window.book.locations.length() > 0) {
+                // Absolute fallback just in case spine math fails
                 percentage = Math.floor(window.book.locations.percentageFromCfi(location.start.cfi) * 100);
-            } else if (spineItem && window.book.spine.length) {
-                // If location generation hasn't finished, calculate percentage based on global chapter index
-                percentage = Math.floor((spineItem.index / window.book.spine.length) * 100);
             }
-            percentage = Math.max(0, Math.min(100, percentage));
+            percentage = Math.max(0, Math.min(100, percentage)); // Ensure it stays between 0 and 100%
             
             localStorage.setItem('progress-' + bookId, JSON.stringify({
                 chapter: chapterTitle,
@@ -173,13 +179,18 @@ window.openReader = async function(bookId, pushHistory = true) {
             toc.forEach(function(chapter, index) {
                 let li = document.createElement('li');
                 li.className = 'list-item toc-item';
-                li.dataset.href = chapter.href; // Required for highlighting
+                li.dataset.href = chapter.href; 
                 li.innerHTML = `
                     <div style="display:flex; justify-content:space-between; align-items:center; width: 100%;">
                         <span class="toc-label" style="flex:1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 10px;">${chapter.label}</span>
                         <span id="toc-page-${index}" style="font-size:12px; color:var(--text-muted); background:var(--border); padding:4px 8px; border-radius:6px; flex-shrink: 0;">...</span>
                     </div>`;
-                li.onclick = () => { window.rendition.display(chapter.href); window.closeAllModals(); };
+                
+                li.onclick = (e) => { 
+                    e.preventDefault(); 
+                    window.rendition.display(chapter.href); 
+                    window.closeAllModals(); 
+                };
                 tocList.appendChild(li);
             });
 
@@ -195,7 +206,6 @@ window.openReader = async function(bookId, pushHistory = true) {
                     if(pageSpan) pageSpan.innerText = pageNum ? `Pg. ${pageNum}` : '';
                 });
                 
-                // Trigger a UI update once location math is finally done calculating
                 const currentLocation = window.rendition.currentLocation();
                 if (currentLocation) window.rendition.emit('relocated', currentLocation);
                 
@@ -267,7 +277,6 @@ window.toggleTOC = function() {
     window.closeAllModals();
     document.getElementById('toc-modal').classList.add('active');
     
-    // Ensure the active chapter is scrolled into view when opening the modal
     setTimeout(() => {
         const activeEl = document.querySelector('.active-toc');
         if (activeEl) activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });

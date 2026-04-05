@@ -21,19 +21,10 @@ window.openReader = async function(bookId, pushHistory = true) {
     const pinTaskbar = localStorage.getItem('pin-taskbar') !== 'false';
     document.getElementById('set-pin-taskbar').checked = pinTaskbar;
 
-    // DYNAMIC TOUCH ACTION: Fixes iOS swipe bugs without breaking scroll mode
-    const readerContainer = document.getElementById('reader-container');
-    if (savedMode === 'paginated') {
-        readerContainer.style.touchAction = 'none'; // Kills all native bounce/swipe
-    } else {
-        readerContainer.style.touchAction = 'pan-y'; // Allows vertical scroll
-    }
-
     let renderOptions = { 
         width: "100%", 
         height: "100%", 
-        spread: "none",
-        snap: savedMode === 'paginated' // ChatGPT's valid suggestion
+        spread: "none" 
     };
     
     if (savedMode === 'continuous') {
@@ -70,7 +61,8 @@ window.openReader = async function(bookId, pushHistory = true) {
     } else {
         themeCSS["body"] = { 
             "margin": "0 !important", 
-            "padding": "0 10px !important" // Minimal padding so columns don't break
+            "padding": "0 !important",
+            "touch-action": "pan-y !important"
         };
     }
 
@@ -117,18 +109,17 @@ window.openReader = async function(bookId, pushHistory = true) {
             });
         });
 
-        // -------------------------------------------------------------
-        // FIXED: THE ULTIMATE TOUCH CONTROLLER
-        // -------------------------------------------------------------
         window.rendition.hooks.content.register(function(contents) {
             const taskbar = document.getElementById('bottom-taskbar');
             const pinCheckbox = document.getElementById('set-pin-taskbar');
 
+            // -------------------------------------------------------------
+            // THE UNIFIED GESTURE RECOGNIZER (Replaces Click AND Swipe)
+            // -------------------------------------------------------------
             let startX = 0;
             let startY = 0;
             let startTime = 0;
 
-            // Must be bound inside the contents to prevent the iframe trap
             contents.document.addEventListener('touchstart', e => {
                 startX = e.changedTouches[0].clientX;
                 startY = e.changedTouches[0].clientY;
@@ -138,48 +129,43 @@ window.openReader = async function(bookId, pushHistory = true) {
             contents.document.addEventListener('touchend', e => {
                 let endX = e.changedTouches[0].clientX;
                 let endY = e.changedTouches[0].clientY;
-                let diffX = startX - endX; // Positive if swiping left
-                let diffY = Math.abs(startY - endY);
+                
+                let diffX = startX - endX; // Positive if swiped left
+                let diffY = startY - endY;
+                let absDiffX = Math.abs(diffX);
+                let absDiffY = Math.abs(diffY);
                 let timeTaken = Date.now() - startTime;
 
-                // Ignore if the user is highlighting text
-                const selection = contents.window.getSelection();
-                if (selection && selection.toString().length > 0) return;
+                // 1. TAP DETECTION (Menu Toggle)
+                // If finger barely moved (< 10px) and was quick (< 300ms)
+                if (absDiffX < 10 && absDiffY < 10 && timeTaken < 300) {
+                    // Ignore tap if clicking a hyperlink
+                    if (e.target && e.target.tagName && e.target.tagName.toLowerCase() === 'a') return;
+                    
+                    // Ignore tap if highlighting text
+                    const selection = contents.window.getSelection();
+                    if (selection && selection.toString().length > 0) return;
 
-                // 1. SWIPE LOGIC
-                if (timeTaken < 500 && Math.abs(diffX) > 40 && Math.abs(diffX) > diffY) {
-                    if (diffX > 0) window.rendition.next();
-                    else window.rendition.prev();
-                    return; // Stop here, do not trigger tap
+                    if (!pinCheckbox.checked) {
+                        taskbar.classList.toggle('hidden');
+                    } else {
+                        taskbar.classList.remove('hidden');
+                    }
+                    return; // Stop running code, tap is complete.
                 }
 
-                // 2. TAP LOGIC (Edge tapping vs Center Menu tapping)
-                if (timeTaken < 300 && Math.abs(diffX) < 10 && diffY < 10) {
-                    // Ignore clicks on links
-                    if (e.target.tagName.toLowerCase() === 'a') return;
-
-                    let screenWidth = contents.window.innerWidth;
-                    
-                    if (savedMode === 'paginated') {
-                        // Left 25% of screen = Prev Page
-                        if (endX < screenWidth * 0.25) {
-                            window.rendition.prev();
-                            return;
-                        }
-                        // Right 25% of screen = Next Page
-                        if (endX > screenWidth * 0.75) {
-                            window.rendition.next();
-                            return;
-                        }
+                // 2. SWIPE DETECTION (Turn Page)
+                // If fast (< 600ms), intentional (> 40px), and horizontal
+                if (timeTaken < 600 && absDiffX > 40 && absDiffX > absDiffY) {
+                    if (diffX > 0) {
+                        window.rendition.next();
+                    } else {
+                        window.rendition.prev();
                     }
-
-                    // Middle screen tap = Toggle Taskbar
-                    if (!pinCheckbox.checked) taskbar.classList.toggle('hidden');
-                    else taskbar.classList.remove('hidden');
                 }
             }, { passive: true });
 
-            // Auto-hide scroll logic (Only triggers in continuous mode)
+            // Auto-hide scroll logic (Only runs in continuous mode)
             let lastScrollTop = 0;
             contents.window.addEventListener('scroll', function() {
                 if (pinCheckbox.checked) {
@@ -194,6 +180,8 @@ window.openReader = async function(bookId, pushHistory = true) {
                 
                 lastScrollTop = st <= 0 ? 0 : st;
             }, { passive: true });
+            
+            // NOTICE: The contents.document.addEventListener('click') has been DELETED entirely.
         });
 
         // TOC Generation

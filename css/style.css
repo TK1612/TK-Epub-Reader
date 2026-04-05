@@ -85,24 +85,65 @@ body { background: var(--bg-color); color: var(--text-color); overflow: hidden; 
 #library-grid.delete-mode .book-card { border-color: var(--danger); transform: scale(0.98); box-shadow: none; }
 .delete-btn-active { background: var(--danger) !important; color: white !important; }
 
-/* --- FIXED READER & TASKBAR --- */
+/* --- FIXED READER & TASKBAR (FLOATING PILL DESIGN) --- */
 #reader-container { display: block; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: var(--bg-color); z-index: 300; display: none; }
 #viewer { width: 100%; height: 100%; max-width: 900px; margin: 0 auto; background: var(--bg-color); }
 
 .bottom-bar { 
-    position: absolute; bottom: 0; left: 0; width: 100%; 
-    display: flex; justify-content: space-between; align-items: center; 
-    padding: 10px 20px; 
+    position: fixed; 
+    bottom: 24px; 
+    left: 50%; 
+    transform: translateX(-50%); 
+    width: calc(100% - 40px);
+    max-width: 860px; /* Constrains it to the text box width */
+    display: flex; 
+    justify-content: flex-start; /* Aligns content from the left like the image */
+    align-items: center; 
+    gap: 15px;
+    padding: 12px 20px; 
     background: var(--glass-surface); 
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border-top: 1px solid var(--border); 
-    z-index: 500; transition: transform 0.3s ease-in-out; 
+    border: 1px solid var(--border); 
+    border-radius: 16px; /* Gives the rounded pill shape */
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); /* Floating shadow */
+    z-index: 500; 
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s; 
 }
-.bottom-bar.hidden { transform: translateY(100%); } /* Slides taskbar down off-screen */
 
-.bar-group { display: flex; gap: 5px; }
-.chapter-title { font-size: 13px; font-weight: 600; text-align: center; color: var(--text-muted); }
+/* Ensure hidden state keeps the -50% translation so it drops straight down */
+.bottom-bar.hidden { 
+    transform: translate(-50%, 150%); 
+    opacity: 0;
+    pointer-events: none;
+}
+
+.bar-group { display: flex; gap: 5px; align-items: center; }
+.bar-group:last-child { margin-left: auto; } /* Pushes the right-side icons to the far right edge */
+
+.chapter-title { 
+    font-size: 14px; 
+    font-weight: 600; 
+    color: var(--text-color); /* Brightened to match the image text */
+    text-align: left; 
+    flex: 1; /* Fills middle space so long titles have room */
+    white-space: nowrap; 
+    overflow: hidden; 
+    text-overflow: ellipsis; 
+}
+
+/* --- FORCING THE BLUE ACCENT COLOR --- */
+.upload-btn {
+    background-color: var(--accent) !important;
+    color: #ffffff !important;
+    font-weight: 600;
+}
+
+/* Target the generated TOC list items to make chapter titles blue */
+#toc-list .list-item div span:first-child {
+    color: var(--accent) !important;
+    font-weight: 600;
+}
 
 /* MODALS */
 .modal { 
@@ -133,19 +174,6 @@ textarea { flex: 1; font-family: monospace; resize: none; }
 mark { background: rgba(59, 130, 246, 0.3); color: var(--text-color); border-radius: 3px; padding: 0 2px;}
 .setting-group { margin-bottom: 15px; }
 .setting-group label { display: flex; justify-content: space-between; align-items: center; font-size: 13px; margin-bottom: 8px; color: var(--text-muted); }
-
-/* MOBILE RESPONSIVENESS */
-@media (max-width: 768px) {
-    .library-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 15px; }
-    .book-cover { height: 170px; }
-    .view { padding: 15px; }
-    .bottom-bar { flex-wrap: wrap; justify-content: center; padding: 10px; gap: 10px; }
-    .chapter-title { width: 100%; order: -1; margin-bottom: 5px; font-size: 12px; }
-    .bar-group { justify-content: center; gap: 10px; }
-    .icon-btn { font-size: 26px; padding: 12px; } 
-    .right-modal { width: 90%; left: 5%; right: 5%; bottom: 80px; }
-    .large-modal { width: 95%; max-height: 85vh; padding: 15px; }
-}
 
 /* --- CUSTOM ENLARGED CHECKBOX --- */
 #set-pin-taskbar {
@@ -180,4 +208,35 @@ mark { background: rgba(59, 130, 246, 0.3); color: var(--text-color); border-rad
     border: solid white;
     border-width: 0 2px 2px 0;
     transform: rotate(45deg);
+}
+
+/* --- MOBILE RESPONSIVENESS --- */
+@media (max-width: 768px) {
+    .library-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 15px; }
+    .book-cover { height: 170px; }
+    .view { padding: 15px; }
+    
+    .bottom-bar { 
+        bottom: 15px;
+        width: calc(100% - 20px); 
+        flex-wrap: wrap; 
+        justify-content: center; 
+        padding: 12px; 
+        gap: 10px; 
+        border-radius: 16px;
+    }
+    .chapter-title { 
+        width: 100%; 
+        order: -1; 
+        margin-bottom: 5px; 
+        font-size: 13px; 
+        text-align: center;
+        flex: none; /* Override flex: 1 from desktop */
+    }
+    .bar-group { justify-content: center; gap: 10px; width: 100%; }
+    .bar-group:last-child { margin-left: 0; }
+    
+    .icon-btn { font-size: 26px; padding: 12px; } 
+    .right-modal { width: 90%; left: 5%; right: 5%; bottom: 80px; }
+    .large-modal { width: 95%; max-height: 85vh; padding: 15px; }
 }

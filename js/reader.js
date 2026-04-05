@@ -1,4 +1,3 @@
-// Added "pushHistory" parameter for browser back/forward buttons
 window.openReader = async function(bookId, pushHistory = true) {
     if (pushHistory) {
         history.pushState({ view: 'reader', bookId: bookId }, '', '#reader');
@@ -12,26 +11,40 @@ window.openReader = async function(bookId, pushHistory = true) {
     window.book = ePub(bookData.buffer);
     document.getElementById('reader-container').style.display = 'flex';
     
-    // Detect if user is on PC for continuous vertical scrolling
-    const isPC = window.innerWidth > 768 && !(/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent));
+    // --- LOAD READING MODE ---
+    let savedMode = localStorage.getItem('reader-mode');
+    if (!savedMode) {
+        // Defaults: Continuous for PC, Paginated for Mobile
+        const isPC = window.innerWidth > 768 && !(/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent));
+        savedMode = isPC ? 'continuous' : 'paginated';
+    }
+    document.getElementById('set-read-mode').value = savedMode;
+
     let renderOptions = { width: "100%", height: "100%", spread: "none" };
 
-    if (isPC) {
+    if (savedMode === 'continuous') {
         renderOptions.manager = "continuous";
         renderOptions.flow = "scrolled";
+    } else if (savedMode === 'scrolled') {
+        renderOptions.manager = "default"; // Stops epub from trying to stitch chapters together (fixes massive image bugs)
+        renderOptions.flow = "scrolled";
+    } else {
+        renderOptions.manager = "default";
+        renderOptions.flow = "paginated";
     }
     
     window.rendition = window.book.renderTo("viewer", renderOptions);
     
-    // Default formatting rules injected directly into the EPUB iframe
+    // --- UPDATED: Image sizing back to normal 100%, added body padding ---
     window.rendition.themes.default({
         "img": {
             "max-width": "100% !important",
-            "max-height": "90vh !important", /* Prevents image from blocking scroll */
-            "object-fit": "contain !important",
             "height": "auto !important",
             "display": "block",
             "margin": "0 auto"
+        },
+        "body": {
+            "padding-bottom": "40px !important" // Ensures images/text don't stick to the bottom bar
         },
         "::-webkit-scrollbar": { "width": "6px", "height": "6px" },
         "::-webkit-scrollbar-track": { "background": "transparent" },
@@ -68,7 +81,7 @@ window.openReader = async function(bookId, pushHistory = true) {
             }, { passive: true });
         });
 
-        // Table of contents with background page calculation
+        // Table of contents
         window.book.loaded.navigation.then(function(toc) {
             const tocList = document.getElementById('toc-list');
             tocList.innerHTML = '';
@@ -137,6 +150,30 @@ window.updateSettings = function() {
     window.rendition.themes.font(fontFamily);
     window.rendition.themes.override('line-height', lineHeight + ' !important');
     window.rendition.themes.override('color', textColor + ' !important');
+};
+
+// NEW: Dynamically change reading mode without losing your page
+window.changeReadMode = function() {
+    const mode = document.getElementById('set-read-mode').value;
+    localStorage.setItem('reader-mode', mode);
+
+    // Save exact current location so it resumes flawlessly
+    if (window.rendition && window.currentBookId) {
+        const location = window.rendition.currentLocation();
+        if (location && location.start) {
+            localStorage.setItem('bookmark-' + window.currentBookId, location.start.cfi);
+        }
+    }
+
+    window.closeAllModals();
+    
+    // Briefly show a loading state while epub.js rebuilds the engine
+    document.getElementById('chapter-title').innerText = "Changing mode...";
+    
+    // Re-open the reader. It will automatically load the mode and jump to the saved bookmark!
+    setTimeout(() => {
+        window.openReader(window.currentBookId, false);
+    }, 100);
 };
 
 window.toggleTOC = function() {

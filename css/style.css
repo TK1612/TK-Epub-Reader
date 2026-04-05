@@ -114,27 +114,28 @@ body {
 
 /* --- FIXED READER & TASKBAR --- */
 #reader-container { 
-    display: block; 
+    display: none; 
     position: fixed; 
     top: 0; 
     left: 0; 
     width: 100vw; 
-    height: 100dvh; /* 100dvh properly accounts for mobile browser URL bars */
+    height: 100dvh; /* dvh perfectly hugs mobile address bars */
     background: var(--bg-color); 
     z-index: 300; 
-    display: none; 
-    /* touch-action is dynamically handled by JavaScript now */
+    touch-action: none; /* Stops the browser from rubber-banding */
+    overscroll-behavior: none;
 }
 
 #viewer { 
-    width: 100vw; 
+    width: 100%; 
     height: 100%; 
     margin: 0; 
     padding: 0; 
-    background: var(--bg-color); 
-    overflow: hidden;
+    background: var(--bg-color);
+    overflow: hidden; 
 }
 
+/* Force epub.js iframe to respect the container bounds */
 #viewer iframe {
     width: 100% !important;
     height: 100% !important;

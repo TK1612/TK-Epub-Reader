@@ -33,9 +33,7 @@ window.openReader = async function(bookId, pushHistory = true) {
     
     window.rendition = window.book.renderTo("viewer", renderOptions);
     
-    // -------------------------------------------------------------
-    // FIXED: CONDITIONAL THEMES FOR PAGINATED VS SCROLLED
-    // -------------------------------------------------------------
+    // Conditional Themes to stop the Black Pages bug
     let themeCSS = {
         "img": { "max-width": "100% !important", "height": "auto !important", "display": "block !important", "margin": "0 auto !important" },
         "::-webkit-scrollbar": { "width": "6px", "height": "6px" },
@@ -53,13 +51,11 @@ window.openReader = async function(bookId, pushHistory = true) {
             "overflow-x": "hidden" 
         };
     } else {
-        // STRICT rules for paginated mode to stop the "Black Pages" bug
         themeCSS["html"] = { "overflow": "hidden !important" };
         themeCSS["body"] = { 
             "margin": "0 !important", 
             "padding": "0 !important",
-            "overflow": "hidden !important",
-            "touch-action": "pan-y !important" // Disables native mobile horizontal swipe 
+            "overflow": "hidden !important"
         };
     }
 
@@ -94,37 +90,48 @@ window.openReader = async function(bookId, pushHistory = true) {
             const pinCheckbox = document.getElementById('set-pin-taskbar');
 
             // -------------------------------------------------------------
-            // FIXED: READEST-STYLE HIGH PRECISION SWIPE DETECTOR
+            // FIXED: IPHONE-SPECIFIC SWIPE LOGIC
             // -------------------------------------------------------------
             let touchStartX = 0;
             let touchStartY = 0;
             let touchStartTime = 0;
 
-            // CRITICAL: Block iframe from triggering Android/iOS back-swipe gestures
+            // Step 1: Force iOS to recognize iframe touch boundaries
             contents.document.documentElement.style.touchAction = 'pan-y';
             if (contents.document.body) contents.document.body.style.touchAction = 'pan-y';
 
+            // Step 2: Use clientX instead of screenX
             contents.document.addEventListener('touchstart', e => {
-                touchStartX = e.changedTouches[0].screenX;
-                touchStartY = e.changedTouches[0].screenY;
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
                 touchStartTime = Date.now();
             }, { passive: true });
 
+            // Step 3: THE MOST IMPORTANT IPHONE FIX - Kill Safari's gesture hijacking
+            contents.document.addEventListener('touchmove', e => {
+                let currentX = e.touches[0].clientX;
+                let currentY = e.touches[0].clientY;
+                let diffX = touchStartX - currentX;
+                let diffY = touchStartY - currentY;
+
+                // If the user is swiping horizontally, explicitly block Safari from navigating back/forward
+                if (Math.abs(diffX) > Math.abs(diffY)) {
+                    e.preventDefault(); 
+                }
+            }, { passive: false }); // MUST be false to allow preventDefault on iOS
+
+            // Step 4: Execute the page turn
             contents.document.addEventListener('touchend', e => {
-                let touchEndX = e.changedTouches[0].screenX;
-                let touchEndY = e.changedTouches[0].screenY;
+                let touchEndX = e.changedTouches[0].clientX;
+                let touchEndY = e.changedTouches[0].clientY;
                 
-                let diffX = touchStartX - touchEndX; // Positive = left swipe
+                let diffX = touchStartX - touchEndX; 
                 let diffY = Math.abs(touchStartY - touchEndY);
                 let timeTaken = Date.now() - touchStartTime;
 
-                // Evaluation: Must be fast (< 500ms), sufficient length (> 30px), and horizontal
-                if (timeTaken < 500 && Math.abs(diffX) > 30 && Math.abs(diffX) > diffY) {
-                    if (diffX > 0) {
-                        window.rendition.next();
-                    } else {
-                        window.rendition.prev();
-                    }
+                if (timeTaken < 600 && Math.abs(diffX) > 40 && Math.abs(diffX) > diffY) {
+                    if (diffX > 0) window.rendition.next();
+                    else window.rendition.prev();
                 }
             }, { passive: true });
 

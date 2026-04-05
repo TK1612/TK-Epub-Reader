@@ -23,7 +23,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', system-ui, sans-serif; }
 body { background: var(--bg-color); color: var(--text-color); overflow: hidden; }
 
-/* --- APP LAYOUT (FIXED) --- */
+/* --- APP LAYOUT --- */
 #app { display: flex; flex-direction: row; height: 100vh; width: 100vw; position: relative; }
 
 /* SIDEBAR AS OVERLAY */
@@ -31,7 +31,7 @@ body { background: var(--bg-color); color: var(--text-color); overflow: hidden; 
     position: absolute; top: 0; left: 0; height: 100%; width: 260px; 
     background: var(--surface); border-right: 1px solid var(--border); 
     transition: transform 0.3s ease; z-index: 200; display: flex; flex-direction: column; 
-    transform: translateX(0); /* Visible by default */
+    transform: translateX(0); 
 }
 #sidebar.collapsed { transform: translateX(-100%); }
 
@@ -53,7 +53,7 @@ body { background: var(--bg-color); color: var(--text-color); overflow: hidden; 
 .btn-primary, .upload-btn { background: var(--accent); color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; }
 .btn-secondary { background: transparent; color: var(--text-color); border: 1px solid var(--border); padding: 10px 16px; border-radius: 8px; cursor: pointer; }
 
-/* LIBRARY GRID & DELETE BUTTON */
+/* LIBRARY GRID */
 .library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 25px; }
 .book-card { background: var(--surface); border-radius: 12px; overflow: hidden; cursor: pointer; border: 1px solid var(--border); box-shadow: var(--shadow); position: relative; transition: transform 0.2s; }
 .book-card:hover { transform: translateY(-4px); }
@@ -62,10 +62,18 @@ body { background: var(--bg-color); color: var(--text-color); overflow: hidden; 
 .book-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
 .book-progress { font-size: 12px; color: var(--text-muted); }
 
-/* Delete Book Button (Hidden until hover) */
-.delete-btn { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.7); color: white; border: none; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; transition: opacity 0.2s, background 0.2s; z-index: 5; }
-.delete-btn:hover { background: var(--danger); }
-.book-card:hover .delete-btn { opacity: 1; }
+/* --- DELETE MODE STYLES --- */
+.delete-overlay {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(239, 68, 68, 0.7); 
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    color: white; font-size: 48px; opacity: 0; pointer-events: none;
+    transition: opacity 0.2s; z-index: 10;
+}
+.delete-overlay span { font-size: 14px; font-weight: bold; margin-top: 10px; }
+#library-grid.delete-mode .book-card .delete-overlay { opacity: 1; }
+#library-grid.delete-mode .book-card { border-color: var(--danger); transform: scale(0.98); box-shadow: none; }
+.delete-btn-active { background: var(--danger) !important; color: white !important; }
 
 /* READER FULLSCREEN */
 #reader-container { display: flex; flex-direction: column; height: 100vh; background: var(--bg-color); position: fixed; top:0; left:0; width: 100%; z-index: 300; display: none; }
@@ -88,8 +96,7 @@ textarea { flex: 1; font-family: monospace; resize: none; }
 .replace-bar { display: flex; gap: 10px; margin-bottom: 15px; }
 .editor-controls { display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px; }
 
-/* Search & TOC Lists */
-.scroll-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; }
+.scroll-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; list-style: none; }
 .list-item { padding: 12px; background: var(--bg-color); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; transition: background 0.2s; font-size: 14px;}
 .list-item:hover { background: var(--border); }
 mark { background: rgba(59, 130, 246, 0.3); color: var(--text-color); border-radius: 3px; padding: 0 2px;}

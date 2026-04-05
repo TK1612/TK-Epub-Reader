@@ -4,7 +4,7 @@ window.handleUpload = async function(event) {
 
     const uploadBtn = document.querySelector('.upload-btn');
     const originalText = uploadBtn.innerHTML;
-    uploadBtn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Uploading...';
+    uploadBtn.innerHTML = '<i class="ph ph-spinner"></i> Uploading...';
     uploadBtn.disabled = true;
 
     for (let i = 0; i < files.length; i++) {
@@ -55,20 +55,14 @@ window.loadLibrary = async function() {
         const coverImg = value.cover ? value.cover : 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTUwIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjMmQyZDJkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmb250LXNpemU9IjE0IiBmaWxsPSIjYWNhY2FjIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+Tm8gQ292ZXI8L3RleHQ+PC9zdmc+';
         
         let progressText = "Not Started";
-        let progressWidth = "0%";
         
-        // Fetch saved progress data
+        // Fetch saved progress data to get the chapter name ONLY
         const progressData = localStorage.getItem('progress-' + key);
         if (progressData) {
             try {
                 const parsed = JSON.parse(progressData);
-                const percent = Math.max(0, Math.min(100, parsed.percentage || 0));
                 progressText = parsed.chapter || "Reading...";
-                
-                // Prevent duplicate titles if the first chapter is just the book name
                 if (progressText === value.title) progressText = "Reading...";
-                
-                progressWidth = percent + "%";
             } catch(e) {}
         }
 
@@ -82,14 +76,8 @@ window.loadLibrary = async function() {
             <img src="${coverImg}" class="book-cover">
             <div class="book-info">
                 <div class="book-title" title="${value.title}">${value.title}</div>
-                <div style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${progressText}">
+                <div style="font-size: 13px; color: var(--text-muted); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${progressText}">
                     ${progressText}
-                </div>
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <div style="flex: 1; height: 6px; background: rgba(150,150,150,0.2); border-radius: 3px; overflow: hidden;">
-                        <div style="width: ${progressWidth}; height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.5s ease;"></div>
-                    </div>
-                    <span style="font-size: 11px; color: var(--text-color); font-weight: 600; width: 32px; text-align: right;">${progressWidth}</span>
                 </div>
             </div>
         `;
@@ -106,7 +94,7 @@ window.deleteBook = async function(bookId, bookTitle) {
     if(confirm(`Are you sure you want to permanently delete "${bookTitle}"?`)) {
         await localforage.removeItem(bookId);
         localStorage.removeItem('bookmark-' + bookId);
-        localStorage.removeItem('progress-' + bookId); 
+        localStorage.removeItem('progress-' + bookId);
         window.loadLibrary(); 
     }
 };
@@ -124,8 +112,7 @@ window.loadBookmarksList = function() {
             if(progressData) {
                 try {
                     const parsed = JSON.parse(progressData);
-                    let displayChap = parsed.chapter === value.title ? "Reading" : parsed.chapter;
-                    progressText = `${displayChap} - ${parsed.percentage}%`;
+                    progressText = parsed.chapter === value.title ? "Reading" : parsed.chapter;
                 } catch(e) {}
             }
 

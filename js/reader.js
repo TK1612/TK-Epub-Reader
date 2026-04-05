@@ -119,16 +119,51 @@ window.openReader = async function(bookId, pushHistory = true) {
                  if (activeEl) activeEl.classList.add('active-toc');
             }
             
-            // FIX: Reliable Progress Percentage based strictly on Total Chapters
+            // FIX: 3-Tier Robust Progress Calculation
             let percentage = 0;
-            if (spineItem && window.book.spine && window.book.spine.length) {
-                // Calculate based on: (Current Chapter Index + 1) / Total Chapters
-                percentage = Math.floor(((spineItem.index + 1) / window.book.spine.length) * 100);
-            } else if (window.book.locations && window.book.locations.length() > 0) {
-                // Absolute fallback just in case spine math fails
-                percentage = Math.floor(window.book.locations.percentageFromCfi(location.start.cfi) * 100);
+            
+            // Tier 1: Exact Location (Fires after background generation completes)
+            if (window.book.locations && window.book.locations.length() > 0) {
+                let locPercentage = window.book.locations.percentageFromCfi(location.start.cfi);
+                if (locPercentage !== null && locPercentage >= 0) {
+                    percentage = Math.floor(locPercentage * 100);
+                }
+            } 
+            
+            // Tier 2 & 3: Fallbacks if locations aren't ready yet
+            if (percentage === 0) {
+                let foundInTOC = false;
+                
+                // Tier 2: Table of Contents math (Current Chapter / Total Chapters)
+                if (navItem && window.book.navigation && window.book.navigation.toc) {
+                    let tocArray = [];
+                    const flattenToc = (items) => {
+                        items.forEach(item => {
+                            tocArray.push(item);
+                            if (item.subitems && item.subitems.length) flattenToc(item.subitems);
+                        });
+                    };
+                    flattenToc(window.book.navigation.toc);
+                    
+                    let matchHref = navItem.href.split('#')[0];
+                    let tocIndex = tocArray.findIndex(item => item.href.split('#')[0] === matchHref);
+                    
+                    if (tocIndex !== -1 && tocArray.length > 0) {
+                        percentage = Math.floor(((tocIndex + 1) / tocArray.length) * 100);
+                        foundInTOC = true;
+                    }
+                }
+                
+                // Tier 3: Spine math (Internal HTML files / Total HTML files)
+                if (!foundInTOC && spineItem && window.book.spine && window.book.spine.spineItems) {
+                    let totalItems = window.book.spine.spineItems.length;
+                    if (totalItems > 0) {
+                        percentage = Math.floor(((spineItem.index + 1) / totalItems) * 100);
+                    }
+                }
             }
-            percentage = Math.max(0, Math.min(100, percentage)); // Ensure it stays between 0 and 100%
+            
+            percentage = Math.max(0, Math.min(100, percentage || 0));
             
             localStorage.setItem('progress-' + bookId, JSON.stringify({
                 chapter: chapterTitle,

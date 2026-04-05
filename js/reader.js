@@ -9,33 +9,31 @@ window.openReader = async function(bookId, pushHistory = true) {
     if(window.book) window.book.destroy();
     
     window.book = ePub(bookData.buffer);
-    document.getElementById('reader-container').style.display = 'flex';
+    document.getElementById('reader-container').style.display = 'block';
     
-    // --- LOAD READING MODE ---
+    // Load Reading Mode & Pin Status
     let savedMode = localStorage.getItem('reader-mode');
     if (!savedMode) {
-        // Defaults: Continuous for PC, Paginated for Mobile
         const isPC = window.innerWidth > 768 && !(/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent));
         savedMode = isPC ? 'continuous' : 'paginated';
     }
     document.getElementById('set-read-mode').value = savedMode;
+    
+    const pinTaskbar = localStorage.getItem('pin-taskbar') !== 'false';
+    document.getElementById('set-pin-taskbar').checked = pinTaskbar;
 
     let renderOptions = { width: "100%", height: "100%", spread: "none" };
-
     if (savedMode === 'continuous') {
-        renderOptions.manager = "continuous";
-        renderOptions.flow = "scrolled";
+        renderOptions.manager = "continuous"; renderOptions.flow = "scrolled";
     } else if (savedMode === 'scrolled') {
-        renderOptions.manager = "default"; // Stops epub from trying to stitch chapters together (fixes massive image bugs)
-        renderOptions.flow = "scrolled";
+        renderOptions.manager = "default"; renderOptions.flow = "scrolled";
     } else {
-        renderOptions.manager = "default";
-        renderOptions.flow = "paginated";
+        renderOptions.manager = "default"; renderOptions.flow = "paginated";
     }
     
     window.rendition = window.book.renderTo("viewer", renderOptions);
     
-    // --- UPDATED: Image sizing back to normal 100%, added body padding ---
+    // Default Themes injected into EPUB
     window.rendition.themes.default({
         "img": {
             "max-width": "100% !important",
@@ -44,7 +42,7 @@ window.openReader = async function(bookId, pushHistory = true) {
             "margin": "0 auto"
         },
         "body": {
-            "padding-bottom": "40px !important" // Ensures images/text don't stick to the bottom bar
+            "padding-bottom": "80px !important" // Ensures bottom text isn't hidden under the taskbar
         },
         "::-webkit-scrollbar": { "width": "6px", "height": "6px" },
         "::-webkit-scrollbar-track": { "background": "transparent" },
@@ -69,9 +67,37 @@ window.openReader = async function(bookId, pushHistory = true) {
             localStorage.setItem('bookmark-' + bookId, location.start.cfi);
         });
 
-        // Mobile swipe gestures
+        // --- SCROLL & SWIPE LISTENERS ---
         window.rendition.hooks.content.register(function(contents) {
             let touchStartX = 0; let touchEndX = 0;
+            let lastScrollTop = 0;
+            const taskbar = document.getElementById('bottom-taskbar');
+
+            // Auto-Hide Taskbar on Scroll
+            contents.window.addEventListener('scroll', function() {
+                const isPinned = document.getElementById('set-pin-taskbar').checked;
+                if (isPinned) {
+                    taskbar.classList.remove('hidden');
+                    return;
+                }
+
+                let st = contents.window.pageYOffset || contents.document.documentElement.scrollTop;
+                if (st > lastScrollTop && st > 50) {
+                    taskbar.classList.add('hidden'); // Scrolling down
+                } else if (st < lastScrollTop) {
+                    taskbar.classList.remove('hidden'); // Scrolling up
+                }
+                lastScrollTop = st <= 0 ? 0 : st;
+            }, { passive: true });
+
+            // Click middle of screen to force-show taskbar
+            contents.document.addEventListener('click', function(e) {
+                if (!document.getElementById('set-pin-taskbar').checked) {
+                    taskbar.classList.remove('hidden');
+                }
+            });
+
+            // Mobile Swipe Logic
             contents.document.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; }, { passive: true });
             contents.document.addEventListener('touchend', e => {
                 touchEndX = e.changedTouches[0].screenX;
@@ -81,7 +107,7 @@ window.openReader = async function(bookId, pushHistory = true) {
             }, { passive: true });
         });
 
-        // Table of contents
+        // Generate TOC
         window.book.loaded.navigation.then(function(toc) {
             const tocList = document.getElementById('toc-list');
             tocList.innerHTML = '';
@@ -126,9 +152,7 @@ window.closeReader = function(pushHistory = true) {
     window.book = null;
     window.rendition = null;
     
-    if (pushHistory) {
-        window.showView('library');
-    }
+    if (pushHistory) window.showView('library');
 };
 
 window.toggleSettings = function() { 
@@ -137,6 +161,11 @@ window.toggleSettings = function() {
 };
 
 window.updateSettings = function() {
+    // Save pin taskbar preference
+    const isPinned = document.getElementById('set-pin-taskbar').checked;
+    localStorage.setItem('pin-taskbar', isPinned);
+    if (isPinned) document.getElementById('bottom-taskbar').classList.remove('hidden');
+
     if(!window.rendition) return;
     const fontSize = document.getElementById('set-font').value + 'px';
     const lineHeight = document.getElementById('set-line').value;
@@ -152,12 +181,10 @@ window.updateSettings = function() {
     window.rendition.themes.override('color', textColor + ' !important');
 };
 
-// NEW: Dynamically change reading mode without losing your page
 window.changeReadMode = function() {
     const mode = document.getElementById('set-read-mode').value;
     localStorage.setItem('reader-mode', mode);
 
-    // Save exact current location so it resumes flawlessly
     if (window.rendition && window.currentBookId) {
         const location = window.rendition.currentLocation();
         if (location && location.start) {
@@ -166,11 +193,8 @@ window.changeReadMode = function() {
     }
 
     window.closeAllModals();
-    
-    // Briefly show a loading state while epub.js rebuilds the engine
     document.getElementById('chapter-title').innerText = "Changing mode...";
     
-    // Re-open the reader. It will automatically load the mode and jump to the saved bookmark!
     setTimeout(() => {
         window.openReader(window.currentBookId, false);
     }, 100);

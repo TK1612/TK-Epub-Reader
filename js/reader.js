@@ -21,12 +21,12 @@ window.openReader = async function(bookId, pushHistory = true) {
     const pinTaskbar = localStorage.getItem('pin-taskbar') !== 'false';
     document.getElementById('set-pin-taskbar').checked = pinTaskbar;
 
-    // REVERTED to your original manager settings to prevent crashes
+    // FIXED: Added manager: "continuous" to enable cross-chapter scrolling natively
     let renderOptions = { 
         width: "100%", 
         height: "100%", 
         spread: "none",
-        manager: "default",
+        manager: savedMode === 'continuous' ? "continuous" : "default",
         flow: savedMode === 'continuous' || savedMode === 'scrolled' ? "scrolled-doc" : "paginated"
     };
     
@@ -37,12 +37,12 @@ window.openReader = async function(bookId, pushHistory = true) {
     });
     
     // -------------------------------------------------------------
-    // CSS THEME INJECTION (Restored to exact original + setup for spacing)
+    // CSS THEME INJECTION (Stored globally so Settings can update it)
     // -------------------------------------------------------------
-    window.currentThemeCSS = {
+    window.baseThemeCSS = {
         "img": { 
             "max-width": "100% !important", 
-            "max-height": "90vh !important", // REVERTED exactly to your original
+            "height": "auto !important", // FIXED: Removed vh units to prevent tiny image bugs
             "object-fit": "contain !important",
             "display": "block !important", 
             "margin": "0 auto !important" 
@@ -53,23 +53,21 @@ window.openReader = async function(bookId, pushHistory = true) {
     };
 
     if (savedMode === 'continuous' || savedMode === 'scrolled') {
-        window.currentThemeCSS["html"] = { "overflow-x": "hidden" };
-        window.currentThemeCSS["body"] = { 
+        window.baseThemeCSS["html"] = { "overflow-x": "hidden" };
+        window.baseThemeCSS["body"] = { 
             "max-width": "900px !important", 
             "margin": "0 auto !important", 
             "padding": "0 20px 80px 20px !important",
             "overflow-x": "hidden" 
         };
     } else {
-        window.currentThemeCSS["html"] = { "touch-action": "pan-y !important" };
-        window.currentThemeCSS["body"] = { 
+        window.baseThemeCSS["body"] = { 
             "padding": "0 !important",
             "margin": "0 !important",
-            "touch-action": "pan-y !important"
         };
     }
 
-    window.rendition.themes.default(window.currentThemeCSS);
+    window.rendition.themes.default(window.baseThemeCSS);
     window.rendition.themes.register("dark", { "body": { "background": "#000000", "color": "#e4e4e7" }});
     window.rendition.themes.register("light", { "body": { "background": "#ffffff", "color": "#18181b" }});
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
@@ -113,7 +111,7 @@ window.openReader = async function(bookId, pushHistory = true) {
         });
 
         // -------------------------------------------------------------
-        // HOOKS: Mobile Swipe & Standard Interactions
+        // HOOKS: SWIPE (Paginated Only), CLICK, & SCROLL
         // -------------------------------------------------------------
         window.rendition.hooks.content.register(function(contents) {
             let startX = 0;
@@ -122,14 +120,16 @@ window.openReader = async function(bookId, pushHistory = true) {
             const iframeDoc = contents.document;
             
             iframeDoc.addEventListener('touchstart', e => {
-                startX = e.changedTouches[0].clientX;
-                startY = e.changedTouches[0].clientY;
+                startX = e.changedTouches[0].screenX;
+                startY = e.changedTouches[0].screenY;
                 isSwiping = false; 
             }, { passive: true });
 
+            const isPassive = savedMode === 'continuous' ? true : false;
+
             iframeDoc.addEventListener('touchmove', e => {
-                let currentX = e.changedTouches[0].clientX;
-                let currentY = e.changedTouches[0].clientY;
+                let currentX = e.changedTouches[0].screenX;
+                let currentY = e.changedTouches[0].screenY;
                 let diffX = Math.abs(startX - currentX);
                 let diffY = Math.abs(startY - currentY);
 
@@ -137,11 +137,12 @@ window.openReader = async function(bookId, pushHistory = true) {
                     isSwiping = true;
                 }
 
-                // Strictly isolate preventDefault to Paginated mode so Continuous scroll doesn't break
-                if (savedMode === 'paginated' && diffX > diffY && diffX > 10) {
-                    if (e.cancelable) e.preventDefault();
+                if (savedMode === 'paginated') {
+                    if (diffX > diffY && diffX > 10) {
+                        if (e.cancelable) e.preventDefault();
+                    }
                 }
-            }, { passive: savedMode === 'paginated' ? false : true });
+            }, { passive: isPassive });
 
             iframeDoc.addEventListener('touchcancel', e => {
                 isSwiping = false;
@@ -150,12 +151,12 @@ window.openReader = async function(bookId, pushHistory = true) {
             iframeDoc.addEventListener('touchend', e => {
                 if (!isSwiping) return;
 
-                let endX = e.changedTouches[0].clientX;
-                let endY = e.changedTouches[0].clientY;
+                let endX = e.changedTouches[0].screenX;
+                let endY = e.changedTouches[0].screenY;
                 let diffX = startX - endX; 
                 let diffY = Math.abs(startY - endY);
 
-                if (savedMode === 'paginated' && Math.abs(diffX) > 40 && Math.abs(diffX) > diffY * 1.5) {
+                if (savedMode === 'paginated' && Math.abs(diffX) > 40 && Math.abs(diffX) > diffY) {
                     if (diffX > 0) window.rendition.next();
                     else window.rendition.prev();
                 }
@@ -198,7 +199,7 @@ window.openReader = async function(bookId, pushHistory = true) {
         });
 
         // -------------------------------------------------------------
-        // TOC FLATTENING (Original)
+        // TOC FLATTENING
         // -------------------------------------------------------------
         window.book.loaded.navigation.then(function(toc) {
             const tocList = document.getElementById('toc-list');
@@ -277,7 +278,7 @@ window.updateSettings = function() {
     const fontFamily = document.getElementById('set-font-family').value;
     const textColor = document.getElementById('set-text-color').value;
     
-    // NEW: Safely grab the slider value and push it cleanly into the active CSS theme
+    // Process paragraph spacing
     const paraSpacingEl = document.getElementById('set-para-spacing');
     const paraSpacing = paraSpacingEl ? paraSpacingEl.value + 'em' : '0em';
     
@@ -287,11 +288,11 @@ window.updateSettings = function() {
         document.getElementById('val-para-spacing').innerText = paraSpacing;
     }
 
-    // Merge paragraph spacing without destroying existing CSS bounds
-    if (window.currentThemeCSS) {
-        window.currentThemeCSS["p"] = { "margin-bottom": paraSpacing + " !important" };
-        window.rendition.themes.default(window.currentThemeCSS);
-    }
+    // Combine base theme with dynamic paragraph spacing
+    let dynamicTheme = Object.assign({}, window.baseThemeCSS, {
+        "p": { "margin-bottom": paraSpacing + " !important" }
+    });
+    window.rendition.themes.default(dynamicTheme);
 
     window.rendition.themes.fontSize(fontSize);
     window.rendition.themes.font(fontFamily);

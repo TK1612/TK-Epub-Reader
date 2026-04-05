@@ -61,10 +61,12 @@ window.openReader = async function(bookId, pushHistory = true) {
             "overflow-x": "hidden" 
         };
     } else {
-        // FIXED: Zero padding or margins for Paginated Mode to stop the 1-Page bug natively
+        // FIXED: Stop the mobile browser from stealing the horizontal swipe gesture
+        themeCSS["html"] = { "touch-action": "pan-y !important" };
         themeCSS["body"] = { 
             "padding": "0 !important",
             "margin": "0 !important",
+            "touch-action": "pan-y !important"
         };
     }
 
@@ -121,14 +123,14 @@ window.openReader = async function(bookId, pushHistory = true) {
             const iframeDoc = contents.document;
             
             iframeDoc.addEventListener('touchstart', e => {
-                startX = e.changedTouches[0].screenX;
-                startY = e.changedTouches[0].screenY;
+                startX = e.changedTouches[0].clientX;
+                startY = e.changedTouches[0].clientY;
                 isSwiping = false; // Reset the flag on touch
             }, { passive: true });
 
             iframeDoc.addEventListener('touchmove', e => {
-                let currentX = e.changedTouches[0].screenX;
-                let currentY = e.changedTouches[0].screenY;
+                let currentX = e.changedTouches[0].clientX;
+                let currentY = e.changedTouches[0].clientY;
                 let diffX = Math.abs(startX - currentX);
                 let diffY = Math.abs(startY - currentY);
 
@@ -138,20 +140,26 @@ window.openReader = async function(bookId, pushHistory = true) {
                 }
             }, { passive: true });
 
+            iframeDoc.addEventListener('touchcancel', e => {
+                isSwiping = false;
+            }, { passive: true });
+
             iframeDoc.addEventListener('touchend', e => {
                 // If it's a tap, let the 'click' event handle the UI toggle natively
                 if (!isSwiping) return;
 
                 // Handle the Page Swipe
-                let endX = e.changedTouches[0].screenX;
-                let endY = e.changedTouches[0].screenY;
+                let endX = e.changedTouches[0].clientX;
+                let endY = e.changedTouches[0].clientY;
                 let diffX = startX - endX; 
                 let diffY = Math.abs(startY - endY);
 
-                if (Math.abs(diffX) > 40 && Math.abs(diffX) > diffY) {
+                if (Math.abs(diffX) > 40 && Math.abs(diffX) > diffY * 1.5) {
                     if (diffX > 0) window.rendition.next();
                     else window.rendition.prev();
                 }
+                
+                isSwiping = false; // Reset flag after swipe finishes
             }, { passive: true });
 
             // This naturally catches Taps on Mobile AND Mouse Clicks on PC

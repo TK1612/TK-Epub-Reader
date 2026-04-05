@@ -9,7 +9,8 @@ window.openReader = async function(bookId) {
     
     window.rendition = window.book.renderTo("viewer", { width: "100%", height: "100%", spread: "none" });
     
-    window.rendition.themes.register("dark", { "body": { "background": "#0f172a", "color": "#f8fafc" }});
+    // Set Pure Black Dark Theme
+    window.rendition.themes.register("dark", { "body": { "background": "#000000", "color": "#e4e4e7" }});
     window.rendition.themes.register("light", { "body": { "background": "#ffffff", "color": "#18181b" }});
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     window.rendition.themes.select(isDark ? "dark" : "light");
@@ -24,19 +25,42 @@ window.openReader = async function(bookId) {
         window.rendition.on('relocated', function(location) {
             const navItem = window.book.navigation.get(location.start.href);
             document.getElementById('chapter-title').innerText = navItem ? navItem.label : bookData.title;
-            // Auto-save location on page turn
             localStorage.setItem('bookmark-' + bookId, location.start.cfi);
         });
 
+        // Generate Table of Contents with Page Numbers
         window.book.loaded.navigation.then(function(toc) {
             const tocList = document.getElementById('toc-list');
             tocList.innerHTML = '';
-            toc.forEach(function(chapter) {
+            
+            // 1. Draw TOC instantly to not block the UI
+            toc.forEach(function(chapter, index) {
                 let li = document.createElement('li');
                 li.className = 'list-item';
-                li.innerText = chapter.label;
+                li.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span>${chapter.label}</span>
+                        <span id="toc-page-${index}" style="font-size:12px; color:var(--text-muted); background:var(--border); padding:2px 6px; border-radius:4px;">...</span>
+                    </div>`;
                 li.onclick = () => { window.rendition.display(chapter.href); window.closeAllModals(); };
                 tocList.appendChild(li);
+            });
+
+            // 2. Generate locations asynchronously in background to find page numbers
+            window.book.locations.generate(1024).then(() => {
+                toc.forEach(function(chapter, index) {
+                    let spineItem = window.book.spine.get(chapter.href);
+                    let pageNum = "";
+                    if(spineItem && spineItem.cfiBase) {
+                        let percentage = window.book.locations.percentageFromCfi(spineItem.cfiBase);
+                        pageNum = Math.max(1, Math.round(percentage * window.book.locations.total));
+                    }
+                    const pageSpan = document.getElementById('toc-page-' + index);
+                    if(pageSpan) pageSpan.innerText = pageNum ? `Pg. ${pageNum}` : '';
+                });
+            }).catch(() => {
+                // If it fails, clear the '...' dots
+                toc.forEach((c, i) => document.getElementById('toc-page-' + i).innerText = '');
             });
         });
     });
@@ -57,14 +81,17 @@ window.updateSettings = function() {
     const fontSize = document.getElementById('set-font').value + 'px';
     const lineHeight = document.getElementById('set-line').value;
     const fontFamily = document.getElementById('set-font-family').value;
+    const textColor = document.getElementById('set-text-color').value;
     
     document.getElementById('val-font').innerText = fontSize;
     document.getElementById('val-line').innerText = lineHeight;
 
     window.rendition.themes.fontSize(fontSize);
     window.rendition.themes.font(fontFamily);
-    window.rendition.themes.register("custom", { "p": { "line-height": lineHeight + " !important" } });
-    window.rendition.themes.select("custom");
+    
+    // Instead of overriding the theme completely, inject the CSS rule safely
+    window.rendition.themes.override('line-height', lineHeight + ' !important');
+    window.rendition.themes.override('color', textColor + ' !important');
 };
 
 window.toggleTOC = function() {

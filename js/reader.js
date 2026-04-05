@@ -21,7 +21,7 @@ window.openReader = async function(bookId, pushHistory = true) {
     const pinTaskbar = localStorage.getItem('pin-taskbar') !== 'false';
     document.getElementById('set-pin-taskbar').checked = pinTaskbar;
 
-    // Native cross-chapter scrolling
+    // FIXED: Restored manager: "continuous" for native cross-chapter scrolling
     let renderOptions = { 
         width: "100%", 
         height: "100%", 
@@ -37,7 +37,7 @@ window.openReader = async function(bookId, pushHistory = true) {
     });
     
     // -------------------------------------------------------------
-    // CSS THEME INJECTION
+    // CSS THEME INJECTION (Images securely locked to 90vh)
     // -------------------------------------------------------------
     window.currentThemeCSS = {
         "img": { 
@@ -78,33 +78,30 @@ window.openReader = async function(bookId, pushHistory = true) {
     window.updateSettings();
 
     // ==============================================================
-    // GUARANTEED PROGRESS SAVER
+    // FIXED: BULLETPROOF PROGRESS SAVER
     // ==============================================================
-    const updateAndSaveProgress = (currentLocation, chapterLabel) => {
+    const updateAndSaveProgress = (cfi, chapterLabel) => {
         let percent = 0;
         
-        // 1. Pull the previous percentage as a shield
+        // 1. Pull the previous percentage to act as a shield against 0% overwrites
         const oldStr = localStorage.getItem('progress-' + bookId);
         if (oldStr) { 
             try { percent = JSON.parse(oldStr).percentage || 0; } catch(e){} 
         }
 
-        // 2. Ensure locations exist before trusting the math
-        const isGenerated = window.book.locations && 
-            ((typeof window.book.locations.length === 'function' && window.book.locations.length() > 0) || 
-             window.book.locations.length > 0 || 
-             window.book.locations.total > 0);
+        // 2. Only allow a new percentage calculation IF the locations are completely generated
+        const hasLocations = window.book.locations && (window.book.locations.total > 0 || (typeof window.book.locations.length === 'function' && window.book.locations.length() > 0));
         
-        if (isGenerated && currentLocation && currentLocation.start && currentLocation.start.cfi) {
+        if (hasLocations) {
             try {
-                let pFloat = window.book.locations.percentageFromCfi(currentLocation.start.cfi);
+                let pFloat = window.book.locations.percentageFromCfi(cfi);
                 if (pFloat !== null && pFloat >= 0 && pFloat <= 1) {
                     percent = Math.round(pFloat * 100);
                 }
             } catch(e) {}
         }
 
-        // 3. Save it securely to local storage
+        // 3. Save the guaranteed safe percentage
         localStorage.setItem('progress-' + bookId, JSON.stringify({
             chapter: chapterLabel,
             percentage: percent
@@ -147,7 +144,7 @@ window.openReader = async function(bookId, pushHistory = true) {
             localStorage.setItem('bookmark-' + bookId, location.start.cfi);
 
             // Execute safe progress saving mechanism
-            updateAndSaveProgress(location, chapterLabel);
+            updateAndSaveProgress(location.start.cfi, chapterLabel);
 
             document.querySelectorAll('#toc-list .list-item').forEach(li => {
                 li.classList.remove('active-toc');
@@ -310,7 +307,7 @@ window.openReader = async function(bookId, pushHistory = true) {
                     const currentLocation = window.rendition.currentLocation();
                     if (currentLocation && currentLocation.start) {
                         let chapterLabel = document.getElementById('chapter-title').innerText;
-                        updateAndSaveProgress(currentLocation, chapterLabel);
+                        updateAndSaveProgress(currentLocation.start.cfi, chapterLabel);
                     }
                 }).catch(() => { updateTocSpans(); });
             } else {
@@ -326,11 +323,6 @@ window.closeReader = function(pushHistory = true) {
     window.book = null;
     window.rendition = null;
     if (pushHistory) window.showView('library');
-    
-    // VITAL FIX: Force the library to redraw when you go back to it, so the percentage visually updates
-    if (typeof window.loadLibrary === 'function') {
-        window.loadLibrary();
-    }
 };
 
 window.toggleSettings = function() { 
@@ -403,12 +395,8 @@ window.saveBookmark = function() {
     const oldStr = localStorage.getItem('progress-' + window.currentBookId);
     if(oldStr) { try { percent = JSON.parse(oldStr).percentage || 0; } catch(e){} }
 
-    const isGenerated = window.book.locations && 
-        ((typeof window.book.locations.length === 'function' && window.book.locations.length() > 0) || 
-         window.book.locations.length > 0 || 
-         window.book.locations.total > 0);
-
-    if (isGenerated) {
+    const hasLocs = window.book.locations && (window.book.locations.total > 0 || (typeof window.book.locations.length === 'function' && window.book.locations.length() > 0));
+    if (hasLocs) {
         try {
             let pFloat = window.book.locations.percentageFromCfi(location.start.cfi);
             if (pFloat !== null && pFloat >= 0 && pFloat <= 1) {

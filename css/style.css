@@ -25,7 +25,7 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', system-ui, sans-serif; }
 
-/* FIXED: Prevent native browser pull-to-refresh and back-swipe */
+/* FIXED: Prevent native browser pull-to-refresh and back-swipe navigation */
 body { 
     background: var(--bg-color); 
     color: var(--text-color); 
@@ -78,7 +78,7 @@ body {
 .btn-primary { background: var(--accent); color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; }
 .btn-secondary { background: transparent; color: var(--text-color); border: 1px solid var(--border); padding: 10px 16px; border-radius: 8px; cursor: pointer; }
 
-/* UPLOAD NOVEL BUTTON (Matches active TOC glass blue) */
+/* UPLOAD NOVEL BUTTON (Glass Blue Style) */
 .upload-btn {
     background-color: rgba(59, 130, 246, 0.15) !important;
     color: var(--text-color) !important;
@@ -119,23 +119,29 @@ body {
     top: 0; 
     left: 0; 
     width: 100vw; 
-    height: 100vh; 
+    height: 100dvh; /* 100dvh properly accounts for mobile browser URL bars */
     background: var(--bg-color); 
     z-index: 300; 
     display: none; 
-    touch-action: pan-y; /* Tells the browser to ONLY allow vertical scrolling natively */
+    /* touch-action is dynamically handled by JavaScript now */
 }
 
-#viewer { width: 100vw; height: 100%; margin: 0; padding: 0; background: var(--bg-color); }
+#viewer { 
+    width: 100vw; 
+    height: 100%; 
+    margin: 0; 
+    padding: 0; 
+    background: var(--bg-color); 
+    overflow: hidden;
+}
 
-/* Force epub.js iframe to respect the container bounds */
 #viewer iframe {
     width: 100% !important;
     height: 100% !important;
     border: none;
 }
 
-/* Left-Aligned Title via Flexbox */
+/* Left-Aligned Flexible Taskbar */
 .bottom-bar { 
     position: fixed; 
     bottom: 24px; 
@@ -171,7 +177,7 @@ body {
     font-size: 14px; 
     font-weight: 600; 
     color: var(--text-color); 
-    text-align: left; /* Kept flush left with the home buttons */
+    text-align: left; 
     white-space: nowrap; 
     overflow: hidden; 
     text-overflow: ellipsis; 
@@ -199,6 +205,7 @@ textarea { flex: 1; font-family: monospace; resize: none; }
 
 /* TOC ACTIVE HIGHLIGHT WITH GLASS BLUE */
 .list-item.active-toc { border: 1px solid var(--accent) !important; background-color: rgba(59, 130, 246, 0.15) !important; }
+
 mark { background: rgba(59, 130, 246, 0.3); color: var(--text-color); border-radius: 3px; padding: 0 2px;}
 .setting-group { margin-bottom: 15px; }
 .setting-group label { display: flex; justify-content: space-between; align-items: center; font-size: 13px; margin-bottom: 8px; color: var(--text-muted); }

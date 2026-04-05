@@ -11,12 +11,13 @@
     --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
+/* Updated Dark Mode: Full Black */
 [data-theme="dark"] {
-    --bg-color: #0f172a;
-    --surface: #1e293b;
-    --text-color: #f8fafc;
-    --text-muted: #94a3b8;
-    --border: #334155;
+    --bg-color: #000000;
+    --surface: #121212; 
+    --text-color: #e4e4e7;
+    --text-muted: #a1a1aa;
+    --border: #27272a;
     --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
 }
 
@@ -57,7 +58,7 @@ body { background: var(--bg-color); color: var(--text-color); overflow: hidden; 
 .library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 25px; }
 .book-card { background: var(--surface); border-radius: 12px; overflow: hidden; cursor: pointer; border: 1px solid var(--border); box-shadow: var(--shadow); position: relative; transition: transform 0.2s; }
 .book-card:hover { transform: translateY(-4px); }
-.book-cover { width: 100%; height: 240px; object-fit: cover; border-bottom: 1px solid var(--border); background: #333; }
+.book-cover { width: 100%; height: 240px; object-fit: cover; border-bottom: 1px solid var(--border); background: #111; }
 .book-info { padding: 15px; }
 .book-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
 .book-progress { font-size: 12px; color: var(--text-muted); }
@@ -92,6 +93,7 @@ body { background: var(--bg-color); color: var(--text-color); overflow: hidden; 
 
 /* INPUTS & LISTS */
 input[type="text"], textarea, select { width: 100%; padding: 10px; background: var(--bg-color); color: var(--text-color); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; font-size: 14px;}
+input[type="color"] { background: transparent; border: none; cursor: pointer; padding: 0; border-radius: 4px; }
 textarea { flex: 1; font-family: monospace; resize: none; }
 .replace-bar { display: flex; gap: 10px; margin-bottom: 15px; }
 .editor-controls { display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px; }

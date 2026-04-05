@@ -21,6 +21,7 @@ window.openReader = async function(bookId, pushHistory = true) {
     const pinTaskbar = localStorage.getItem('pin-taskbar') !== 'false';
     document.getElementById('set-pin-taskbar').checked = pinTaskbar;
 
+    // Use strict percentages so Epub.js reads the 100dvh CSS container perfectly
     let renderOptions = { 
         width: "100%", 
         height: "100%", 
@@ -36,6 +37,11 @@ window.openReader = async function(bookId, pushHistory = true) {
     }
     
     window.rendition = window.book.renderTo("viewer", renderOptions);
+    
+    // Resize listener ensures columns recalculate if you rotate your phone
+    window.addEventListener("resize", () => {
+        if (window.rendition) window.rendition.resize();
+    });
     
     let themeCSS = {
         "img": { 
@@ -59,10 +65,9 @@ window.openReader = async function(bookId, pushHistory = true) {
             "overflow-x": "hidden" 
         };
     } else {
+        // PAGINATED MODE: Absolutely NO overflow limitations. Let it calculate columns freely.
         themeCSS["body"] = { 
-            "margin": "0 !important", 
-            "padding": "0 !important",
-            "touch-action": "pan-y !important"
+            "padding": "0 15px !important"
         };
     }
 
@@ -109,65 +114,60 @@ window.openReader = async function(bookId, pushHistory = true) {
             });
         });
 
-        window.rendition.hooks.content.register(function(contents) {
+        // -------------------------------------------------------------
+        // NATIVE EPUB.JS EVENT TUNNELING (Fixes Swipe & Click natively)
+        // -------------------------------------------------------------
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let touchStartTime = 0;
+
+        window.rendition.on('touchstart', function(event) {
+            let touch = event.changedTouches ? event.changedTouches[0] : event.touches[0];
+            touchStartX = touch.clientX;
+            touchStartY = touch.clientY;
+            touchStartTime = Date.now();
+        });
+
+        window.rendition.on('touchend', function(event) {
+            let touch = event.changedTouches ? event.changedTouches[0] : event.touches[0];
+            let diffX = touchStartX - touch.clientX; 
+            let diffY = Math.abs(touchStartY - touch.clientY);
+            let timeTaken = Date.now() - touchStartTime;
+
+            // Highly accurate Swipe Detection (>40px movement, horizontal bias, <500ms)
+            if (timeTaken < 500 && Math.abs(diffX) > 40 && Math.abs(diffX) > diffY) {
+                if (diffX > 0) window.rendition.next();
+                else window.rendition.prev();
+            }
+        });
+
+        window.rendition.on('click', function(event) {
             const taskbar = document.getElementById('bottom-taskbar');
             const pinCheckbox = document.getElementById('set-pin-taskbar');
+            
+            // Ignore if clicking a hyperlink
+            if (event.target && event.target.tagName && event.target.tagName.toLowerCase() === 'a') return;
+            
+            // Ignore if selecting text to copy
+            const contents = window.rendition.getContents()[0];
+            if (contents) {
+                const selection = contents.window.getSelection();
+                if (selection && selection.toString().length > 0) return;
+            }
 
-            // -------------------------------------------------------------
-            // THE UNIFIED GESTURE RECOGNIZER (Replaces Click AND Swipe)
-            // -------------------------------------------------------------
-            let startX = 0;
-            let startY = 0;
-            let startTime = 0;
+            // Hide/Show taskbar gracefully
+            if (!pinCheckbox.checked) {
+                taskbar.classList.toggle('hidden');
+            }
+        });
 
-            contents.document.addEventListener('touchstart', e => {
-                startX = e.changedTouches[0].clientX;
-                startY = e.changedTouches[0].clientY;
-                startTime = Date.now();
-            }, { passive: true });
-
-            contents.document.addEventListener('touchend', e => {
-                let endX = e.changedTouches[0].clientX;
-                let endY = e.changedTouches[0].clientY;
-                
-                let diffX = startX - endX; // Positive if swiped left
-                let diffY = startY - endY;
-                let absDiffX = Math.abs(diffX);
-                let absDiffY = Math.abs(diffY);
-                let timeTaken = Date.now() - startTime;
-
-                // 1. TAP DETECTION (Menu Toggle)
-                // If finger barely moved (< 10px) and was quick (< 300ms)
-                if (absDiffX < 10 && absDiffY < 10 && timeTaken < 300) {
-                    // Ignore tap if clicking a hyperlink
-                    if (e.target && e.target.tagName && e.target.tagName.toLowerCase() === 'a') return;
-                    
-                    // Ignore tap if highlighting text
-                    const selection = contents.window.getSelection();
-                    if (selection && selection.toString().length > 0) return;
-
-                    if (!pinCheckbox.checked) {
-                        taskbar.classList.toggle('hidden');
-                    } else {
-                        taskbar.classList.remove('hidden');
-                    }
-                    return; // Stop running code, tap is complete.
-                }
-
-                // 2. SWIPE DETECTION (Turn Page)
-                // If fast (< 600ms), intentional (> 40px), and horizontal
-                if (timeTaken < 600 && absDiffX > 40 && absDiffX > absDiffY) {
-                    if (diffX > 0) {
-                        window.rendition.next();
-                    } else {
-                        window.rendition.prev();
-                    }
-                }
-            }, { passive: true });
-
-            // Auto-hide scroll logic (Only runs in continuous mode)
+        // The only thing we need hooks for is scroll-hiding the menu in continuous mode
+        window.rendition.hooks.content.register(function(contents) {
             let lastScrollTop = 0;
             contents.window.addEventListener('scroll', function() {
+                const taskbar = document.getElementById('bottom-taskbar');
+                const pinCheckbox = document.getElementById('set-pin-taskbar');
+                
                 if (pinCheckbox.checked) {
                     taskbar.classList.remove('hidden');
                     return;
@@ -180,11 +180,9 @@ window.openReader = async function(bookId, pushHistory = true) {
                 
                 lastScrollTop = st <= 0 ? 0 : st;
             }, { passive: true });
-            
-            // NOTICE: The contents.document.addEventListener('click') has been DELETED entirely.
         });
 
-        // TOC Generation
+        // Recursive TOC Generation
         window.book.loaded.navigation.then(function(toc) {
             const tocList = document.getElementById('toc-list');
             tocList.innerHTML = '';

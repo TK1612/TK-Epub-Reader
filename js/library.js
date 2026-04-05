@@ -16,7 +16,9 @@ window.handleUpload = async function(event) {
             tempBook.ready.then(async () => {
                 const meta = tempBook.packaging.metadata;
                 const title = meta.title || "Unknown Title";
-                const bookId = meta.identifier || (title + Date.now() + i); 
+                
+                // FIXED: Smarter ID generation prevents database duplicates if you upload the same file twice
+                const bookId = meta.identifier || (title.replace(/\s+/g, '') + "_" + file.size); 
                 
                 let coverBase64 = "";
                 const coverUrl = await tempBook.coverUrl();
@@ -41,53 +43,69 @@ window.handleUpload = async function(event) {
         });
     }
 
-    window.loadLibrary();
+    await window.loadLibrary();
     uploadBtn.innerHTML = originalText;
     uploadBtn.disabled = false;
     event.target.value = ''; 
 };
 
+// FIXED: Added a loading lock to prevent Race Conditions (drawing duplicates)
+let isLibraryLoading = false;
+
 window.loadLibrary = async function() {
-    const grid = document.getElementById('library-grid');
-    grid.innerHTML = '';
+    if (isLibraryLoading) return; // If already loading, stop the duplicate process
+    isLibraryLoading = true;
     
-    localforage.iterate(function(value, key) {
-        const coverImg = value.cover ? value.cover : 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTUwIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjMmQyZDJkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmb250LXNpemU9IjE0IiBmaWxsPSIjYWNhY2FjIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+Tm8gQ292ZXI8L3RleHQ+PC9zdmc+';
+    try {
+        const grid = document.getElementById('library-grid');
+        if (!grid) return;
         
-        let progressText = "Not Started";
+        const cards = []; // Store cards in an array first
         
-        // Fetch saved progress data to get the chapter name ONLY
-        const progressData = localStorage.getItem('progress-' + key);
-        if (progressData) {
-            try {
-                const parsed = JSON.parse(progressData);
-                progressText = parsed.chapter || "Reading...";
-                if (progressText === value.title) progressText = "Reading...";
-            } catch(e) {}
-        }
+        await localforage.iterate(function(value, key) {
+            const coverImg = value.cover ? value.cover : 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTUwIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjMmQyZDJkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmb250LXNpemU9IjE0IiBmaWxsPSIjYWNhY2FjIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+Tm8gQ292ZXI8L3RleHQ+PC9zdmc+';
+            
+            let progressText = "Not Started";
+            
+            const progressData = localStorage.getItem('progress-' + key);
+            if (progressData) {
+                try {
+                    const parsed = JSON.parse(progressData);
+                    progressText = parsed.chapter || "Reading...";
+                    if (progressText === value.title) progressText = "Reading...";
+                } catch(e) {}
+            }
 
-        const card = document.createElement('div');
-        card.className = 'book-card';
-        card.innerHTML = `
-            <div class="delete-overlay">
-                <i class="ph ph-trash"></i>
-                <span>Click to Delete</span>
-            </div>
-            <img src="${coverImg}" class="book-cover">
-            <div class="book-info">
-                <div class="book-title" title="${value.title}">${value.title}</div>
-                <div style="font-size: 13px; color: var(--text-muted); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${progressText}">
-                    ${progressText}
+            const card = document.createElement('div');
+            card.className = 'book-card';
+            card.innerHTML = `
+                <div class="delete-overlay">
+                    <i class="ph ph-trash"></i>
+                    <span>Click to Delete</span>
                 </div>
-            </div>
-        `;
+                <img src="${coverImg}" class="book-cover">
+                <div class="book-info">
+                    <div class="book-title" title="${value.title}">${value.title}</div>
+                    <div style="font-size: 13px; color: var(--text-muted); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${progressText}">
+                        ${progressText}
+                    </div>
+                </div>
+            `;
 
-        card.onclick = () => {
-            if (window.isDeleteMode) window.deleteBook(key, value.title);
-            else window.openReader(key);
-        };
-        grid.appendChild(card);
-    });
+            card.onclick = () => {
+                if (window.isDeleteMode) window.deleteBook(key, value.title);
+                else window.openReader(key);
+            };
+            cards.push(card);
+        });
+        
+        // Clear grid completely before rendering to ensure no overlapping
+        grid.innerHTML = '';
+        cards.forEach(card => grid.appendChild(card));
+        
+    } finally {
+        isLibraryLoading = false; // Unlock when finished
+    }
 };
 
 window.deleteBook = async function(bookId, bookTitle) {
@@ -95,42 +113,56 @@ window.deleteBook = async function(bookId, bookTitle) {
         await localforage.removeItem(bookId);
         localStorage.removeItem('bookmark-' + bookId);
         localStorage.removeItem('progress-' + bookId);
+        localStorage.removeItem('locations-' + bookId); // Clean up cached locations to free memory
         window.loadLibrary(); 
     }
 };
 
-window.loadBookmarksList = function() {
-    const list = document.getElementById('bookmarks-list');
-    if(!list) return;
-    list.innerHTML = '';
+let isBookmarksLoading = false;
+
+window.loadBookmarksList = async function() {
+    if (isBookmarksLoading) return;
+    isBookmarksLoading = true;
     
-    localforage.iterate(function(value, key) {
-        const savedCfi = localStorage.getItem('bookmark-' + key);
-        if (savedCfi) {
-            let progressText = "Auto-saved progress available";
-            const progressData = localStorage.getItem('progress-' + key);
-            if(progressData) {
-                try {
-                    const parsed = JSON.parse(progressData);
-                    progressText = parsed.chapter === value.title ? "Reading" : parsed.chapter;
-                } catch(e) {}
+    try {
+        const list = document.getElementById('bookmarks-list');
+        if(!list) return;
+        
+        const items = [];
+        
+        await localforage.iterate(function(value, key) {
+            const savedCfi = localStorage.getItem('bookmark-' + key);
+            if (savedCfi) {
+                let progressText = "Auto-saved progress available";
+                const progressData = localStorage.getItem('progress-' + key);
+                if(progressData) {
+                    try {
+                        const parsed = JSON.parse(progressData);
+                        progressText = parsed.chapter === value.title ? "Reading" : parsed.chapter;
+                    } catch(e) {}
+                }
+
+                const li = document.createElement('li');
+                li.className = 'list-item';
+                li.innerHTML = `
+                    <strong style="color:var(--accent); display:block; margin-bottom:4px;">${value.title}</strong>
+                    <span style="font-size:12px; color:var(--text-muted);">${progressText}</span>
+                `;
+                li.onclick = () => {
+                    window.showView('library');
+                    window.openReader(key);
+                };
+                items.push(li);
             }
+        });
 
-            const li = document.createElement('li');
-            li.className = 'list-item';
-            li.innerHTML = `
-                <strong style="color:var(--accent); display:block; margin-bottom:4px;">${value.title}</strong>
-                <span style="font-size:12px; color:var(--text-muted);">${progressText}</span>
-            `;
-            li.onclick = () => {
-                window.showView('library');
-                window.openReader(key);
-            };
-            list.appendChild(li);
+        list.innerHTML = '';
+        items.forEach(li => list.appendChild(li));
+        
+        if (list.innerHTML === '') {
+            list.innerHTML = '<p style="color:gray; padding:10px;">No reading progress saved yet.</p>';
         }
-    });
-
-    if (list.innerHTML === '') {
-        list.innerHTML = '<p style="color:gray; padding:10px;">No reading progress saved yet.</p>';
+    } finally {
+        isBookmarksLoading = false;
     }
 };

@@ -21,28 +21,24 @@ window.openReader = async function(bookId, pushHistory = true) {
     const pinTaskbar = localStorage.getItem('pin-taskbar') !== 'false';
     document.getElementById('set-pin-taskbar').checked = pinTaskbar;
 
-    // Use strict percentages so Epub.js reads the 100dvh CSS container perfectly
     let renderOptions = { 
         width: "100%", 
         height: "100%", 
-        spread: "none" 
+        spread: "none",
+        manager: "default",
+        flow: savedMode === 'continuous' || savedMode === 'scrolled' ? "scrolled-doc" : "paginated"
     };
-    
-    if (savedMode === 'continuous') {
-        renderOptions.manager = "continuous"; renderOptions.flow = "scrolled-doc";
-    } else if (savedMode === 'scrolled') {
-        renderOptions.manager = "default"; renderOptions.flow = "scrolled-doc";
-    } else {
-        renderOptions.manager = "default"; renderOptions.flow = "paginated";
-    }
     
     window.rendition = window.book.renderTo("viewer", renderOptions);
     
-    // Resize listener ensures columns recalculate if you rotate your phone
+    // Auto-resize on phone rotation
     window.addEventListener("resize", () => {
         if (window.rendition) window.rendition.resize();
     });
     
+    // -------------------------------------------------------------
+    // CSS THEME INJECTION
+    // -------------------------------------------------------------
     let themeCSS = {
         "img": { 
             "max-width": "100% !important", 
@@ -65,9 +61,10 @@ window.openReader = async function(bookId, pushHistory = true) {
             "overflow-x": "hidden" 
         };
     } else {
-        // PAGINATED MODE: Absolutely NO overflow limitations. Let it calculate columns freely.
+        // FIXED: Zero padding or margins for Paginated Mode to stop the 1-Page bug natively
         themeCSS["body"] = { 
-            "padding": "0 15px !important"
+            "padding": "0 !important",
+            "margin": "0 !important",
         };
     }
 
@@ -115,74 +112,89 @@ window.openReader = async function(bookId, pushHistory = true) {
         });
 
         // -------------------------------------------------------------
-        // NATIVE EPUB.JS EVENT TUNNELING (Fixes Swipe & Click natively)
+        // FIXED: THE "READEST" SEPARATED SWIPE & CLICK LOGIC
         // -------------------------------------------------------------
-        let touchStartX = 0;
-        let touchStartY = 0;
-        let touchStartTime = 0;
-
-        window.rendition.on('touchstart', function(event) {
-            let touch = event.changedTouches ? event.changedTouches[0] : event.touches[0];
-            touchStartX = touch.clientX;
-            touchStartY = touch.clientY;
-            touchStartTime = Date.now();
-        });
-
-        window.rendition.on('touchend', function(event) {
-            let touch = event.changedTouches ? event.changedTouches[0] : event.touches[0];
-            let diffX = touchStartX - touch.clientX; 
-            let diffY = Math.abs(touchStartY - touch.clientY);
-            let timeTaken = Date.now() - touchStartTime;
-
-            // Highly accurate Swipe Detection (>40px movement, horizontal bias, <500ms)
-            if (timeTaken < 500 && Math.abs(diffX) > 40 && Math.abs(diffX) > diffY) {
-                if (diffX > 0) window.rendition.next();
-                else window.rendition.prev();
-            }
-        });
-
-        window.rendition.on('click', function(event) {
-            const taskbar = document.getElementById('bottom-taskbar');
-            const pinCheckbox = document.getElementById('set-pin-taskbar');
+        window.rendition.hooks.content.register(function(contents) {
+            let startX = 0;
+            let startY = 0;
+            let isSwiping = false; // The magic flag to separate swipes from clicks
+            const iframeDoc = contents.document;
             
-            // Ignore if clicking a hyperlink
-            if (event.target && event.target.tagName && event.target.tagName.toLowerCase() === 'a') return;
-            
-            // Ignore if selecting text to copy
-            const contents = window.rendition.getContents()[0];
-            if (contents) {
+            iframeDoc.addEventListener('touchstart', e => {
+                startX = e.changedTouches[0].screenX;
+                startY = e.changedTouches[0].screenY;
+                isSwiping = false; // Reset the flag on touch
+            }, { passive: true });
+
+            iframeDoc.addEventListener('touchmove', e => {
+                let currentX = e.changedTouches[0].screenX;
+                let currentY = e.changedTouches[0].screenY;
+                let diffX = Math.abs(startX - currentX);
+                let diffY = Math.abs(startY - currentY);
+
+                // If finger moves more than 10 pixels, it is officially a Swipe, not a Click
+                if (diffX > 10 || diffY > 10) {
+                    isSwiping = true;
+                }
+            }, { passive: true });
+
+            iframeDoc.addEventListener('touchend', e => {
+                // If it's a tap, let the 'click' event handle the UI toggle natively
+                if (!isSwiping) return;
+
+                // Handle the Page Swipe
+                let endX = e.changedTouches[0].screenX;
+                let endY = e.changedTouches[0].screenY;
+                let diffX = startX - endX; 
+                let diffY = Math.abs(startY - endY);
+
+                if (Math.abs(diffX) > 40 && Math.abs(diffX) > diffY) {
+                    if (diffX > 0) window.rendition.next();
+                    else window.rendition.prev();
+                }
+            }, { passive: true });
+
+            // This naturally catches Taps on Mobile AND Mouse Clicks on PC
+            iframeDoc.addEventListener('click', e => {
+                if (isSwiping) return; // Prevent double-firing if a swipe finished
+                
+                // Ignore if clicking a link or highlighting text
+                if (e.target && e.target.closest('a')) return;
                 const selection = contents.window.getSelection();
                 if (selection && selection.toString().length > 0) return;
-            }
 
-            // Hide/Show taskbar gracefully
-            if (!pinCheckbox.checked) {
-                taskbar.classList.toggle('hidden');
-            }
-        });
+                // Toggle Taskbar safely
+                const taskbar = document.getElementById('bottom-taskbar');
+                const pinCheckbox = document.getElementById('set-pin-taskbar');
+                if (taskbar && pinCheckbox && !pinCheckbox.checked) {
+                    taskbar.classList.toggle('hidden');
+                }
+            });
 
-        // The only thing we need hooks for is scroll-hiding the menu in continuous mode
-        window.rendition.hooks.content.register(function(contents) {
+            // Auto-hide scroll logic (Continuous mode)
             let lastScrollTop = 0;
             contents.window.addEventListener('scroll', function() {
                 const taskbar = document.getElementById('bottom-taskbar');
                 const pinCheckbox = document.getElementById('set-pin-taskbar');
                 
-                if (pinCheckbox.checked) {
-                    taskbar.classList.remove('hidden');
+                if (pinCheckbox && pinCheckbox.checked) {
+                    if(taskbar) taskbar.classList.remove('hidden');
                     return;
                 }
                 let st = contents.window.scrollY || contents.document.documentElement.scrollTop;
                 if (Math.abs(lastScrollTop - st) <= 5) return;
 
-                if (st > lastScrollTop && st > 20) taskbar.classList.add('hidden');
-                else if (st < lastScrollTop) taskbar.classList.remove('hidden');
-                
+                if (taskbar) {
+                    if (st > lastScrollTop && st > 20) taskbar.classList.add('hidden');
+                    else if (st < lastScrollTop) taskbar.classList.remove('hidden');
+                }
                 lastScrollTop = st <= 0 ? 0 : st;
             }, { passive: true });
         });
 
-        // Recursive TOC Generation
+        // -------------------------------------------------------------
+        // TOC FLATTENING
+        // -------------------------------------------------------------
         window.book.loaded.navigation.then(function(toc) {
             const tocList = document.getElementById('toc-list');
             tocList.innerHTML = '';
@@ -192,7 +204,6 @@ window.openReader = async function(bookId, pushHistory = true) {
                     let li = document.createElement('li');
                     li.className = 'list-item';
                     li.dataset.href = chapter.href; 
-                    
                     let padding = level * 15; 
                     
                     li.innerHTML = `

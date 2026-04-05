@@ -70,7 +70,7 @@ body { background: var(--bg-color); color: var(--text-color); overflow: hidden; 
 .btn-primary { background: var(--accent); color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; }
 .btn-secondary { background: transparent; color: var(--text-color); border: 1px solid var(--border); padding: 10px 16px; border-radius: 8px; cursor: pointer; }
 
-/* UPLOAD NOVEL BUTTON (Matches active TOC glass blue) */
+/* UPLOAD NOVEL BUTTON */
 .upload-btn {
     background-color: rgba(59, 130, 246, 0.15) !important;
     color: var(--text-color) !important;
@@ -107,9 +107,9 @@ body { background: var(--bg-color); color: var(--text-color); overflow: hidden; 
 /* --- FIXED READER & TASKBAR --- */
 #reader-container { display: block; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: var(--bg-color); z-index: 300; display: none; }
 
-/* FIXED: Scrollbar placement. The viewer takes 100vw so the scrollbar sits at the screen edge. */
 #viewer { width: 100vw; height: 100%; margin: 0; padding: 0; background: var(--bg-color); }
 
+/* FIXED: Reverted to Flexbox for Left-Aligned Title */
 .bottom-bar { 
     position: fixed; 
     bottom: 24px; 
@@ -117,8 +117,7 @@ body { background: var(--bg-color); color: var(--text-color); overflow: hidden; 
     transform: translateX(-50%); 
     width: calc(100% - 40px);
     max-width: 860px;
-    display: grid; 
-    grid-template-columns: 1fr auto 1fr; 
+    display: flex; /* Back to Flex */
     align-items: center; 
     padding: 12px 20px; 
     background: var(--glass-surface); 
@@ -137,25 +136,20 @@ body { background: var(--bg-color); color: var(--text-color); overflow: hidden; 
     pointer-events: none;
 }
 
-.bar-group { display: flex; gap: 5px; align-items: center; }
-.left-group { justify-content: flex-start; }
-.right-group { justify-content: flex-end; }
+.bar-group { display: flex; gap: 5px; align-items: center; flex-shrink: 0; }
 
-/* FIXED: Perfect vertical/row centering for the text */
 .chapter-title { 
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    margin: 0;
-    padding: 0 15px; 
+    flex: 1 1 auto; 
+    min-width: 0; 
+    margin: 0 15px; 
     font-size: 14px; 
     font-weight: 600; 
     color: var(--text-color); 
+    text-align: left; /* FIXED: Left aligned */
     white-space: nowrap; 
     overflow: hidden; 
     text-overflow: ellipsis; 
-    line-height: 1; /* Strips invisible font margins that cause misalignment */
+    line-height: 1; 
 }
 
 /* MODALS */
@@ -183,10 +177,37 @@ mark { background: rgba(59, 130, 246, 0.3); color: var(--text-color); border-rad
 .setting-group { margin-bottom: 15px; }
 .setting-group label { display: flex; justify-content: space-between; align-items: center; font-size: 13px; margin-bottom: 8px; color: var(--text-muted); }
 
-/* --- CUSTOM ENLARGED CHECKBOX --- */
-#set-pin-taskbar { appearance: none; -webkit-appearance: none; width: 24px !important; height: 24px !important; border: 2px solid var(--border); border-radius: 6px; background-color: var(--bg-color); position: relative; cursor: pointer; margin: 0; vertical-align: middle; transition: background-color 0.2s, border-color 0.2s; }
-#set-pin-taskbar:checked { background-color: var(--accent); border-color: var(--accent); }
-#set-pin-taskbar:checked::after { content: ''; position: absolute; top: 2px; left: 7px; width: 6px; height: 12px; border: solid white; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+
+/* --- FIXED: RESTORED CUSTOM ENLARGED CHECKBOX --- */
+#set-pin-taskbar { 
+    appearance: none; 
+    -webkit-appearance: none; 
+    width: 20px !important; 
+    height: 20px !important; 
+    border: 2px solid var(--border); 
+    border-radius: 4px; 
+    background-color: var(--bg-color); 
+    position: relative; 
+    cursor: pointer; 
+    margin: 0; 
+    vertical-align: middle; 
+    transition: background-color 0.2s, border-color 0.2s; 
+}
+#set-pin-taskbar:checked { 
+    background-color: var(--accent); 
+    border-color: var(--accent); 
+}
+#set-pin-taskbar:checked::after { 
+    content: ''; 
+    position: absolute; 
+    top: 1px; 
+    left: 6px; 
+    width: 5px; 
+    height: 10px; 
+    border: solid white; 
+    border-width: 0 2px 2px 0; 
+    transform: rotate(45deg); 
+}
 
 
 /* --- MOBILE RESPONSIVENESS --- */
@@ -196,7 +217,6 @@ mark { background: rgba(59, 130, 246, 0.3); color: var(--text-color); border-rad
     .view { padding: 15px; }
     
     .bottom-bar { 
-        display: flex; /* Revert back to Flex on mobile so they stack */
         bottom: 15px;
         width: calc(100% - 20px); 
         flex-wrap: wrap; 
@@ -211,11 +231,11 @@ mark { background: rgba(59, 130, 246, 0.3); color: var(--text-color); border-rad
         margin: 0 0 5px 0; 
         order: 1; 
         font-size: 14px; 
-        text-align: center;
+        text-align: left; /* Left aligned on mobile too */
     }
     
-    .bar-group.left-group { order: 2; margin-left: 0; } 
-    .bar-group.right-group { order: 3; margin-left: auto; } 
+    .bar-group:first-child { order: 2; margin-left: 0; } 
+    .bar-group:last-child { order: 3; margin-left: auto; } 
     
     .icon-btn { font-size: 22px; padding: 6px; } 
     

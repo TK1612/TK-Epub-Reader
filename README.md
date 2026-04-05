@@ -10,7 +10,6 @@ A sleek, web-based EPUB reader featuring a modern Glassmorphism UI, continuous s
 
 * **Offline Local Library:** Upload `.epub` files directly from your device. Books are stored safely in your browser's IndexedDB using `localforage` so they remain available even after you close the tab.
 * **Modern Glassmorphism UI:** A beautiful, frosted-glass interface with fully supported **Light** and **Dark modes**.
-* **Smart Progress Tracking:** Automatically calculates your reading percentage (based on chapter/spine index) and displays a sleek progress bar on your library cards. 
 * **Advanced Reading Modes:** * *Continuous Scroll:* Read seamlessly with custom-injected visual gaps between chapters.
     * *Single Chapter Scroll:* Traditional vertical scrolling chapter-by-chapter.
     * *Paginated:* Swipe or click to turn pages like a real book.

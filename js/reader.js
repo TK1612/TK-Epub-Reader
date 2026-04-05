@@ -77,7 +77,15 @@ window.openReader = async function(bookId, pushHistory = true) {
     window.updateSettings();
 
     window.book.ready.then(() => {
+        // FIXED: Try to load cached locations before displaying to speed up percentage calculation
         const savedCfi = localStorage.getItem('bookmark-' + bookId);
+        const cachedLocations = localStorage.getItem('locations-' + bookId);
+        
+        if (cachedLocations) {
+            try { window.book.locations.load(cachedLocations); } 
+            catch(e) { console.warn("Could not load cached locations"); }
+        }
+
         if (savedCfi) window.rendition.display(savedCfi);
         else window.rendition.display();
 
@@ -104,11 +112,28 @@ window.openReader = async function(bookId, pushHistory = true) {
             document.getElementById('chapter-title').innerText = chapterLabel;
             localStorage.setItem('bookmark-' + bookId, location.start.cfi);
 
-            // FIXED: Calculate percentage and save it as a JSON object for the Library to read
+            // ==========================================
+            // FIXED: ROCK-SOLID PROGRESS CALCULATION
+            // ==========================================
             let percent = 0;
-            if (window.book.locations && window.book.locations.total > 0) {
-                let percentageFloat = window.book.locations.percentageFromCfi(location.start.cfi);
-                percent = Math.max(0, Math.min(100, Math.round(percentageFloat * 100)));
+            
+            // 1. Always pull the old percentage first as a safe fallback
+            const oldStr = localStorage.getItem('progress-' + bookId);
+            if (oldStr) { try { percent = JSON.parse(oldStr).percentage || 0; } catch(e){} }
+
+            // 2. Try getting the native ePub.js percentage (if calculation is done)
+            if (location.start.percentage > 0 && location.start.percentage <= 1) {
+                percent = Math.round(location.start.percentage * 100);
+            } 
+            // 3. Fallback to manually querying the locations API
+            else if (window.book.locations) {
+                try {
+                    let pFloat = window.book.locations.percentageFromCfi(location.start.cfi);
+                    // Only update if it returns a valid number between 0% and 100%
+                    if (pFloat !== null && pFloat >= 0 && pFloat <= 1) {
+                        percent = Math.round(pFloat * 100);
+                    }
+                } catch(e) {}
             }
             
             localStorage.setItem('progress-' + bookId, JSON.stringify({
@@ -244,36 +269,50 @@ window.openReader = async function(bookId, pushHistory = true) {
             
             flattenToc(toc);
 
-            window.book.locations.generate(1024).then(() => {
+            const updateTocSpans = () => {
                 const pageSpans = document.querySelectorAll('.toc-page-num');
                 pageSpans.forEach(span => {
                     let href = span.dataset.href;
                     let spineItem = window.book.spine.get(href);
-                    if (spineItem && spineItem.cfiBase) {
-                        let percentage = window.book.locations.percentageFromCfi(spineItem.cfiBase);
-                        let pageNum = Math.max(1, Math.round(percentage * window.book.locations.total));
-                        span.innerText = `Pg. ${pageNum}`;
+                    if (spineItem && spineItem.cfiBase && window.book.locations) {
+                        try {
+                            let percentage = window.book.locations.percentageFromCfi(spineItem.cfiBase);
+                            let total = window.book.locations.total || 0;
+                            if (total > 0) {
+                                let pageNum = Math.max(1, Math.round(percentage * total));
+                                span.innerText = `Pg. ${pageNum}`;
+                            } else {
+                                span.innerText = `${Math.round(percentage * 100)}%`;
+                            }
+                        } catch(e) { span.innerText = ''; }
                     } else {
                         span.innerText = '';
                     }
                 });
+            };
 
-                // FIXED: Update progress bar immediately after locations finish generating
-                const currentLocation = window.rendition.currentLocation();
-                if (currentLocation && currentLocation.start) {
-                    let chapterLabel = document.getElementById('chapter-title').innerText;
-                    let percentageFloat = window.book.locations.percentageFromCfi(currentLocation.start.cfi);
-                    let percent = Math.max(0, Math.min(100, Math.round(percentageFloat * 100)));
+            // If locations weren't cached, generate them in the background
+            if (!cachedLocations) {
+                window.book.locations.generate(1024).then(() => {
+                    localStorage.setItem('locations-' + bookId, window.book.locations.save());
+                    updateTocSpans();
                     
-                    localStorage.setItem('progress-' + bookId, JSON.stringify({
-                        chapter: chapterLabel,
-                        percentage: percent
-                    }));
-                }
-
-            }).catch(() => {
-                document.querySelectorAll('.toc-page-num').forEach(span => span.innerText = '');
-            });
+                    // FIXED: Force an immediate progress save the moment generation finishes
+                    const currentLocation = window.rendition.currentLocation();
+                    if (currentLocation && currentLocation.start) {
+                        let chapterLabel = document.getElementById('chapter-title').innerText;
+                        let pFloat = window.book.locations.percentageFromCfi(currentLocation.start.cfi);
+                        if (pFloat !== null && pFloat >= 0 && pFloat <= 1) {
+                            localStorage.setItem('progress-' + bookId, JSON.stringify({
+                                chapter: chapterLabel,
+                                percentage: Math.round(pFloat * 100)
+                            }));
+                        }
+                    }
+                }).catch(() => { updateTocSpans(); });
+            } else {
+                updateTocSpans();
+            }
         });
     });
 };
@@ -350,13 +389,23 @@ window.saveBookmark = function() {
     
     localStorage.setItem('bookmark-' + window.currentBookId, location.start.cfi);
     
-    // Ensure manual bookmark saves JSON progress too
     let chapterLabel = document.getElementById('chapter-title').innerText;
     let percent = 0;
-    if (window.book.locations && window.book.locations.total > 0) {
-        let percentageFloat = window.book.locations.percentageFromCfi(location.start.cfi);
-        percent = Math.max(0, Math.min(100, Math.round(percentageFloat * 100)));
+    
+    const oldStr = localStorage.getItem('progress-' + window.currentBookId);
+    if(oldStr) { try { percent = JSON.parse(oldStr).percentage || 0; } catch(e){} }
+
+    if (location.start.percentage > 0 && location.start.percentage <= 1) {
+        percent = Math.round(location.start.percentage * 100);
+    } else if (window.book.locations) {
+        try {
+            let pFloat = window.book.locations.percentageFromCfi(location.start.cfi);
+            if (pFloat !== null && pFloat >= 0 && pFloat <= 1) {
+                percent = Math.round(pFloat * 100);
+            }
+        } catch(e) {}
     }
+    
     localStorage.setItem('progress-' + window.currentBookId, JSON.stringify({
         chapter: chapterLabel,
         percentage: percent

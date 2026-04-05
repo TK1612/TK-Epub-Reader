@@ -33,28 +33,33 @@ window.openReader = async function(bookId, pushHistory = true) {
     
     window.rendition = window.book.renderTo("viewer", renderOptions);
     
-    // FIXED: Conditional CSS injection based on Reading Mode
+    // -------------------------------------------------------------
+    // FIXED: CONDITIONAL THEMES FOR PAGINATED VS SCROLLED
+    // -------------------------------------------------------------
     let themeCSS = {
-        "img": { "max-width": "100% !important", "height": "auto !important", "display": "block !important", "margin": "0 auto !important", "position": "static !important" },
-        "div": { "position": "static !important" },
+        "img": { "max-width": "100% !important", "height": "auto !important", "display": "block !important", "margin": "0 auto !important" },
         "::-webkit-scrollbar": { "width": "6px", "height": "6px" },
         "::-webkit-scrollbar-track": { "background": "transparent" },
         "::-webkit-scrollbar-thumb": { "background": "rgba(150, 150, 150, 0.4)", "border-radius": "10px" }
     };
 
-    // If continuous, restrict width and hide X overflow. If paginated, LET IT BREATHE.
     if (savedMode === 'continuous' || savedMode === 'scrolled') {
         themeCSS["html"] = { "overflow-x": "hidden" };
         themeCSS["body"] = { 
             "max-width": "900px !important", 
             "margin": "0 auto !important", 
+            "padding": "0 20px !important",
             "padding-bottom": "80px !important", 
             "overflow-x": "hidden" 
         };
     } else {
+        // STRICT rules for paginated mode to stop the "Black Pages" bug
+        themeCSS["html"] = { "overflow": "hidden !important" };
         themeCSS["body"] = { 
-            "padding": "0 10px !important", // Gives text breathing room on mobile
-            "margin": "0 !important" 
+            "margin": "0 !important", 
+            "padding": "0 !important",
+            "overflow": "hidden !important",
+            "touch-action": "pan-y !important" // Disables native mobile horizontal swipe 
         };
     }
 
@@ -88,10 +93,16 @@ window.openReader = async function(bookId, pushHistory = true) {
             const taskbar = document.getElementById('bottom-taskbar');
             const pinCheckbox = document.getElementById('set-pin-taskbar');
 
-            // --- FIXED: HIGH PRECISION SWIPE DETECTOR ---
+            // -------------------------------------------------------------
+            // FIXED: READEST-STYLE HIGH PRECISION SWIPE DETECTOR
+            // -------------------------------------------------------------
             let touchStartX = 0;
             let touchStartY = 0;
             let touchStartTime = 0;
+
+            // CRITICAL: Block iframe from triggering Android/iOS back-swipe gestures
+            contents.document.documentElement.style.touchAction = 'pan-y';
+            if (contents.document.body) contents.document.body.style.touchAction = 'pan-y';
 
             contents.document.addEventListener('touchstart', e => {
                 touchStartX = e.changedTouches[0].screenX;
@@ -102,18 +113,23 @@ window.openReader = async function(bookId, pushHistory = true) {
             contents.document.addEventListener('touchend', e => {
                 let touchEndX = e.changedTouches[0].screenX;
                 let touchEndY = e.changedTouches[0].screenY;
-                let diffX = touchStartX - touchEndX; // Positive if swiped left
-                let diffY = touchStartY - touchEndY;
+                
+                let diffX = touchStartX - touchEndX; // Positive = left swipe
+                let diffY = Math.abs(touchStartY - touchEndY);
                 let timeTaken = Date.now() - touchStartTime;
 
-                // Fast swipe (< 800ms) that is mostly horizontal
-                if (timeTaken < 800 && Math.abs(diffX) > 40 && Math.abs(diffX) > Math.abs(diffY)) {
-                    if (diffX > 0) window.rendition.next(); // Swipe left to go to next page
-                    else window.rendition.prev(); // Swipe right to go to prev page
+                // Evaluation: Must be fast (< 500ms), sufficient length (> 30px), and horizontal
+                if (timeTaken < 500 && Math.abs(diffX) > 30 && Math.abs(diffX) > diffY) {
+                    if (diffX > 0) {
+                        window.rendition.next();
+                    } else {
+                        window.rendition.prev();
+                    }
                 }
             }, { passive: true });
 
-            // Auto-hide scroll logic (only triggers in continuous mode)
+
+            // Auto-hide scroll logic
             let lastScrollTop = 0;
             contents.window.addEventListener('scroll', function() {
                 if (pinCheckbox.checked) {
@@ -129,7 +145,7 @@ window.openReader = async function(bookId, pushHistory = true) {
                 lastScrollTop = st <= 0 ? 0 : st;
             }, { passive: true });
 
-            // Tap anywhere to toggle menu (essential for paginated mode)
+            // Tap screen to show menu
             contents.document.addEventListener('click', function(e) {
                 if (e.target.tagName.toLowerCase() === 'a') return;
                 const selection = contents.window.getSelection();
@@ -172,6 +188,7 @@ window.openReader = async function(bookId, pushHistory = true) {
                     }
                 });
             };
+            
             flattenToc(toc);
 
             window.book.locations.generate(1024).then(() => {

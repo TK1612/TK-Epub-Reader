@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TK Web Epub Reader</title>
+    <title>TK Reader</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js"></script>
@@ -11,7 +11,6 @@
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-    
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -48,7 +47,6 @@
             <div id="library-view" class="view active">
                 <div class="library-grid" id="library-grid"></div>
             </div>
-
             <div id="bookmarks-view" class="view">
                 <ul id="bookmarks-list" class="scroll-list"></ul>
             </div>
@@ -128,9 +126,13 @@
                 <option value="'Courier New', Courier, monospace">Courier New</option>
             </select>
         </div>
+        <div class="setting-group" style="display: flex; align-items: center; justify-content: space-between;">
+            <label style="margin-bottom: 0;">Text Color</label>
+            <input type="color" id="set-text-color" value="#e4e4e7" onchange="updateSettings()" style="width: 40px; height: 30px;">
+        </div>
     </div>
 
-    <div id="toc-modal" class="modal center-modal">
+    <div id="toc-modal" class="modal center-modal large-modal">
         <div class="modal-header">
             <h3>Table of Contents</h3>
             <button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button>

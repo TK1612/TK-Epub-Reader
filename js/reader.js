@@ -24,7 +24,6 @@ window.openReader = async function(bookId, pushHistory = true) {
 
     let renderOptions = { width: "100%", height: "100%", spread: "none" };
     
-    // FIX: Changed "scrolled" to "scrolled-doc" to fix the frozen scrollbar bug natively
     if (savedMode === 'continuous') {
         renderOptions.manager = "continuous"; renderOptions.flow = "scrolled-doc";
     } else if (savedMode === 'scrolled') {
@@ -35,22 +34,16 @@ window.openReader = async function(bookId, pushHistory = true) {
     
     window.rendition = window.book.renderTo("viewer", renderOptions);
     
-    // FIX: Force static positioning on images to prevent them from breaking the iframe layout
     window.rendition.themes.default({
         "img": {
             "max-width": "100% !important",
             "height": "auto !important",
             "display": "block !important",
             "margin": "0 auto !important",
-            "position": "static !important" /* Stops EPUB covers from using absolute positioning to trap the screen */
+            "position": "static !important"
         },
-        "div": {
-            "position": "static !important" /* Prevents image wrapper divs from overflowing */
-        },
-        "body": {
-            "padding-bottom": "80px !important",
-            "overflow-y": "auto !important"
-        },
+        "div": { "position": "static !important" },
+        "body": { "padding-bottom": "80px !important", "overflow-y": "auto !important" },
         "::-webkit-scrollbar": { "width": "6px", "height": "6px" },
         "::-webkit-scrollbar-track": { "background": "transparent" },
         "::-webkit-scrollbar-thumb": { "background": "rgba(150, 150, 150, 0.4)", "border-radius": "10px" }
@@ -72,39 +65,51 @@ window.openReader = async function(bookId, pushHistory = true) {
             const navItem = window.book.navigation.get(location.start.href);
             document.getElementById('chapter-title').innerText = navItem ? navItem.label : bookData.title;
             localStorage.setItem('bookmark-' + bookId, location.start.cfi);
+
+            document.querySelectorAll('#toc-list .list-item').forEach(li => {
+                li.classList.remove('active-toc');
+                if (navItem && li.dataset.href === navItem.href) {
+                    li.classList.add('active-toc');
+                }
+            });
         });
 
-        // 1. Mobile Swipe Logic (Using rendition events is more reliable in epub.js)
-        let touchStartX = 0;
-        let touchEndX = 0;
-
-        window.rendition.on('touchstart', event => {
-            touchStartX = event.changedTouches[0].screenX;
-        });
-
-        window.rendition.on('touchend', event => {
-            touchEndX = event.changedTouches[0].screenX;
-            const threshold = 50; 
-            if (touchEndX < touchStartX - threshold) window.rendition.next();
-            if (touchEndX > touchStartX + threshold) window.rendition.prev();
-        });
-
-        // 2. Iframe Content Hooks for Scrolling and Tapping
+        // Iframe Content Hooks (Handles both Swipe & Taskbar Logic internally)
         window.rendition.hooks.content.register(function(contents) {
             let lastScrollTop = 0;
             const taskbar = document.getElementById('bottom-taskbar');
             const pinCheckbox = document.getElementById('set-pin-taskbar');
 
-            // Auto-Hide Taskbar on Scroll (For Continuous/Scrolled Mode)
+            // --- MOBILE SWIPE LOGIC (Fixed for iframes) ---
+            let touchStartX = 0;
+            let touchStartY = 0;
+
+            contents.document.addEventListener('touchstart', e => {
+                touchStartX = e.changedTouches[0].screenX;
+                touchStartY = e.changedTouches[0].screenY;
+            }, { passive: true });
+
+            contents.document.addEventListener('touchend', e => {
+                let touchEndX = e.changedTouches[0].screenX;
+                let touchEndY = e.changedTouches[0].screenY;
+                
+                let deltaX = touchEndX - touchStartX;
+                let deltaY = Math.abs(touchEndY - touchStartY);
+
+                // Swipe must be horizontal-dominant to prevent scrolling from turning the page
+                if (Math.abs(deltaX) > 50 && Math.abs(deltaX) > deltaY) {
+                    if (deltaX < 0) window.rendition.next(); // Swiped left
+                    else window.rendition.prev(); // Swiped right
+                }
+            }, { passive: true });
+
+            // --- AUTO-HIDE SCROLL LOGIC ---
             contents.window.addEventListener('scroll', function() {
                 if (pinCheckbox.checked) {
                     taskbar.classList.remove('hidden');
                     return;
                 }
-
                 let st = contents.window.scrollY || contents.document.documentElement.scrollTop;
-                
-                // Add a small threshold (5px) to prevent jittering on mobile
                 if (Math.abs(lastScrollTop - st) <= 5) return;
 
                 if (st > lastScrollTop && st > 20) {
@@ -115,18 +120,13 @@ window.openReader = async function(bookId, pushHistory = true) {
                 lastScrollTop = st <= 0 ? 0 : st;
             }, { passive: true });
 
-            // Tap Screen to Toggle Taskbar (Essential for Paginated Mode)
             contents.document.addEventListener('click', function(e) {
-                // Ignore clicks if the user is clicking a link or highlighting text
                 if (e.target.tagName.toLowerCase() === 'a') return;
                 const selection = contents.window.getSelection();
                 if (selection && selection.toString().length > 0) return;
 
-                if (!pinCheckbox.checked) {
-                    taskbar.classList.toggle('hidden');
-                } else {
-                    taskbar.classList.remove('hidden');
-                }
+                if (!pinCheckbox.checked) taskbar.classList.toggle('hidden');
+                else taskbar.classList.remove('hidden');
             });
         });
 
@@ -138,9 +138,10 @@ window.openReader = async function(bookId, pushHistory = true) {
             toc.forEach(function(chapter, index) {
                 let li = document.createElement('li');
                 li.className = 'list-item';
+                li.dataset.href = chapter.href; 
                 li.innerHTML = `
                     <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span>${chapter.label}</span>
+                        <span style="color: var(--text-color);">${chapter.label}</span>
                         <span id="toc-page-${index}" style="font-size:12px; color:var(--text-muted); background:var(--border); padding:2px 6px; border-radius:4px;">...</span>
                     </div>`;
                 li.onclick = () => { window.rendition.display(chapter.href); window.closeAllModals(); };
@@ -170,11 +171,9 @@ window.openReader = async function(bookId, pushHistory = true) {
 
 window.closeReader = function(pushHistory = true) {
     document.getElementById('reader-container').style.display = 'none';
-    
     if(window.book) window.book.destroy();
     window.book = null;
     window.rendition = null;
-    
     if (pushHistory) window.showView('library');
 };
 

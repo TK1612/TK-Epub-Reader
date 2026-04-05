@@ -1,4 +1,8 @@
-window.openReader = async function(bookId) {
+window.openReader = async function(bookId, pushHistory = true) {
+    if (pushHistory) {
+        history.pushState({ view: 'reader', bookId: bookId }, '', '#reader');
+    }
+    
     window.currentBookId = bookId;
     const bookData = await localforage.getItem(bookId);
     
@@ -7,16 +11,9 @@ window.openReader = async function(bookId) {
     window.book = ePub(bookData.buffer);
     document.getElementById('reader-container').style.display = 'flex';
     
-    // Detect if the user is on a PC/Desktop (checks screen width and user agent)
     const isPC = window.innerWidth > 768 && !(/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent));
-    
-    let renderOptions = { 
-        width: "100%", 
-        height: "100%", 
-        spread: "none" 
-    };
+    let renderOptions = { width: "100%", height: "100%", spread: "none" };
 
-    // If on PC, enable Web Novel style continuous vertical scrolling
     if (isPC) {
         renderOptions.manager = "continuous";
         renderOptions.flow = "scrolled";
@@ -24,7 +21,18 @@ window.openReader = async function(bookId) {
     
     window.rendition = window.book.renderTo("viewer", renderOptions);
     
-    // Set Pure Black Dark Theme
+    window.rendition.themes.default({
+        "img": {
+            "max-width": "100% !important",
+            "height": "auto !important",
+            "display": "block",
+            "margin": "0 auto"
+        },
+        "::-webkit-scrollbar": { "width": "6px", "height": "6px" },
+        "::-webkit-scrollbar-track": { "background": "transparent" },
+        "::-webkit-scrollbar-thumb": { "background": "rgba(150, 150, 150, 0.4)", "border-radius": "10px" }
+    });
+
     window.rendition.themes.register("dark", { "body": { "background": "#000000", "color": "#e4e4e7" }});
     window.rendition.themes.register("light", { "body": { "background": "#ffffff", "color": "#18181b" }});
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
@@ -43,30 +51,17 @@ window.openReader = async function(bookId) {
             localStorage.setItem('bookmark-' + bookId, location.start.cfi);
         });
 
-        // --- MOBILE SWIPE GESTURES (Only triggers on touch devices) ---
         window.rendition.hooks.content.register(function(contents) {
-            let touchStartX = 0;
-            let touchEndX = 0;
-
-            contents.document.addEventListener('touchstart', e => {
-                touchStartX = e.changedTouches[0].screenX;
-            }, { passive: true });
-
+            let touchStartX = 0; let touchEndX = 0;
+            contents.document.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; }, { passive: true });
             contents.document.addEventListener('touchend', e => {
                 touchEndX = e.changedTouches[0].screenX;
-                handleSwipe();
-            }, { passive: true });
-
-            function handleSwipe() {
-                const threshold = 60; // Minimum pixels needed to trigger a swipe
-                // On PC continuous scroll, swipe left/right won't break anything, 
-                // but usually PCs don't trigger touch events anyway.
+                const threshold = 60; 
                 if (touchEndX < touchStartX - threshold) window.rendition.next();
                 if (touchEndX > touchStartX + threshold) window.rendition.prev();
-            }
+            }, { passive: true });
         });
 
-        // Generate Table of Contents with Page Numbers
         window.book.loaded.navigation.then(function(toc) {
             const tocList = document.getElementById('toc-list');
             tocList.innerHTML = '';
@@ -104,9 +99,16 @@ window.openReader = async function(bookId) {
     });
 };
 
-window.closeReader = function() {
+window.closeReader = function(pushHistory = true) {
     document.getElementById('reader-container').style.display = 'none';
+    
     if(window.book) window.book.destroy();
+    window.book = null;
+    window.rendition = null;
+    
+    if (pushHistory) {
+        window.showView('library');
+    }
 };
 
 window.toggleSettings = function() { 

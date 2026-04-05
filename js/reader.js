@@ -21,11 +21,12 @@ window.openReader = async function(bookId, pushHistory = true) {
     const pinTaskbar = localStorage.getItem('pin-taskbar') !== 'false';
     document.getElementById('set-pin-taskbar').checked = pinTaskbar;
 
+    // FIXED: Restored manager: "continuous" for native cross-chapter scrolling
     let renderOptions = { 
         width: "100%", 
         height: "100%", 
         spread: "none",
-        manager: "default",
+        manager: savedMode === 'continuous' ? "continuous" : "default",
         flow: savedMode === 'continuous' || savedMode === 'scrolled' ? "scrolled-doc" : "paginated"
     };
     
@@ -36,7 +37,7 @@ window.openReader = async function(bookId, pushHistory = true) {
     });
     
     // -------------------------------------------------------------
-    // CSS THEME INJECTION
+    // CSS THEME INJECTION (Images securely locked to 90vh)
     // -------------------------------------------------------------
     window.currentThemeCSS = {
         "img": { 
@@ -76,8 +77,38 @@ window.openReader = async function(bookId, pushHistory = true) {
 
     window.updateSettings();
 
+    // ==============================================================
+    // FIXED: BULLETPROOF PROGRESS SAVER
+    // ==============================================================
+    const updateAndSaveProgress = (cfi, chapterLabel) => {
+        let percent = 0;
+        
+        // 1. Pull the previous percentage to act as a shield against 0% overwrites
+        const oldStr = localStorage.getItem('progress-' + bookId);
+        if (oldStr) { 
+            try { percent = JSON.parse(oldStr).percentage || 0; } catch(e){} 
+        }
+
+        // 2. Only allow a new percentage calculation IF the locations are completely generated
+        const hasLocations = window.book.locations && (window.book.locations.total > 0 || (typeof window.book.locations.length === 'function' && window.book.locations.length() > 0));
+        
+        if (hasLocations) {
+            try {
+                let pFloat = window.book.locations.percentageFromCfi(cfi);
+                if (pFloat !== null && pFloat >= 0 && pFloat <= 1) {
+                    percent = Math.round(pFloat * 100);
+                }
+            } catch(e) {}
+        }
+
+        // 3. Save the guaranteed safe percentage
+        localStorage.setItem('progress-' + bookId, JSON.stringify({
+            chapter: chapterLabel,
+            percentage: percent
+        }));
+    };
+
     window.book.ready.then(() => {
-        // FIXED: Try to load cached locations before displaying to speed up percentage calculation
         const savedCfi = localStorage.getItem('bookmark-' + bookId);
         const cachedLocations = localStorage.getItem('locations-' + bookId);
         
@@ -112,34 +143,8 @@ window.openReader = async function(bookId, pushHistory = true) {
             document.getElementById('chapter-title').innerText = chapterLabel;
             localStorage.setItem('bookmark-' + bookId, location.start.cfi);
 
-            // ==========================================
-            // FIXED: ROCK-SOLID PROGRESS CALCULATION
-            // ==========================================
-            let percent = 0;
-            
-            // 1. Always pull the old percentage first as a safe fallback
-            const oldStr = localStorage.getItem('progress-' + bookId);
-            if (oldStr) { try { percent = JSON.parse(oldStr).percentage || 0; } catch(e){} }
-
-            // 2. Try getting the native ePub.js percentage (if calculation is done)
-            if (location.start.percentage > 0 && location.start.percentage <= 1) {
-                percent = Math.round(location.start.percentage * 100);
-            } 
-            // 3. Fallback to manually querying the locations API
-            else if (window.book.locations) {
-                try {
-                    let pFloat = window.book.locations.percentageFromCfi(location.start.cfi);
-                    // Only update if it returns a valid number between 0% and 100%
-                    if (pFloat !== null && pFloat >= 0 && pFloat <= 1) {
-                        percent = Math.round(pFloat * 100);
-                    }
-                } catch(e) {}
-            }
-            
-            localStorage.setItem('progress-' + bookId, JSON.stringify({
-                chapter: chapterLabel,
-                percentage: percent
-            }));
+            // Execute safe progress saving mechanism
+            updateAndSaveProgress(location.start.cfi, chapterLabel);
 
             document.querySelectorAll('#toc-list .list-item').forEach(li => {
                 li.classList.remove('active-toc');
@@ -271,10 +276,12 @@ window.openReader = async function(bookId, pushHistory = true) {
 
             const updateTocSpans = () => {
                 const pageSpans = document.querySelectorAll('.toc-page-num');
+                const hasLocs = window.book.locations && (window.book.locations.total > 0 || (typeof window.book.locations.length === 'function' && window.book.locations.length() > 0));
+                
                 pageSpans.forEach(span => {
                     let href = span.dataset.href;
                     let spineItem = window.book.spine.get(href);
-                    if (spineItem && spineItem.cfiBase && window.book.locations) {
+                    if (spineItem && spineItem.cfiBase && hasLocs) {
                         try {
                             let percentage = window.book.locations.percentageFromCfi(spineItem.cfiBase);
                             let total = window.book.locations.total || 0;
@@ -291,23 +298,16 @@ window.openReader = async function(bookId, pushHistory = true) {
                 });
             };
 
-            // If locations weren't cached, generate them in the background
             if (!cachedLocations) {
                 window.book.locations.generate(1024).then(() => {
                     localStorage.setItem('locations-' + bookId, window.book.locations.save());
                     updateTocSpans();
                     
-                    // FIXED: Force an immediate progress save the moment generation finishes
+                    // Force an immediate progress save the moment background generation finishes
                     const currentLocation = window.rendition.currentLocation();
                     if (currentLocation && currentLocation.start) {
                         let chapterLabel = document.getElementById('chapter-title').innerText;
-                        let pFloat = window.book.locations.percentageFromCfi(currentLocation.start.cfi);
-                        if (pFloat !== null && pFloat >= 0 && pFloat <= 1) {
-                            localStorage.setItem('progress-' + bookId, JSON.stringify({
-                                chapter: chapterLabel,
-                                percentage: Math.round(pFloat * 100)
-                            }));
-                        }
+                        updateAndSaveProgress(currentLocation.start.cfi, chapterLabel);
                     }
                 }).catch(() => { updateTocSpans(); });
             } else {
@@ -395,9 +395,8 @@ window.saveBookmark = function() {
     const oldStr = localStorage.getItem('progress-' + window.currentBookId);
     if(oldStr) { try { percent = JSON.parse(oldStr).percentage || 0; } catch(e){} }
 
-    if (location.start.percentage > 0 && location.start.percentage <= 1) {
-        percent = Math.round(location.start.percentage * 100);
-    } else if (window.book.locations) {
+    const hasLocs = window.book.locations && (window.book.locations.total > 0 || (typeof window.book.locations.length === 'function' && window.book.locations.length() > 0));
+    if (hasLocs) {
         try {
             let pFloat = window.book.locations.percentageFromCfi(location.start.cfi);
             if (pFloat !== null && pFloat >= 0 && pFloat <= 1) {

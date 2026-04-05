@@ -4,14 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Modern Web Reader</title>
-    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-    
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -26,7 +23,7 @@
                 <button onclick="showView('library')"><i class="ph ph-books"></i> Library</button>
                 <button onclick="showView('bookmarks')"><i class="ph ph-bookmarks"></i> Bookmarks</button>
                 <div class="divider"></div>
-                <input type="file" id="upload-input" accept=".epub" style="display: none;" onchange="handleUpload(event)">
+                <input type="file" id="upload-input" accept=".epub" multiple style="display: none;" onchange="handleUpload(event)">
                 <button class="upload-btn" onclick="document.getElementById('upload-input').click()"><i class="ph ph-upload-simple"></i> Upload Novel</button>
             </nav>
         </aside>
@@ -43,7 +40,7 @@
             </div>
 
             <div id="bookmarks-view" class="view">
-                <ul id="bookmarks-list"></ul>
+                <ul id="bookmarks-list" class="scroll-list"></ul>
             </div>
         </main>
     </div>
@@ -52,11 +49,12 @@
         <div id="viewer"></div>
         <div class="bottom-bar">
             <div class="bar-group">
-                <button class="icon-btn" onclick="closeReader()"><i class="ph ph-house"></i></button>
+                <button class="icon-btn" onclick="closeReader()" title="Back to Library"><i class="ph ph-house"></i></button>
                 <button class="icon-btn" onclick="rendition.prev()"><i class="ph ph-caret-left"></i></button>
             </div>
             <div class="chapter-title" id="chapter-title">Loading...</div>
             <div class="bar-group">
+                <button class="icon-btn" onclick="toggleTOC()" title="Table of Contents"><i class="ph ph-list-bullets"></i></button>
                 <button class="icon-btn" onclick="saveBookmark()" title="Bookmark"><i class="ph ph-heart"></i></button>
                 <button class="icon-btn" onclick="toggleSearch()" title="Global Search"><i class="ph ph-magnifying-glass"></i></button>
                 <button class="icon-btn" onclick="toggleEditMode()" title="Edit HTML"><i class="ph ph-code"></i></button>
@@ -69,39 +67,36 @@
     <div id="search-modal" class="modal center-modal">
         <div class="modal-header">
             <h3>Search Novel</h3>
-            <button class="icon-btn" onclick="toggleSearch()"><i class="ph ph-x"></i></button>
+            <button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button>
         </div>
-        <div class="search-controls">
+        <div class="search-controls" style="display:flex; gap:10px;">
             <input type="text" id="global-search-input" placeholder="Type word or phrase...">
-            <button class="btn-primary" onclick="runGlobalSearch()">Search</button>
+            <button class="btn-primary" style="margin-bottom:10px;" onclick="runGlobalSearch()">Search</button>
         </div>
-        <div id="search-results" class="search-results-container">
-            <p style="color: gray; font-size: 14px;">Results will appear here...</p>
-        </div>
+        <div id="search-results" class="scroll-list"></div>
     </div>
 
     <div id="html-editor" class="modal center-modal large-modal">
         <div class="modal-header">
             <h3>Edit Current Page HTML</h3>
-            <button class="icon-btn" onclick="closeEditor()"><i class="ph ph-x"></i></button>
+            <button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button>
         </div>
-        
         <div class="replace-bar">
             <input type="text" id="find-input" placeholder="Find (Regex supported)">
             <input type="text" id="replace-input" placeholder="Replace with">
             <button class="btn-secondary" onclick="executeReplace()">Replace All</button>
         </div>
-
         <textarea id="html-textarea" spellcheck="false"></textarea>
-        
         <div class="editor-controls">
-            <button class="btn-secondary" onclick="closeEditor()">Cancel</button>
             <button class="btn-primary" onclick="applyHTML()">Apply Changes</button>
         </div>
     </div>
 
     <div id="settings-modal" class="modal right-modal">
-        <h3>Reader Settings</h3><br>
+        <div class="modal-header">
+            <h3>Reader Settings</h3>
+            <button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button>
+        </div>
         <div class="setting-group">
             <label>Font Size <span id="val-font">18px</span></label>
             <input type="range" id="set-font" min="12" max="36" value="18" oninput="updateSettings()">
@@ -110,6 +105,26 @@
             <label>Line Height <span id="val-line">1.5</span></label>
             <input type="range" id="set-line" min="1" max="3" step="0.1" value="1.5" oninput="updateSettings()">
         </div>
+        <div class="setting-group">
+            <label>Font Family</label>
+            <select id="set-font-family" onchange="updateSettings()">
+                <option value="system-ui">System Default</option>
+                <option value="serif">Standard Serif</option>
+                <option value="sans-serif">Standard Sans-Serif</option>
+                <option value="Georgia, serif">Georgia</option>
+                <option value="'Times New Roman', Times, serif">Times New Roman</option>
+                <option value="Arial, Helvetica, sans-serif">Arial</option>
+            </select>
+        </div>
+    </div>
+
+    <div id="toc-modal" class="modal center-modal">
+        <div class="modal-header">
+            <h3>Table of Contents</h3>
+            <button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button>
+        </div>
+        <ul id="toc-list" class="scroll-list">
+            </ul>
     </div>
 
     <script src="js/app.js"></script>

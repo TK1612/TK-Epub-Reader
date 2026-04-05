@@ -33,7 +33,6 @@ window.openReader = async function(bookId, pushHistory = true) {
     
     window.rendition = window.book.renderTo("viewer", renderOptions);
     
-    // FIXED: Pushes scrollbar to the edge while constraining the text reading width to 900px
     window.rendition.themes.default({
         "html": { "overflow-x": "hidden" },
         "body": { 
@@ -79,8 +78,6 @@ window.openReader = async function(bookId, pushHistory = true) {
             const taskbar = document.getElementById('bottom-taskbar');
             const pinCheckbox = document.getElementById('set-pin-taskbar');
 
-            // --- FIXED: CROSS-ORIGIN BULLETPROOF SWIPE ---
-            // Uses clientX on the iframe window directly
             let startX = 0;
             let startY = 0;
 
@@ -101,7 +98,6 @@ window.openReader = async function(bookId, pushHistory = true) {
                 }
             }, { passive: true });
 
-            // Auto-hide scroll logic
             contents.window.addEventListener('scroll', function() {
                 if (pinCheckbox.checked) {
                     taskbar.classList.remove('hidden');
@@ -126,40 +122,58 @@ window.openReader = async function(bookId, pushHistory = true) {
             });
         });
 
-        // Generate TOC
+        // FIXED: Recursive TOC Generation to catch all nested sub-chapters
         window.book.loaded.navigation.then(function(toc) {
             const tocList = document.getElementById('toc-list');
             tocList.innerHTML = '';
             
-            toc.forEach(function(chapter, index) {
-                let li = document.createElement('li');
-                li.className = 'list-item';
-                li.dataset.href = chapter.href; 
-                li.innerHTML = `
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span style="color: var(--text-color);">${chapter.label}</span>
-                        <span id="toc-page-${index}" style="font-size:12px; color:var(--text-muted); background:var(--border); padding:2px 6px; border-radius:4px;">...</span>
-                    </div>`;
-                li.onclick = () => { window.rendition.display(chapter.href); window.closeAllModals(); };
-                tocList.appendChild(li);
-            });
-
-            window.book.locations.generate(1024).then(() => {
-                toc.forEach(function(chapter, index) {
-                    let spineItem = window.book.spine.get(chapter.href);
-                    let pageNum = "";
-                    if(spineItem && spineItem.cfiBase) {
-                        let percentage = window.book.locations.percentageFromCfi(spineItem.cfiBase);
-                        pageNum = Math.max(1, Math.round(percentage * window.book.locations.total));
+            const flattenToc = (items, level = 0) => {
+                items.forEach(function(chapter) {
+                    let li = document.createElement('li');
+                    li.className = 'list-item';
+                    li.dataset.href = chapter.href; 
+                    
+                    let padding = level * 15; // Indents sub-chapters automatically
+                    
+                    li.innerHTML = `
+                        <div style="display:flex; justify-content:space-between; align-items:center; padding-left: ${padding}px;">
+                            <span style="color: var(--text-color);">${chapter.label}</span>
+                            <span class="toc-page-num" data-href="${chapter.href}" style="font-size:12px; color:var(--text-muted); background:var(--border); padding:2px 6px; border-radius:4px;">...</span>
+                        </div>`;
+                        
+                    li.onclick = () => { 
+                        if (chapter.href) {
+                            window.rendition.display(chapter.href); 
+                            window.closeAllModals(); 
+                        }
+                    };
+                    tocList.appendChild(li);
+                    
+                    // Dig deeper if there are nested chapters
+                    if (chapter.subitems && chapter.subitems.length > 0) {
+                        flattenToc(chapter.subitems, level + 1);
                     }
-                    const pageSpan = document.getElementById('toc-page-' + index);
-                    if(pageSpan) pageSpan.innerText = pageNum ? `Pg. ${pageNum}` : '';
+                });
+            };
+            
+            flattenToc(toc);
+
+            // Fetch page numbers
+            window.book.locations.generate(1024).then(() => {
+                const pageSpans = document.querySelectorAll('.toc-page-num');
+                pageSpans.forEach(span => {
+                    let href = span.dataset.href;
+                    let spineItem = window.book.spine.get(href);
+                    if (spineItem && spineItem.cfiBase) {
+                        let percentage = window.book.locations.percentageFromCfi(spineItem.cfiBase);
+                        let pageNum = Math.max(1, Math.round(percentage * window.book.locations.total));
+                        span.innerText = `Pg. ${pageNum}`;
+                    } else {
+                        span.innerText = '';
+                    }
                 });
             }).catch(() => {
-                toc.forEach((c, i) => {
-                    let el = document.getElementById('toc-page-' + i);
-                    if (el) el.innerText = '';
-                });
+                document.querySelectorAll('.toc-page-num').forEach(span => span.innerText = '');
             });
         });
     });
@@ -211,10 +225,7 @@ window.changeReadMode = function() {
 
     window.closeAllModals();
     document.getElementById('chapter-title').innerText = "Changing mode...";
-    
-    setTimeout(() => {
-        window.openReader(window.currentBookId, false);
-    }, 100);
+    setTimeout(() => { window.openReader(window.currentBookId, false); }, 100);
 };
 
 window.toggleTOC = function() {

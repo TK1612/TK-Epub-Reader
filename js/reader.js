@@ -11,7 +11,6 @@ window.openReader = async function(bookId, pushHistory = true) {
     window.book = ePub(bookData.buffer);
     document.getElementById('reader-container').style.display = 'block';
     
-    // Load Reading Mode & Pin Status
     let savedMode = localStorage.getItem('reader-mode');
     if (!savedMode) {
         const isPC = window.innerWidth > 768 && !(/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent));
@@ -34,6 +33,8 @@ window.openReader = async function(bookId, pushHistory = true) {
     
     window.rendition = window.book.renderTo("viewer", renderOptions);
     
+    const chapterGap = savedMode === 'continuous' ? "35vh !important" : "120px !important";
+
     window.rendition.themes.default({
         "img, image, svg": {
             "max-width": "100% !important",
@@ -60,7 +61,7 @@ window.openReader = async function(bookId, pushHistory = true) {
             "margin": "0 auto !important", 
             "padding-left": "24px !important",
             "padding-right": "24px !important",
-            "padding-bottom": "120px !important", 
+            "padding-bottom": chapterGap, 
             "padding-top": "40px !important",
             "height": "auto !important",
             "min-height": "auto !important",
@@ -85,17 +86,43 @@ window.openReader = async function(bookId, pushHistory = true) {
         else window.rendition.display();
 
         window.rendition.on('relocated', function(location) {
-            const navItem = window.book.navigation.get(location.start.href);
-            const chapterTitle = navItem ? navItem.label : bookData.title;
+            let chapterTitle = "Unknown Chapter";
+            const spineItem = window.book.spine.get(location.start.cfi);
+            let navItem = window.book.navigation.get(location.start.href);
+
+            // Robust fallback to find actual chapter name
+            if (!navItem && spineItem) {
+                navItem = window.book.navigation.toc.find(item => item.href.split('#')[0] === spineItem.href.split('#')[0]);
+            }
+
+            if (navItem && navItem.label) {
+                chapterTitle = navItem.label.trim();
+            } else if (spineItem) {
+                chapterTitle = `Chapter ${spineItem.index + 1}`;
+            } else {
+                chapterTitle = bookData.title;
+            }
+
             document.getElementById('chapter-title').innerText = chapterTitle;
             localStorage.setItem('bookmark-' + bookId, location.start.cfi);
+
+            // Highlight Active TOC Item
+            document.querySelectorAll('#toc-list .list-item').forEach(el => el.classList.remove('active-toc'));
+            if (navItem || spineItem) {
+                const matchHref = navItem ? navItem.href.split('#')[0] : spineItem.href.split('#')[0];
+                const activeEl = document.querySelector(`.toc-item[data-href^="${matchHref}"]`);
+                if (activeEl) activeEl.classList.add('active-toc');
+            }
             
-            // Calculate and Save Percentage Progress
+            // Reliable Progress Percentage (Spine-based fallback)
             let percentage = 0;
             if (window.book.locations && window.book.locations.length() > 0) {
                 percentage = Math.floor(window.book.locations.percentageFromCfi(location.start.cfi) * 100);
-                percentage = Math.max(0, Math.min(100, percentage)); // Ensure it stays between 0 and 100
+            } else if (spineItem && window.book.spine.length) {
+                // If location generation hasn't finished, calculate percentage based on global chapter index
+                percentage = Math.floor((spineItem.index / window.book.spine.length) * 100);
             }
+            percentage = Math.max(0, Math.min(100, percentage));
             
             localStorage.setItem('progress-' + bookId, JSON.stringify({
                 chapter: chapterTitle,
@@ -139,18 +166,18 @@ window.openReader = async function(bookId, pushHistory = true) {
             }, { passive: true });
         });
 
-        // Generate TOC and Map Book Locations
         window.book.loaded.navigation.then(function(toc) {
             const tocList = document.getElementById('toc-list');
             tocList.innerHTML = '';
             
             toc.forEach(function(chapter, index) {
                 let li = document.createElement('li');
-                li.className = 'list-item';
+                li.className = 'list-item toc-item';
+                li.dataset.href = chapter.href; // Required for highlighting
                 li.innerHTML = `
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span>${chapter.label}</span>
-                        <span id="toc-page-${index}" style="font-size:12px; color:var(--text-muted); background:var(--border); padding:4px 8px; border-radius:6px;">...</span>
+                    <div style="display:flex; justify-content:space-between; align-items:center; width: 100%;">
+                        <span class="toc-label" style="flex:1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 10px;">${chapter.label}</span>
+                        <span id="toc-page-${index}" style="font-size:12px; color:var(--text-muted); background:var(--border); padding:4px 8px; border-radius:6px; flex-shrink: 0;">...</span>
                     </div>`;
                 li.onclick = () => { window.rendition.display(chapter.href); window.closeAllModals(); };
                 tocList.appendChild(li);
@@ -168,19 +195,9 @@ window.openReader = async function(bookId, pushHistory = true) {
                     if(pageSpan) pageSpan.innerText = pageNum ? `Pg. ${pageNum}` : '';
                 });
                 
-                // Immediately update progress once locations finish generating behind the scenes
+                // Trigger a UI update once location math is finally done calculating
                 const currentLocation = window.rendition.currentLocation();
-                if (currentLocation) {
-                    const navItem = window.book.navigation.get(currentLocation.start.href);
-                    const chapterTitle = navItem ? navItem.label : bookData.title;
-                    let currentPercentage = Math.floor(window.book.locations.percentageFromCfi(currentLocation.start.cfi) * 100);
-                    currentPercentage = Math.max(0, Math.min(100, currentPercentage));
-                    
-                    localStorage.setItem('progress-' + bookId, JSON.stringify({
-                        chapter: chapterTitle,
-                        percentage: currentPercentage
-                    }));
-                }
+                if (currentLocation) window.rendition.emit('relocated', currentLocation);
                 
             }).catch(() => {
                 toc.forEach((c, i) => {
@@ -249,6 +266,12 @@ window.changeReadMode = function() {
 window.toggleTOC = function() {
     window.closeAllModals();
     document.getElementById('toc-modal').classList.add('active');
+    
+    // Ensure the active chapter is scrolled into view when opening the modal
+    setTimeout(() => {
+        const activeEl = document.querySelector('.active-toc');
+        if (activeEl) activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
 };
 
 window.saveBookmark = function() {

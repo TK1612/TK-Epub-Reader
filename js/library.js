@@ -64,13 +64,16 @@ window.loadLibrary = async function() {
                 const parsed = JSON.parse(progressData);
                 const percent = Math.max(0, Math.min(100, parsed.percentage || 0));
                 progressText = parsed.chapter || "Reading...";
+                
+                // Prevent duplicate titles if the first chapter is just the book name
+                if (progressText === value.title) progressText = "Reading...";
+                
                 progressWidth = percent + "%";
             } catch(e) {}
         }
 
         const card = document.createElement('div');
         card.className = 'book-card';
-        // Updated HTML injected to render the new Chapter text and Progress Bar
         card.innerHTML = `
             <div class="delete-overlay">
                 <i class="ph ph-trash"></i>
@@ -103,7 +106,7 @@ window.deleteBook = async function(bookId, bookTitle) {
     if(confirm(`Are you sure you want to permanently delete "${bookTitle}"?`)) {
         await localforage.removeItem(bookId);
         localStorage.removeItem('bookmark-' + bookId);
-        localStorage.removeItem('progress-' + bookId); // Make sure to delete the progress save too
+        localStorage.removeItem('progress-' + bookId); 
         window.loadLibrary(); 
     }
 };
@@ -121,7 +124,8 @@ window.loadBookmarksList = function() {
             if(progressData) {
                 try {
                     const parsed = JSON.parse(progressData);
-                    progressText = `${parsed.chapter} - ${parsed.percentage}%`;
+                    let displayChap = parsed.chapter === value.title ? "Reading" : parsed.chapter;
+                    progressText = `${displayChap} - ${parsed.percentage}%`;
                 } catch(e) {}
             }
 

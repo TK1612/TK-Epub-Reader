@@ -7,7 +7,6 @@ window.showView = function(viewId) {
     document.getElementById(viewId + '-view').classList.add('active');
     document.getElementById('page-title').innerText = viewId.charAt(0).toUpperCase() + viewId.slice(1);
     
-    // Auto-close sidebar on mobile/small screens
     if (window.innerWidth < 768) {
         document.getElementById('sidebar').classList.add('collapsed');
     }
@@ -19,8 +18,17 @@ window.showView = function(viewId) {
 window.toggleDarkMode = function() {
     const html = document.documentElement;
     const isDark = html.getAttribute('data-theme') === 'dark';
-    html.setAttribute('data-theme', isDark ? 'light' : 'dark');
-    if(window.rendition) window.rendition.themes.select(isDark ? "light" : "dark");
+    const newTheme = isDark ? 'light' : 'dark';
+    html.setAttribute('data-theme', newTheme);
+    
+    if(window.rendition) {
+        window.rendition.themes.select(newTheme);
+        
+        // Update color picker to match the new theme's default text
+        const defaultColor = newTheme === 'dark' ? '#e4e4e7' : '#18181b';
+        document.getElementById('set-text-color').value = defaultColor;
+        window.rendition.themes.override('color', defaultColor + ' !important');
+    }
 };
 
 window.closeAllModals = function() {

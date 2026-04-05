@@ -21,11 +21,19 @@ window.openReader = async function(bookId, pushHistory = true) {
     const pinTaskbar = localStorage.getItem('pin-taskbar') !== 'false';
     document.getElementById('set-pin-taskbar').checked = pinTaskbar;
 
-    // Use 100% so the iframe perfectly hugs the container without breaking math
+    // DYNAMIC TOUCH ACTION: Fixes iOS swipe bugs without breaking scroll mode
+    const readerContainer = document.getElementById('reader-container');
+    if (savedMode === 'paginated') {
+        readerContainer.style.touchAction = 'none'; // Kills all native bounce/swipe
+    } else {
+        readerContainer.style.touchAction = 'pan-y'; // Allows vertical scroll
+    }
+
     let renderOptions = { 
         width: "100%", 
         height: "100%", 
-        spread: "none" 
+        spread: "none",
+        snap: savedMode === 'paginated' // ChatGPT's valid suggestion
     };
     
     if (savedMode === 'continuous') {
@@ -38,9 +46,6 @@ window.openReader = async function(bookId, pushHistory = true) {
     
     window.rendition = window.book.renderTo("viewer", renderOptions);
     
-    // -------------------------------------------------------------
-    // FIXED: STRIPPED AGGRESSIVE CSS THAT WAS DELETING PAGES
-    // -------------------------------------------------------------
     let themeCSS = {
         "img": { 
             "max-width": "100% !important", 
@@ -55,7 +60,6 @@ window.openReader = async function(bookId, pushHistory = true) {
     };
 
     if (savedMode === 'continuous' || savedMode === 'scrolled') {
-        // Continuous mode gets centered and constrained
         themeCSS["html"] = { "overflow-x": "hidden" };
         themeCSS["body"] = { 
             "max-width": "900px !important", 
@@ -64,11 +68,9 @@ window.openReader = async function(bookId, pushHistory = true) {
             "overflow-x": "hidden" 
         };
     } else {
-        // Paginated mode gets NOTHING except the command to block native swipe-backs
         themeCSS["body"] = { 
             "margin": "0 !important", 
-            "padding": "0 !important",
-            "touch-action": "pan-y !important"
+            "padding": "0 10px !important" // Minimal padding so columns don't break
         };
     }
 
@@ -115,17 +117,18 @@ window.openReader = async function(bookId, pushHistory = true) {
             });
         });
 
+        // -------------------------------------------------------------
+        // FIXED: THE ULTIMATE TOUCH CONTROLLER
+        // -------------------------------------------------------------
         window.rendition.hooks.content.register(function(contents) {
             const taskbar = document.getElementById('bottom-taskbar');
             const pinCheckbox = document.getElementById('set-pin-taskbar');
 
-            // -------------------------------------------------------------
-            // FIXED: CLEAN AND HIGHLY RESPONSIVE SWIPE
-            // -------------------------------------------------------------
             let startX = 0;
             let startY = 0;
             let startTime = 0;
 
+            // Must be bound inside the contents to prevent the iframe trap
             contents.document.addEventListener('touchstart', e => {
                 startX = e.changedTouches[0].clientX;
                 startY = e.changedTouches[0].clientY;
@@ -139,17 +142,44 @@ window.openReader = async function(bookId, pushHistory = true) {
                 let diffY = Math.abs(startY - endY);
                 let timeTaken = Date.now() - startTime;
 
-                // If swipe is fast (<600ms), long enough (>30px), and horizontal
-                if (timeTaken < 600 && Math.abs(diffX) > 30 && Math.abs(diffX) > diffY) {
-                    if (diffX > 0) {
-                        window.rendition.next();
-                    } else {
-                        window.rendition.prev();
+                // Ignore if the user is highlighting text
+                const selection = contents.window.getSelection();
+                if (selection && selection.toString().length > 0) return;
+
+                // 1. SWIPE LOGIC
+                if (timeTaken < 500 && Math.abs(diffX) > 40 && Math.abs(diffX) > diffY) {
+                    if (diffX > 0) window.rendition.next();
+                    else window.rendition.prev();
+                    return; // Stop here, do not trigger tap
+                }
+
+                // 2. TAP LOGIC (Edge tapping vs Center Menu tapping)
+                if (timeTaken < 300 && Math.abs(diffX) < 10 && diffY < 10) {
+                    // Ignore clicks on links
+                    if (e.target.tagName.toLowerCase() === 'a') return;
+
+                    let screenWidth = contents.window.innerWidth;
+                    
+                    if (savedMode === 'paginated') {
+                        // Left 25% of screen = Prev Page
+                        if (endX < screenWidth * 0.25) {
+                            window.rendition.prev();
+                            return;
+                        }
+                        // Right 25% of screen = Next Page
+                        if (endX > screenWidth * 0.75) {
+                            window.rendition.next();
+                            return;
+                        }
                     }
+
+                    // Middle screen tap = Toggle Taskbar
+                    if (!pinCheckbox.checked) taskbar.classList.toggle('hidden');
+                    else taskbar.classList.remove('hidden');
                 }
             }, { passive: true });
 
-            // Auto-hide scroll logic (only runs in continuous)
+            // Auto-hide scroll logic (Only triggers in continuous mode)
             let lastScrollTop = 0;
             contents.window.addEventListener('scroll', function() {
                 if (pinCheckbox.checked) {
@@ -164,16 +194,6 @@ window.openReader = async function(bookId, pushHistory = true) {
                 
                 lastScrollTop = st <= 0 ? 0 : st;
             }, { passive: true });
-
-            // Tap screen to show/hide menu
-            contents.document.addEventListener('click', function(e) {
-                if (e.target.tagName.toLowerCase() === 'a') return;
-                const selection = contents.window.getSelection();
-                if (selection && selection.toString().length > 0) return;
-
-                if (!pinCheckbox.checked) taskbar.classList.toggle('hidden');
-                else taskbar.classList.remove('hidden');
-            });
         });
 
         // TOC Generation

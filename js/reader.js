@@ -1,330 +1,181 @@
-window.openReader = async function(bookId, pushHistory = true) {
-    if (pushHistory) {
-        history.pushState({ view: 'reader', bookId: bookId }, '', '#reader');
-    }
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Epub Reader</title>
     
-    window.currentBookId = bookId;
-    const bookData = await localforage.getItem(bookId);
+    <link rel="icon" type="image/jpeg" href="./649178036_950205537550061_276526426078080711_n.jpg?v=8">
+    <link rel="shortcut icon" type="image/jpeg" href="./649178036_950205537550061_276526426078080711_n.jpg?v=8">
+    <link rel="apple-touch-icon" href="./649178036_950205537550061_276526426078080711_n.jpg?v=8">
     
-    if(window.book) window.book.destroy();
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
     
-    window.book = ePub(bookData.buffer);
-    document.getElementById('reader-container').style.display = 'block';
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     
-    let savedMode = localStorage.getItem('reader-mode');
-    if (!savedMode) {
-        const isPC = window.innerWidth > 768 && !(/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent));
-        savedMode = isPC ? 'continuous' : 'paginated';
-    }
-    document.getElementById('set-read-mode').value = savedMode;
-    
-    const pinTaskbar = localStorage.getItem('pin-taskbar') !== 'false';
-    document.getElementById('set-pin-taskbar').checked = pinTaskbar;
+    <link rel="stylesheet" href="css/style.css?v=8">
+</head>
+<body>
 
-    // FIXED: Added manager: "continuous" to enable cross-chapter scrolling natively
-    let renderOptions = { 
-        width: "100%", 
-        height: "100%", 
-        spread: "none",
-        manager: savedMode === 'continuous' ? "continuous" : "default",
-        flow: savedMode === 'continuous' || savedMode === 'scrolled' ? "scrolled-doc" : "paginated"
-    };
-    
-    window.rendition = window.book.renderTo("viewer", renderOptions);
-    
-    window.addEventListener("resize", () => {
-        if (window.rendition) window.rendition.resize();
-    });
-    
-    // -------------------------------------------------------------
-    // CSS THEME INJECTION (Stored globally so Settings can update it)
-    // -------------------------------------------------------------
-    window.baseThemeCSS = {
-        "img": { 
-            "max-width": "100% !important", 
-            "height": "auto !important", // FIXED: Removed vh units to prevent tiny image bugs
-            "object-fit": "contain !important",
-            "display": "block !important", 
-            "margin": "0 auto !important" 
-        },
-        "::-webkit-scrollbar": { "width": "6px", "height": "6px" },
-        "::-webkit-scrollbar-track": { "background": "transparent" },
-        "::-webkit-scrollbar-thumb": { "background": "rgba(150, 150, 150, 0.4)", "border-radius": "10px" }
-    };
+    <div id="app">
+        <aside id="sidebar" class="collapsed">
+            <div class="sidebar-header">
+                <h3>Menu</h3>
+                <button class="icon-btn" onclick="toggleSidebar()"><i class="ph ph-x"></i></button>
+            </div>
+            <nav class="sidebar-nav">
+                <button onclick="showView('library')"><i class="ph ph-books"></i> Library</button>
+                <button onclick="showView('bookmarks')"><i class="ph ph-bookmarks"></i> Bookmarks</button>
+                <div class="divider"></div>
+                <input type="file" id="upload-input" accept=".epub" multiple style="display: none;" onchange="handleUpload(event)">
+                <button class="upload-btn" onclick="document.getElementById('upload-input').click()"><i class="ph ph-upload-simple"></i> Upload Novel</button>
+            </nav>
+        </aside>
 
-    if (savedMode === 'continuous' || savedMode === 'scrolled') {
-        window.baseThemeCSS["html"] = { "overflow-x": "hidden" };
-        window.baseThemeCSS["body"] = { 
-            "max-width": "900px !important", 
-            "margin": "0 auto !important", 
-            "padding": "0 20px 80px 20px !important",
-            "overflow-x": "hidden" 
+        <main id="main-content">
+            <header class="top-bar">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <button class="icon-btn" onclick="toggleSidebar()"><i class="ph ph-list"></i></button>
+                    <h2 id="page-title">Library</h2>
+                </div>
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    <button class="icon-btn" id="delete-mode-btn" onclick="toggleDeleteMode()" style="color: var(--danger);" title="Toggle Delete Mode">
+                        <i class="ph ph-x-circle"></i>
+                    </button>
+                    <button class="icon-btn" onclick="toggleDarkMode()" title="Toggle Dark Mode"><i class="ph ph-moon"></i></button>
+                </div>
+            </header>
+
+            <div id="library-view" class="view active">
+                <div class="library-grid" id="library-grid"></div>
+            </div>
+
+            <div id="bookmarks-view" class="view">
+                <ul id="bookmarks-list" class="scroll-list"></ul>
+            </div>
+        </main>
+    </div>
+
+    <div id="reader-container">
+        <div id="viewer"></div>
+        <div class="bottom-bar" id="bottom-taskbar">
+            <div class="bar-group left-group">
+                <button class="icon-btn" onclick="closeReader()" title="Back to Library"><i class="ph ph-house"></i></button>
+                <button class="icon-btn" onclick="rendition.prev()"><i class="ph ph-caret-left"></i></button>
+            </div>
+            <div class="chapter-title" id="chapter-title">Loading...</div>
+            <div class="bar-group right-group">
+                <button class="icon-btn" onclick="toggleTOC()" title="Table of Contents"><i class="ph ph-list-bullets"></i></button>
+                <button class="icon-btn" onclick="saveBookmark()" title="Save Bookmark"><i class="ph ph-heart"></i></button>
+                <button class="icon-btn" onclick="toggleSearch()" title="Global Search"><i class="ph ph-magnifying-glass"></i></button>
+                <button class="icon-btn" onclick="toggleEditMode()" title="Edit HTML"><i class="ph ph-code"></i></button>
+                <button class="icon-btn" onclick="toggleSettings()" title="Settings"><i class="ph ph-faders"></i></button>
+                <button class="icon-btn" onclick="rendition.next()"><i class="ph ph-caret-right"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <div id="search-modal" class="modal center-modal">
+        <div class="modal-header">
+            <h3>Search Novel</h3>
+            <button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button>
+        </div>
+        <div class="search-controls" style="display:flex; gap:10px;">
+            <input type="text" id="global-search-input" placeholder="Type word or phrase...">
+            <button class="btn-primary" style="margin-bottom:10px;" onclick="runGlobalSearch()">Search</button>
+        </div>
+        <div id="search-results" class="scroll-list"></div>
+    </div>
+
+    <div id="html-editor" class="modal center-modal large-modal">
+        <div class="modal-header">
+            <h3>Edit Current Page HTML</h3>
+            <button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button>
+        </div>
+        <div class="replace-bar">
+            <input type="text" id="find-input" placeholder="Find (Regex supported)">
+            <input type="text" id="replace-input" placeholder="Replace with">
+            <button class="btn-secondary" onclick="executeReplace()">Replace All</button>
+        </div>
+        <textarea id="html-textarea" spellcheck="false"></textarea>
+        <div class="editor-controls">
+            <button class="btn-primary" onclick="applyHTML()">Apply Changes</button>
+        </div>
+    </div>
+
+    <div id="settings-modal" class="modal right-modal">
+        <div class="modal-header">
+            <h3>Reader Settings</h3>
+            <button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button>
+        </div>
+        <div class="setting-group">
+            <label>Reading Mode</label>
+            <select id="set-read-mode" onchange="changeReadMode()">
+                <option value="continuous">Continuous Scroll (All Chapters)</option>
+                <option value="scrolled">Single Chapter Scroll (Click Next)</option>
+                <option value="paginated">Paginated (Swipe / Click Next)</option>
+            </select>
+        </div>
+        <div class="setting-group">
+            <label>Font Size <span id="val-font">18px</span></label>
+            <input type="range" id="set-font" min="12" max="36" value="18" oninput="updateSettings()">
+        </div>
+        <div class="setting-group">
+            <label>Line Height <span id="val-line">1.5</span></label>
+            <input type="range" id="set-line" min="1" max="3" step="0.1" value="1.5" oninput="updateSettings()">
+        </div>
+        
+        <div class="setting-group">
+            <label>Paragraph Spacing <span id="val-para-spacing">0em</span></label>
+            <input type="range" id="set-para-spacing" min="0" max="5" step="0.5" value="0" oninput="updateSettings()">
+        </div>
+
+        <div class="setting-group">
+            <label>Font Family</label>
+            <select id="set-font-family" onchange="updateSettings()">
+                <option value="system-ui">System Default</option>
+                <option value="serif">Standard Serif</option>
+                <option value="sans-serif">Standard Sans-Serif</option>
+                <option value="Georgia, serif">Georgia</option>
+                <option value="'Times New Roman', Times, serif">Times New Roman</option>
+                <option value="Arial, Helvetica, sans-serif">Arial</option>
+            </select>
+        </div>
+        <div class="setting-group">
+            <label>Text Color
+                <input type="color" id="set-text-color" value="#e4e4e7" onchange="updateSettings()" style="width: 30px; height: 30px;">
+            </label>
+        </div>
+        <div class="setting-group" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);">
+            <label style="cursor: pointer;">
+                Pin Taskbar (Don't Hide)
+                <input type="checkbox" id="set-pin-taskbar" onchange="updateSettings()" style="width: auto;">
+            </label>
+        </div>
+    </div>
+
+    <div id="toc-modal" class="modal center-modal large-modal">
+        <div class="modal-header">
+            <h3>Table of Contents</h3>
+            <button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button>
+        </div>
+        <ul id="toc-list" class="scroll-list"></ul>
+    </div>
+
+    <script src="js/globals.js?v=8"></script>
+    <script src="js/ui.js?v=8"></script>
+    <script src="js/library.js?v=8"></script>
+    <script src="js/reader.js?v=12"></script>
+    <script src="js/tools.js?v=8"></script>
+    
+    <script>
+        window.onload = () => {
+            history.replaceState({ view: 'library' }, '', '#library');
+            loadLibrary();
         };
-    } else {
-        window.baseThemeCSS["body"] = { 
-            "padding": "0 !important",
-            "margin": "0 !important",
-        };
-    }
-
-    window.rendition.themes.default(window.baseThemeCSS);
-    window.rendition.themes.register("dark", { "body": { "background": "#000000", "color": "#e4e4e7" }});
-    window.rendition.themes.register("light", { "body": { "background": "#ffffff", "color": "#18181b" }});
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    window.rendition.themes.select(isDark ? "dark" : "light");
-
-    window.updateSettings();
-
-    window.book.ready.then(() => {
-        const savedCfi = localStorage.getItem('bookmark-' + bookId);
-        if (savedCfi) window.rendition.display(savedCfi);
-        else window.rendition.display();
-
-        window.rendition.on('relocated', function(location) {
-            let currentHref = location.start.href;
-            let navItem = window.book.navigation.get(currentHref);
-            
-            if (!navItem) {
-                const findNavItem = (items) => {
-                    for (let item of items) {
-                        let baseHref = item.href.split('#')[0];
-                        if (baseHref === currentHref || currentHref.includes(baseHref)) return item;
-                        if (item.subitems && item.subitems.length > 0) {
-                            let subMatch = findNavItem(item.subitems);
-                            if (subMatch) return subMatch;
-                        }
-                    }
-                    return null;
-                };
-                navItem = findNavItem(window.book.navigation.toc);
-            }
-
-            document.getElementById('chapter-title').innerText = navItem ? navItem.label.trim() : bookData.title;
-            localStorage.setItem('bookmark-' + bookId, location.start.cfi);
-
-            document.querySelectorAll('#toc-list .list-item').forEach(li => {
-                li.classList.remove('active-toc');
-                if (navItem && li.dataset.href === navItem.href) {
-                    li.classList.add('active-toc');
-                }
-            });
-        });
-
-        // -------------------------------------------------------------
-        // HOOKS: SWIPE (Paginated Only), CLICK, & SCROLL
-        // -------------------------------------------------------------
-        window.rendition.hooks.content.register(function(contents) {
-            let startX = 0;
-            let startY = 0;
-            let isSwiping = false; 
-            const iframeDoc = contents.document;
-            
-            iframeDoc.addEventListener('touchstart', e => {
-                startX = e.changedTouches[0].screenX;
-                startY = e.changedTouches[0].screenY;
-                isSwiping = false; 
-            }, { passive: true });
-
-            const isPassive = savedMode === 'continuous' ? true : false;
-
-            iframeDoc.addEventListener('touchmove', e => {
-                let currentX = e.changedTouches[0].screenX;
-                let currentY = e.changedTouches[0].screenY;
-                let diffX = Math.abs(startX - currentX);
-                let diffY = Math.abs(startY - currentY);
-
-                if (diffX > 10 || diffY > 10) {
-                    isSwiping = true;
-                }
-
-                if (savedMode === 'paginated') {
-                    if (diffX > diffY && diffX > 10) {
-                        if (e.cancelable) e.preventDefault();
-                    }
-                }
-            }, { passive: isPassive });
-
-            iframeDoc.addEventListener('touchcancel', e => {
-                isSwiping = false;
-            }, { passive: true });
-
-            iframeDoc.addEventListener('touchend', e => {
-                if (!isSwiping) return;
-
-                let endX = e.changedTouches[0].screenX;
-                let endY = e.changedTouches[0].screenY;
-                let diffX = startX - endX; 
-                let diffY = Math.abs(startY - endY);
-
-                if (savedMode === 'paginated' && Math.abs(diffX) > 40 && Math.abs(diffX) > diffY) {
-                    if (diffX > 0) window.rendition.next();
-                    else window.rendition.prev();
-                }
-                
-                isSwiping = false; 
-            }, { passive: true });
-
-            iframeDoc.addEventListener('click', e => {
-                if (isSwiping) return; 
-                
-                if (e.target && e.target.closest('a')) return;
-                const selection = contents.window.getSelection();
-                if (selection && selection.toString().length > 0) return;
-
-                const taskbar = document.getElementById('bottom-taskbar');
-                const pinCheckbox = document.getElementById('set-pin-taskbar');
-                if (taskbar && pinCheckbox && !pinCheckbox.checked) {
-                    taskbar.classList.toggle('hidden');
-                }
-            });
-
-            let lastScrollTop = 0;
-            contents.window.addEventListener('scroll', function() {
-                const taskbar = document.getElementById('bottom-taskbar');
-                const pinCheckbox = document.getElementById('set-pin-taskbar');
-                
-                if (pinCheckbox && pinCheckbox.checked) {
-                    if(taskbar) taskbar.classList.remove('hidden');
-                    return;
-                }
-                let st = contents.window.scrollY || contents.document.documentElement.scrollTop;
-                if (Math.abs(lastScrollTop - st) <= 5) return;
-
-                if (taskbar) {
-                    if (st > lastScrollTop && st > 20) taskbar.classList.add('hidden');
-                    else if (st < lastScrollTop) taskbar.classList.remove('hidden');
-                }
-                lastScrollTop = st <= 0 ? 0 : st;
-            }, { passive: true });
-        });
-
-        // -------------------------------------------------------------
-        // TOC FLATTENING
-        // -------------------------------------------------------------
-        window.book.loaded.navigation.then(function(toc) {
-            const tocList = document.getElementById('toc-list');
-            tocList.innerHTML = '';
-            
-            const flattenToc = (items, level = 0) => {
-                items.forEach(function(chapter) {
-                    let li = document.createElement('li');
-                    li.className = 'list-item';
-                    li.dataset.href = chapter.href; 
-                    let padding = level * 15; 
-                    
-                    li.innerHTML = `
-                        <div style="display:flex; justify-content:space-between; align-items:center; padding-left: ${padding}px;">
-                            <span style="color: var(--text-color);">${chapter.label}</span>
-                            <span class="toc-page-num" data-href="${chapter.href}" style="font-size:12px; color:var(--text-muted); background:var(--border); padding:2px 6px; border-radius:4px;">...</span>
-                        </div>`;
-                        
-                    li.onclick = () => { 
-                        if (chapter.href) {
-                            window.rendition.display(chapter.href); 
-                            window.closeAllModals(); 
-                        }
-                    };
-                    tocList.appendChild(li);
-                    
-                    if (chapter.subitems && chapter.subitems.length > 0) {
-                        flattenToc(chapter.subitems, level + 1);
-                    }
-                });
-            };
-            
-            flattenToc(toc);
-
-            window.book.locations.generate(1024).then(() => {
-                const pageSpans = document.querySelectorAll('.toc-page-num');
-                pageSpans.forEach(span => {
-                    let href = span.dataset.href;
-                    let spineItem = window.book.spine.get(href);
-                    if (spineItem && spineItem.cfiBase) {
-                        let percentage = window.book.locations.percentageFromCfi(spineItem.cfiBase);
-                        let pageNum = Math.max(1, Math.round(percentage * window.book.locations.total));
-                        span.innerText = `Pg. ${pageNum}`;
-                    } else {
-                        span.innerText = '';
-                    }
-                });
-            }).catch(() => {
-                document.querySelectorAll('.toc-page-num').forEach(span => span.innerText = '');
-            });
-        });
-    });
-};
-
-window.closeReader = function(pushHistory = true) {
-    document.getElementById('reader-container').style.display = 'none';
-    if(window.book) window.book.destroy();
-    window.book = null;
-    window.rendition = null;
-    if (pushHistory) window.showView('library');
-};
-
-window.toggleSettings = function() { 
-    window.closeAllModals();
-    document.getElementById('settings-modal').classList.add('active'); 
-};
-
-window.updateSettings = function() {
-    const isPinned = document.getElementById('set-pin-taskbar').checked;
-    localStorage.setItem('pin-taskbar', isPinned);
-    if (isPinned) document.getElementById('bottom-taskbar').classList.remove('hidden');
-
-    if(!window.rendition) return;
-    const fontSize = document.getElementById('set-font').value + 'px';
-    const lineHeight = document.getElementById('set-line').value;
-    const fontFamily = document.getElementById('set-font-family').value;
-    const textColor = document.getElementById('set-text-color').value;
-    
-    // Process paragraph spacing
-    const paraSpacingEl = document.getElementById('set-para-spacing');
-    const paraSpacing = paraSpacingEl ? paraSpacingEl.value + 'em' : '0em';
-    
-    document.getElementById('val-font').innerText = fontSize;
-    document.getElementById('val-line').innerText = lineHeight;
-    if (document.getElementById('val-para-spacing')) {
-        document.getElementById('val-para-spacing').innerText = paraSpacing;
-    }
-
-    // Combine base theme with dynamic paragraph spacing
-    let dynamicTheme = Object.assign({}, window.baseThemeCSS, {
-        "p": { "margin-bottom": paraSpacing + " !important" }
-    });
-    window.rendition.themes.default(dynamicTheme);
-
-    window.rendition.themes.fontSize(fontSize);
-    window.rendition.themes.font(fontFamily);
-    window.rendition.themes.override('line-height', lineHeight + ' !important');
-    window.rendition.themes.override('color', textColor + ' !important');
-};
-
-window.changeReadMode = function() {
-    const mode = document.getElementById('set-read-mode').value;
-    localStorage.setItem('reader-mode', mode);
-
-    if (window.rendition && window.currentBookId) {
-        const location = window.rendition.currentLocation();
-        if (location && location.start) {
-            localStorage.setItem('bookmark-' + window.currentBookId, location.start.cfi);
-        }
-    }
-
-    window.closeAllModals();
-    document.getElementById('chapter-title').innerText = "Changing mode...";
-    setTimeout(() => { window.openReader(window.currentBookId, false); }, 100);
-};
-
-window.toggleTOC = function() {
-    window.closeAllModals();
-    document.getElementById('toc-modal').classList.add('active');
-};
-
-window.saveBookmark = function() {
-    if(!window.rendition || !window.currentBookId) return;
-    const location = window.rendition.currentLocation();
-    if(!location) return;
-    localStorage.setItem('bookmark-' + window.currentBookId, location.start.cfi);
-    alert('Progress manually bookmarked!');
-};
+    </script>
+</body>
+</html>

@@ -21,7 +21,14 @@ window.openReader = async function(bookId, pushHistory = true) {
     const pinTaskbar = localStorage.getItem('pin-taskbar') !== 'false';
     document.getElementById('set-pin-taskbar').checked = pinTaskbar;
 
-    let renderOptions = { width: "100%", height: "100%", spread: "none" };
+    // -------------------------------------------------------------
+    // FIXED: EXACT PIXEL DIMENSIONS FIXES THE BLACK PAGE BUG
+    // -------------------------------------------------------------
+    let renderOptions = { 
+        width: window.innerWidth, 
+        height: window.innerHeight, 
+        spread: "none" 
+    };
     
     if (savedMode === 'continuous') {
         renderOptions.manager = "continuous"; renderOptions.flow = "scrolled-doc";
@@ -33,9 +40,25 @@ window.openReader = async function(bookId, pushHistory = true) {
     
     window.rendition = window.book.renderTo("viewer", renderOptions);
     
-    // Strict Conditional CSS Injection
+    // Auto-resize the reader when rotating the phone to prevent text clipping
+    window.addEventListener("resize", () => {
+        if (window.rendition) {
+            window.rendition.resize(window.innerWidth, window.innerHeight);
+        }
+    });
+    
+    // -------------------------------------------------------------
+    // FIXED: IMAGE SIZING AND STRICT OVERFLOW CSS
+    // -------------------------------------------------------------
     let themeCSS = {
-        "img": { "max-width": "100% !important", "height": "auto !important", "display": "block !important", "margin": "0 auto !important" },
+        "img": { 
+            "max-width": "100% !important", 
+            "max-height": "90vh !important", /* Stops giant covers from creating blank columns */
+            "object-fit": "contain !important",
+            "break-inside": "avoid !important",
+            "display": "block !important", 
+            "margin": "0 auto !important" 
+        },
         "::-webkit-scrollbar": { "width": "6px", "height": "6px" },
         "::-webkit-scrollbar-track": { "background": "transparent" },
         "::-webkit-scrollbar-thumb": { "background": "rgba(150, 150, 150, 0.4)", "border-radius": "10px" }
@@ -51,11 +74,13 @@ window.openReader = async function(bookId, pushHistory = true) {
             "overflow-x": "hidden" 
         };
     } else {
+        // STRICT rules for paginated mode
         themeCSS["html"] = { "overflow": "hidden !important" };
         themeCSS["body"] = { 
             "margin": "0 !important", 
-            "padding": "0 !important",
-            "overflow": "hidden !important"
+            "padding": "0 10px !important", /* Small breathing room */
+            "overflow": "hidden !important",
+            "box-sizing": "border-box !important"
         };
     }
 
@@ -72,14 +97,10 @@ window.openReader = async function(bookId, pushHistory = true) {
         if (savedCfi) window.rendition.display(savedCfi);
         else window.rendition.display();
 
-        // -------------------------------------------------------------
-        // FIXED: TOC MATCHING LOGIC (Strips Anchor Tags)
-        // -------------------------------------------------------------
         window.rendition.on('relocated', function(location) {
             let currentHref = location.start.href;
             let navItem = window.book.navigation.get(currentHref);
             
-            // Fallback Search: Manually iterate the TOC and strip '#' anchors to find a match
             if (!navItem) {
                 const findNavItem = (items) => {
                     for (let item of items) {
@@ -98,7 +119,6 @@ window.openReader = async function(bookId, pushHistory = true) {
             document.getElementById('chapter-title').innerText = navItem ? navItem.label.trim() : bookData.title;
             localStorage.setItem('bookmark-' + bookId, location.start.cfi);
 
-            // Highlight active TOC item
             document.querySelectorAll('#toc-list .list-item').forEach(li => {
                 li.classList.remove('active-toc');
                 if (navItem && li.dataset.href === navItem.href) {
@@ -108,49 +128,41 @@ window.openReader = async function(bookId, pushHistory = true) {
         });
 
         // -------------------------------------------------------------
-        // FIXED: IFRAME-BOUND SWIPE LOGIC
+        // FIXED: HIGH-CATCH SWIPE DETECTOR (Double Bound)
         // -------------------------------------------------------------
+        let touchStartX = 0;
+        let touchStartTime = 0;
+
+        const handleTouchStart = (e) => {
+            let touch = e.changedTouches ? e.changedTouches[0] : e.touches[0];
+            touchStartX = touch.screenX; // screenX is immune to iframe boundary bugs
+            touchStartTime = Date.now();
+        };
+
+        const handleTouchEnd = (e) => {
+            let touch = e.changedTouches ? e.changedTouches[0] : e.touches[0];
+            let touchEndX = touch.screenX;
+            let diffX = touchStartX - touchEndX; 
+            let timeTaken = Date.now() - touchStartTime;
+
+            // Highly forgiving swipe logic: Just needs to be fast (<800ms) and intentional (>40px)
+            if (timeTaken < 800 && Math.abs(diffX) > 40) {
+                if (diffX > 0) window.rendition.next();
+                else window.rendition.prev();
+            }
+        };
+
+        // Bind to outer wrapper
+        window.rendition.on('touchstart', handleTouchStart);
+        window.rendition.on('touchend', handleTouchEnd);
+
         window.rendition.hooks.content.register(function(contents) {
             const taskbar = document.getElementById('bottom-taskbar');
             const pinCheckbox = document.getElementById('set-pin-taskbar');
 
-            let touchStartX = 0;
-            let touchStartY = 0;
-            let touchStartTime = 0;
-
-            // Block Safari horizontal gesture history
-            contents.document.documentElement.style.touchAction = 'pan-y';
-            if (contents.document.body) contents.document.body.style.touchAction = 'pan-y';
-
-            contents.document.addEventListener('touchstart', e => {
-                touchStartX = e.touches[0].clientX;
-                touchStartY = e.touches[0].clientY;
-                touchStartTime = Date.now();
-            }, { passive: true });
-
-            contents.document.addEventListener('touchmove', e => {
-                let currentX = e.touches[0].clientX;
-                let currentY = e.touches[0].clientY;
-                let diffX = touchStartX - currentX;
-                let diffY = Math.abs(touchStartY - currentY);
-                if (Math.abs(diffX) > diffY) {
-                    e.preventDefault(); 
-                }
-            }, { passive: false }); 
-
-            contents.document.addEventListener('touchend', e => {
-                let touchEndX = e.changedTouches[0].clientX;
-                let touchEndY = e.changedTouches[0].clientY;
-                
-                let diffX = touchStartX - touchEndX; 
-                let diffY = Math.abs(touchStartY - touchEndY);
-                let timeTaken = Date.now() - touchStartTime;
-
-                if (timeTaken < 600 && Math.abs(diffX) > 40 && Math.abs(diffX) > diffY) {
-                    if (diffX > 0) window.rendition.next();
-                    else window.rendition.prev();
-                }
-            }, { passive: true });
+            // Bind to inner wrapper
+            contents.window.addEventListener('touchstart', handleTouchStart, { passive: true });
+            contents.window.addEventListener('touchend', handleTouchEnd, { passive: true });
 
             // Auto-hide scroll logic
             let lastScrollTop = 0;
@@ -179,9 +191,7 @@ window.openReader = async function(bookId, pushHistory = true) {
             });
         });
 
-        // -------------------------------------------------------------
-        // FIXED: RECURSIVE TOC DISPLAY
-        // -------------------------------------------------------------
+        // Recursive TOC Generation
         window.book.loaded.navigation.then(function(toc) {
             const tocList = document.getElementById('toc-list');
             tocList.innerHTML = '';

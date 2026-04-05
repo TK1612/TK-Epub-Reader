@@ -73,44 +73,18 @@ body { background: var(--bg-color); color: var(--text-color); overflow: hidden; 
 
 /* --- FIXED READER & TASKBAR --- */
 #reader-container { display: block; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: var(--bg-color); z-index: 300; display: none; }
-#viewer { width: 100%; height: 100%; max-width: 900px; margin: 0 auto; background: var(--bg-color); overflow-y: auto; overflow-x: hidden; }
+#viewer { width: 100%; height: 100%; max-width: 900px; margin: 0 auto; background: var(--bg-color); }
 
-/* Bottom Bar & Progress Slider Layout */
 .bottom-bar { 
     position: absolute; bottom: 0; left: 0; width: 100%; 
-    background: var(--surface); border-top: 1px solid var(--border); 
+    display: flex; justify-content: space-between; align-items: center; 
+    padding: 10px 20px; background: var(--surface); border-top: 1px solid var(--border); 
     z-index: 500; transition: transform 0.3s ease-in-out; 
-    display: flex; flex-direction: column;
 }
 .bottom-bar.hidden { transform: translateY(100%); }
 
-.taskbar-content {
-    display: flex; justify-content: space-between; align-items: center; 
-    width: 100%; padding: 10px 20px;
-}
 .bar-group { display: flex; gap: 5px; }
-.chapter-title { font-size: 13px; font-weight: 600; text-align: center; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 10px;}
-
-/* Progress Slider */
-.progress-container { width: 100%; background: var(--border); height: 4px; position: relative; }
-#progress-slider {
-    position: absolute; top: -8px; left: 0; width: 100%; height: 20px; cursor: pointer;
-    -webkit-appearance: none; appearance: none; background: transparent; outline: none; margin: 0;
-}
-#progress-slider::-webkit-slider-thumb {
-    -webkit-appearance: none; appearance: none; width: 16px; height: 16px;
-    border-radius: 50%; background: var(--accent); cursor: pointer;
-}
-#progress-slider::-webkit-slider-runnable-track { background: transparent; }
-
-/* Pin Taskbar Checkbox Sizing */
-#set-pin-taskbar {
-    width: 20px; height: 20px;
-    cursor: pointer;
-    accent-color: var(--accent);
-    transform: scale(1.4);
-    margin-right: 5px;
-}
+.chapter-title { font-size: 13px; font-weight: 600; text-align: center; color: var(--text-muted); }
 
 /* MODALS */
 .modal { display: none; position: fixed; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 25px; box-shadow: var(--shadow); z-index: 600; flex-direction: column; }
@@ -134,19 +108,31 @@ mark { background: rgba(59, 130, 246, 0.3); color: var(--text-color); border-rad
 .setting-group { margin-bottom: 15px; }
 .setting-group label { display: flex; justify-content: space-between; align-items: center; font-size: 13px; margin-bottom: 8px; color: var(--text-muted); }
 
-/* MOBILE RESPONSIVENESS (1-Row Fix) */
+/* MOBILE RESPONSIVENESS */
 @media (max-width: 768px) {
     .library-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 15px; }
     .book-cover { height: 170px; }
     .view { padding: 15px; }
     
-    /* Forces Title to top, and all icons to fit in one single row */
-    .taskbar-content { flex-wrap: wrap; justify-content: center; padding: 5px 8px; gap: 4px; }
-    .chapter-title { width: 100%; order: -1; margin-bottom: 2px; font-size: 12px; }
-    .bar-group { display: flex; flex-wrap: nowrap; gap: 2px; justify-content: center; }
-    .taskbar-content > .bar-group:first-child { flex: 0 0 auto; }
-    .taskbar-content > .bar-group:last-child { flex: 1 1 auto; justify-content: space-evenly; }
-    .icon-btn { font-size: 20px; padding: 8px; } 
+    /* MOBILE TASKBAR 1-ROW FIX */
+    .bottom-bar { 
+        padding: 5px 10px; 
+        flex-wrap: nowrap; 
+        justify-content: space-between; 
+        gap: 0;
+    }
+    .chapter-title { 
+        position: absolute; 
+        top: -25px; 
+        left: 0; 
+        width: 100%; 
+        background: var(--surface); 
+        padding: 2px 0; 
+        border-top: 1px solid var(--border);
+        font-size: 11px;
+    }
+    .bar-group { gap: 2px; }
+    .icon-btn { font-size: 20px; padding: 6px; } 
     
     .right-modal { width: 90%; left: 5%; right: 5%; bottom: 80px; }
     .large-modal { width: 95%; max-height: 85vh; padding: 15px; }

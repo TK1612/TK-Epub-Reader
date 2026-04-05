@@ -3,12 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Modern Web Reader</title>
+    <title>TK Web Epub Reader</title>
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -30,9 +33,16 @@
 
         <main id="main-content">
             <header class="top-bar">
-                <button class="icon-btn" onclick="toggleSidebar()"><i class="ph ph-list"></i></button>
-                <h2 id="page-title">Library</h2>
-                <button class="icon-btn" onclick="toggleDarkMode()"><i class="ph ph-moon"></i></button>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <button class="icon-btn" onclick="toggleSidebar()"><i class="ph ph-list"></i></button>
+                    <h2 id="page-title">Library</h2>
+                </div>
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    <button class="icon-btn" id="delete-mode-btn" onclick="toggleDeleteMode()" style="color: var(--danger);" title="Toggle Delete Mode">
+                        <i class="ph ph-x-circle"></i>
+                    </button>
+                    <button class="icon-btn" onclick="toggleDarkMode()" title="Toggle Dark Mode"><i class="ph ph-moon"></i></button>
+                </div>
             </header>
 
             <div id="library-view" class="view active">
@@ -55,7 +65,7 @@
             <div class="chapter-title" id="chapter-title">Loading...</div>
             <div class="bar-group">
                 <button class="icon-btn" onclick="toggleTOC()" title="Table of Contents"><i class="ph ph-list-bullets"></i></button>
-                <button class="icon-btn" onclick="saveBookmark()" title="Bookmark"><i class="ph ph-heart"></i></button>
+                <button class="icon-btn" onclick="saveBookmark()" title="Save Bookmark"><i class="ph ph-heart"></i></button>
                 <button class="icon-btn" onclick="toggleSearch()" title="Global Search"><i class="ph ph-magnifying-glass"></i></button>
                 <button class="icon-btn" onclick="toggleEditMode()" title="Edit HTML"><i class="ph ph-code"></i></button>
                 <button class="icon-btn" onclick="toggleSettings()" title="Settings"><i class="ph ph-faders"></i></button>
@@ -114,6 +124,8 @@
                 <option value="Georgia, serif">Georgia</option>
                 <option value="'Times New Roman', Times, serif">Times New Roman</option>
                 <option value="Arial, Helvetica, sans-serif">Arial</option>
+                <option value="Verdana, Geneva, sans-serif">Verdana</option>
+                <option value="'Courier New', Courier, monospace">Courier New</option>
             </select>
         </div>
     </div>
@@ -123,10 +135,19 @@
             <h3>Table of Contents</h3>
             <button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button>
         </div>
-        <ul id="toc-list" class="scroll-list">
-            </ul>
+        <ul id="toc-list" class="scroll-list"></ul>
     </div>
 
-    <script src="js/app.js"></script>
+    <script src="js/globals.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/library.js"></script>
+    <script src="js/reader.js"></script>
+    <script src="js/tools.js"></script>
+    
+    <script>
+        window.onload = () => {
+            loadLibrary();
+        };
+    </script>
 </body>
 </html>

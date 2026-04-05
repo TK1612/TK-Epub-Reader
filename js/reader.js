@@ -31,13 +31,12 @@ window.openReader = async function(bookId, pushHistory = true) {
     
     window.rendition = window.book.renderTo("viewer", renderOptions);
     
-    // Auto-resize on phone rotation
     window.addEventListener("resize", () => {
         if (window.rendition) window.rendition.resize();
     });
     
     // -------------------------------------------------------------
-    // CSS THEME INJECTION
+    // CSS THEME INJECTION (Restored to original + Line Spacing)
     // -------------------------------------------------------------
     let themeCSS = {
         "img": { 
@@ -46,6 +45,9 @@ window.openReader = async function(bookId, pushHistory = true) {
             "object-fit": "contain !important",
             "display": "block !important", 
             "margin": "0 auto !important" 
+        },
+        "p": {
+            "margin-bottom": "4em !important" // Adds 4 line spacings between character dialogues/paragraphs
         },
         "::-webkit-scrollbar": { "width": "6px", "height": "6px" },
         "::-webkit-scrollbar-track": { "background": "transparent" },
@@ -61,7 +63,6 @@ window.openReader = async function(bookId, pushHistory = true) {
             "overflow-x": "hidden" 
         };
     } else {
-        // FIXED: Zero padding or margins for Paginated Mode to stop the 1-Page bug natively
         themeCSS["body"] = { 
             "padding": "0 !important",
             "margin": "0 !important",
@@ -112,19 +113,22 @@ window.openReader = async function(bookId, pushHistory = true) {
         });
 
         // -------------------------------------------------------------
-        // FIXED: THE "READEST" SEPARATED SWIPE & CLICK LOGIC
+        // HOOKS: SWIPE, CLICK, & NATIVE SCROLL (RESTORED)
         // -------------------------------------------------------------
         window.rendition.hooks.content.register(function(contents) {
             let startX = 0;
             let startY = 0;
-            let isSwiping = false; // The magic flag to separate swipes from clicks
+            let isSwiping = false; 
             const iframeDoc = contents.document;
             
             iframeDoc.addEventListener('touchstart', e => {
                 startX = e.changedTouches[0].screenX;
                 startY = e.changedTouches[0].screenY;
-                isSwiping = false; // Reset the flag on touch
+                isSwiping = false; 
             }, { passive: true });
+
+            // We use dynamic passthrough. If Continuous, passive is true (allows scrolling). If Paginated, passive is false (allows us to block native swipe-back).
+            const isPassive = savedMode === 'continuous' ? true : false;
 
             iframeDoc.addEventListener('touchmove', e => {
                 let currentX = e.changedTouches[0].screenX;
@@ -132,38 +136,47 @@ window.openReader = async function(bookId, pushHistory = true) {
                 let diffX = Math.abs(startX - currentX);
                 let diffY = Math.abs(startY - currentY);
 
-                // If finger moves more than 10 pixels, it is officially a Swipe, not a Click
                 if (diffX > 10 || diffY > 10) {
                     isSwiping = true;
                 }
+
+                // Block the mobile browser's native go-back swipe ONLY in paginated mode
+                if (savedMode === 'paginated') {
+                    if (diffX > diffY && diffX > 10) {
+                        if (e.cancelable) e.preventDefault();
+                    }
+                }
+            }, { passive: isPassive });
+
+            iframeDoc.addEventListener('touchcancel', e => {
+                isSwiping = false;
             }, { passive: true });
 
             iframeDoc.addEventListener('touchend', e => {
-                // If it's a tap, let the 'click' event handle the UI toggle natively
                 if (!isSwiping) return;
 
-                // Handle the Page Swipe
                 let endX = e.changedTouches[0].screenX;
                 let endY = e.changedTouches[0].screenY;
                 let diffX = startX - endX; 
                 let diffY = Math.abs(startY - endY);
 
-                if (Math.abs(diffX) > 40 && Math.abs(diffX) > diffY) {
+                // Execute custom swipe logic only for Paginated mode
+                if (savedMode === 'paginated' && Math.abs(diffX) > 40 && Math.abs(diffX) > diffY) {
                     if (diffX > 0) window.rendition.next();
                     else window.rendition.prev();
                 }
+                
+                isSwiping = false; 
             }, { passive: true });
 
-            // This naturally catches Taps on Mobile AND Mouse Clicks on PC
+            // Click detection restored for all modes
             iframeDoc.addEventListener('click', e => {
-                if (isSwiping) return; // Prevent double-firing if a swipe finished
+                if (isSwiping) return; 
                 
-                // Ignore if clicking a link or highlighting text
                 if (e.target && e.target.closest('a')) return;
                 const selection = contents.window.getSelection();
                 if (selection && selection.toString().length > 0) return;
 
-                // Toggle Taskbar safely
                 const taskbar = document.getElementById('bottom-taskbar');
                 const pinCheckbox = document.getElementById('set-pin-taskbar');
                 if (taskbar && pinCheckbox && !pinCheckbox.checked) {
@@ -171,7 +184,7 @@ window.openReader = async function(bookId, pushHistory = true) {
                 }
             });
 
-            // Auto-hide scroll logic (Continuous mode)
+            // Native auto-hide scroll logic restored for continuous mode
             let lastScrollTop = 0;
             contents.window.addEventListener('scroll', function() {
                 const taskbar = document.getElementById('bottom-taskbar');

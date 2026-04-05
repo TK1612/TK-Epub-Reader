@@ -24,7 +24,6 @@ window.openReader = async function(bookId, pushHistory = true) {
 
     let renderOptions = { width: "100%", height: "100%", spread: "none" };
     
-    // FIX: Changed "scrolled" to "scrolled-doc" to fix the frozen scrollbar bug natively
     if (savedMode === 'continuous') {
         renderOptions.manager = "continuous"; renderOptions.flow = "scrolled-doc";
     } else if (savedMode === 'scrolled') {
@@ -35,21 +34,29 @@ window.openReader = async function(bookId, pushHistory = true) {
     
     window.rendition = window.book.renderTo("viewer", renderOptions);
     
-    // FIX: Force static positioning on images to prevent them from breaking the iframe layout
+    // FIX: Comprehensive CSS reset to prevent EPUB cover wrappers (SVG/HTML) 
+    // from breaking the layout, while maintaining proper image aspect ratios.
     window.rendition.themes.default({
-        "img": {
+        "img, image, svg": {
             "max-width": "100% !important",
+            "max-height": "100vh !important", /* Prevents infinite scaling */
             "height": "auto !important",
+            "width": "auto !important",
             "display": "block !important",
             "margin": "0 auto !important",
-            "position": "static !important" /* Stops EPUB covers from using absolute positioning to trap the screen */
+            "position": "static !important",
+            "object-fit": "contain !important" /* Keeps original image proportions safely */
         },
-        "div": {
-            "position": "static !important" /* Prevents image wrapper divs from overflowing */
+        "div, figure": {
+            "position": "static !important",
+            "max-width": "100% !important",
+            "height": "auto !important"
         },
-        "body": {
+        "html, body": {
             "padding-bottom": "80px !important",
-            "overflow-y": "auto !important"
+            "overflow-y": "auto !important",
+            "height": "auto !important", /* Fixes continuous scroll freeze */
+            "min-height": "auto !important"
         },
         "::-webkit-scrollbar": { "width": "6px", "height": "6px" },
         "::-webkit-scrollbar-track": { "background": "transparent" },
@@ -96,7 +103,7 @@ window.openReader = async function(bookId, pushHistory = true) {
                 lastScrollTop = st <= 0 ? 0 : st;
             }, { passive: true });
 
-            // Fail-safe: Click anywhere (including on massive images) to bring taskbar back
+            // Fail-safe: Click anywhere to bring taskbar back
             contents.document.addEventListener('click', function() {
                 if (!document.getElementById('set-pin-taskbar').checked) {
                     taskbar.classList.remove('hidden');

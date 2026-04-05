@@ -119,51 +119,14 @@ window.openReader = async function(bookId, pushHistory = true) {
                  if (activeEl) activeEl.classList.add('active-toc');
             }
             
-            // FIX: 3-Tier Robust Progress Calculation
+            // Tiered Progress Calculation (prevents jump to 0%)
             let percentage = 0;
-            
-            // Tier 1: Exact Location (Fires after background generation completes)
             if (window.book.locations && window.book.locations.length() > 0) {
-                let locPercentage = window.book.locations.percentageFromCfi(location.start.cfi);
-                if (locPercentage !== null && locPercentage >= 0) {
-                    percentage = Math.floor(locPercentage * 100);
-                }
-            } 
-            
-            // Tier 2 & 3: Fallbacks if locations aren't ready yet
-            if (percentage === 0) {
-                let foundInTOC = false;
-                
-                // Tier 2: Table of Contents math (Current Chapter / Total Chapters)
-                if (navItem && window.book.navigation && window.book.navigation.toc) {
-                    let tocArray = [];
-                    const flattenToc = (items) => {
-                        items.forEach(item => {
-                            tocArray.push(item);
-                            if (item.subitems && item.subitems.length) flattenToc(item.subitems);
-                        });
-                    };
-                    flattenToc(window.book.navigation.toc);
-                    
-                    let matchHref = navItem.href.split('#')[0];
-                    let tocIndex = tocArray.findIndex(item => item.href.split('#')[0] === matchHref);
-                    
-                    if (tocIndex !== -1 && tocArray.length > 0) {
-                        percentage = Math.floor(((tocIndex + 1) / tocArray.length) * 100);
-                        foundInTOC = true;
-                    }
-                }
-                
-                // Tier 3: Spine math (Internal HTML files / Total HTML files)
-                if (!foundInTOC && spineItem && window.book.spine && window.book.spine.spineItems) {
-                    let totalItems = window.book.spine.spineItems.length;
-                    if (totalItems > 0) {
-                        percentage = Math.floor(((spineItem.index + 1) / totalItems) * 100);
-                    }
-                }
+                percentage = Math.floor(window.book.locations.percentageFromCfi(location.start.cfi) * 100);
+            } else if (spineItem && window.book.spine && window.book.spine.spineItems) {
+                percentage = Math.floor((spineItem.index / window.book.spine.spineItems.length) * 100);
             }
-            
-            percentage = Math.max(0, Math.min(100, percentage || 0));
+            percentage = Math.max(0, Math.min(100, percentage));
             
             localStorage.setItem('progress-' + bookId, JSON.stringify({
                 chapter: chapterTitle,
@@ -173,11 +136,13 @@ window.openReader = async function(bookId, pushHistory = true) {
 
         window.rendition.hooks.content.register(function(contents) {
             let touchStartX = 0; let touchEndX = 0;
-            let lastScrollTop = 0;
             const taskbar = document.getElementById('bottom-taskbar');
 
+            // --- MODIFIED: Proper Hide/Show logic inside iframe ---
+            let lastScrollTop = 0;
             contents.window.addEventListener('scroll', function() {
-                const isPinned = document.getElementById('set-pin-taskbar').checked;
+                // If pinned, NEVER hide
+                const isPinned = localStorage.getItem('pin-taskbar') === 'true';
                 if (isPinned) {
                     taskbar.classList.remove('hidden');
                     return;
@@ -185,17 +150,18 @@ window.openReader = async function(bookId, pushHistory = true) {
 
                 let st = contents.window.pageYOffset || contents.document.documentElement.scrollTop;
                 if (st > lastScrollTop && st > 20) {
+                    // Scrolling down - hide
                     taskbar.classList.add('hidden'); 
                 } else if (st < lastScrollTop) {
+                    // Scrolling up - show
                     taskbar.classList.remove('hidden'); 
                 }
                 lastScrollTop = st <= 0 ? 0 : st;
             }, { passive: true });
 
+            // Restore taskbar on tap anywhere in content frame
             contents.document.addEventListener('click', function() {
-                if (!document.getElementById('set-pin-taskbar').checked) {
-                    taskbar.classList.remove('hidden');
-                }
+                taskbar.classList.remove('hidden');
             });
 
             contents.document.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; }, { passive: true });
@@ -270,9 +236,14 @@ window.toggleSettings = function() {
 };
 
 window.updateSettings = function() {
-    const isPinned = document.getElementById('set-pin-taskbar').checked;
-    localStorage.setItem('pin-taskbar', isPinned);
-    if (isPinned) document.getElementById('bottom-taskbar').classList.remove('hidden');
+    // --- MODIFIED: Ensure proper localStorage update based on checkbox ---
+    const isPinnedChecked = document.getElementById('set-pin-taskbar').checked;
+    localStorage.setItem('pin-taskbar', isPinnedChecked);
+    
+    const taskbar = document.getElementById('bottom-taskbar');
+    if (isPinnedChecked) {
+        taskbar.classList.remove('hidden'); // Force visible if pinned
+    }
 
     if(!window.rendition) return;
     const fontSize = document.getElementById('set-font').value + 'px';

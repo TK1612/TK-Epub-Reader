@@ -1,8 +1,26 @@
+// --- BROWSER BACK/FORWARD BUTTON LISTENER ---
+window.addEventListener('popstate', function(event) {
+    const state = event.state;
+    if (state) {
+        if (state.view === 'reader' && state.bookId) {
+            window.openReader(state.bookId, false); 
+        } else {
+            window.closeReader(false); 
+            window.showView(state.view, false);
+        }
+    }
+});
+
+// --- UI LOGIC ---
 window.toggleSidebar = function() {
     document.getElementById('sidebar').classList.toggle('collapsed');
 };
 
-window.showView = function(viewId) {
+window.showView = function(viewId, pushHistory = true) {
+    if (pushHistory) {
+        history.pushState({ view: viewId }, '', '#' + viewId);
+    }
+
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.getElementById(viewId + '-view').classList.add('active');
     document.getElementById('page-title').innerText = viewId.charAt(0).toUpperCase() + viewId.slice(1);
@@ -23,8 +41,6 @@ window.toggleDarkMode = function() {
     
     if(window.rendition) {
         window.rendition.themes.select(newTheme);
-        
-        // Update color picker to match the new theme's default text
         const defaultColor = newTheme === 'dark' ? '#e4e4e7' : '#18181b';
         document.getElementById('set-text-color').value = defaultColor;
         window.rendition.themes.override('color', defaultColor + ' !important');

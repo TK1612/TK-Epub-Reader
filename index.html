@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Epub Reader</title>
     
-    <link rel="icon" href="649178036_950205537550061_276526426078080711_n.jpg">
+    <link rel="shortcut icon" type="image/jpeg" href="649178036_950205537550061_276526426078080711_n.jpg">
+    <link rel="icon" type="image/jpeg" href="649178036_950205537550061_276526426078080711_n.jpg">
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js"></script>
@@ -14,7 +15,7 @@
     
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     
-    <link rel="stylesheet" href="css/style.css?v=5">
+    <link rel="stylesheet" href="css/style.css?v=6">
 </head>
 <body>
 
@@ -60,12 +61,12 @@
     <div id="reader-container">
         <div id="viewer"></div>
         <div class="bottom-bar" id="bottom-taskbar">
-            <div class="bar-group">
+            <div class="bar-group left-group">
                 <button class="icon-btn" onclick="closeReader()" title="Back to Library"><i class="ph ph-house"></i></button>
                 <button class="icon-btn" onclick="rendition.prev()"><i class="ph ph-caret-left"></i></button>
             </div>
             <div class="chapter-title" id="chapter-title">Loading...</div>
-            <div class="bar-group">
+            <div class="bar-group right-group">
                 <button class="icon-btn" onclick="toggleTOC()" title="Table of Contents"><i class="ph ph-list-bullets"></i></button>
                 <button class="icon-btn" onclick="saveBookmark()" title="Save Bookmark"><i class="ph ph-heart"></i></button>
                 <button class="icon-btn" onclick="toggleSearch()" title="Global Search"><i class="ph ph-magnifying-glass"></i></button>
@@ -109,7 +110,6 @@
             <h3>Reader Settings</h3>
             <button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button>
         </div>
-        
         <div class="setting-group">
             <label>Reading Mode</label>
             <select id="set-read-mode" onchange="changeReadMode()">
@@ -118,7 +118,6 @@
                 <option value="paginated">Paginated (Swipe / Click Next)</option>
             </select>
         </div>
-
         <div class="setting-group">
             <label>Font Size <span id="val-font">18px</span></label>
             <input type="range" id="set-font" min="12" max="36" value="18" oninput="updateSettings()">
@@ -143,7 +142,6 @@
                 <input type="color" id="set-text-color" value="#e4e4e7" onchange="updateSettings()" style="width: 30px; height: 30px;">
             </label>
         </div>
-        
         <div class="setting-group" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);">
             <label style="cursor: pointer;">
                 Pin Taskbar (Don't Hide)
@@ -160,11 +158,11 @@
         <ul id="toc-list" class="scroll-list"></ul>
     </div>
 
-    <script src="js/globals.js?v=5"></script>
-    <script src="js/ui.js?v=5"></script>
-    <script src="js/library.js?v=5"></script>
-    <script src="js/reader.js?v=5"></script>
-    <script src="js/tools.js?v=5"></script>
+    <script src="js/globals.js?v=6"></script>
+    <script src="js/ui.js?v=6"></script>
+    <script src="js/library.js?v=6"></script>
+    <script src="js/reader.js?v=6"></script>
+    <script src="js/tools.js?v=6"></script>
     
     <script>
         window.onload = () => {

@@ -24,7 +24,6 @@ window.openReader = async function(bookId, pushHistory = true) {
 
     let renderOptions = { width: "100%", height: "100%", spread: "none" };
     
-    // FIX: Changed "scrolled" to "scrolled-doc" to fix the frozen scrollbar bug natively
     if (savedMode === 'continuous') {
         renderOptions.manager = "continuous"; renderOptions.flow = "scrolled-doc";
     } else if (savedMode === 'scrolled') {
@@ -35,25 +34,21 @@ window.openReader = async function(bookId, pushHistory = true) {
     
     window.rendition = window.book.renderTo("viewer", renderOptions);
     
-    // FIX: Force static positioning on images to prevent them from breaking the iframe layout
     window.rendition.themes.default({
         "img": {
             "max-width": "100% !important",
             "height": "auto !important",
             "display": "block !important",
             "margin": "0 auto !important",
-            "position": "static !important" /* Stops EPUB covers from using absolute positioning to trap the screen */
+            "position": "static !important"
         },
         "div": {
-            "position": "static !important" /* Prevents image wrapper divs from overflowing */
+            "position": "static !important"
         },
         "body": {
             "padding-bottom": "80px !important",
             "overflow-y": "auto !important"
-        },
-        "::-webkit-scrollbar": { "width": "6px", "height": "6px" },
-        "::-webkit-scrollbar-track": { "background": "transparent" },
-        "::-webkit-scrollbar-thumb": { "background": "rgba(150, 150, 150, 0.4)", "border-radius": "10px" }
+        }
     });
 
     window.rendition.themes.register("dark", { "body": { "background": "#000000", "color": "#e4e4e7" }});
@@ -68,31 +63,13 @@ window.openReader = async function(bookId, pushHistory = true) {
         if (savedCfi) window.rendition.display(savedCfi);
         else window.rendition.display();
 
-        // 1. Progress Slider User Input
-        const slider = document.getElementById('progress-slider');
-        if (slider) {
-            slider.addEventListener('change', function(e) {
-                if (window.book.locations.length > 0) {
-                    const cfi = window.book.locations.cfiFromPercentage(e.target.value / 100);
-                    window.rendition.display(cfi);
-                }
-            });
-        }
-
-        // 2. Location Tracking & Syncing
         window.rendition.on('relocated', function(location) {
             const navItem = window.book.navigation.get(location.start.href);
             document.getElementById('chapter-title').innerText = navItem ? navItem.label : bookData.title;
             localStorage.setItem('bookmark-' + bookId, location.start.cfi);
-            
-            // Sync slider position natively
-            if (slider && window.book.locations.length > 0) {
-                let percentage = window.book.locations.percentageFromCfi(location.start.cfi);
-                slider.value = Math.round(percentage * 100);
-            }
         });
 
-        // 3. Scroll & Taskbar Hide/Show Logic
+        // --- UNIFIED SCROLL LOGIC ---
         let lastScrollTop = 0;
         const taskbar = document.getElementById('bottom-taskbar');
 
@@ -102,7 +79,7 @@ window.openReader = async function(bookId, pushHistory = true) {
                 taskbar.classList.remove('hidden');
                 return;
             }
-            if (scrollTop > lastScrollTop && scrollTop > 10) {
+            if (scrollTop > lastScrollTop && scrollTop > 20) {
                 taskbar.classList.add('hidden'); // Scrolling down
             } else if (scrollTop < lastScrollTop) {
                 taskbar.classList.remove('hidden'); // Scrolling up
@@ -110,74 +87,40 @@ window.openReader = async function(bookId, pushHistory = true) {
             lastScrollTop = scrollTop <= 0 ? 0 : scrollTop;
         };
 
-        // Attach scroll listener to continuous scrolling containers 
-        setTimeout(() => {
-            const managerContainer = window.rendition.manager && window.rendition.manager.container;
-            if (managerContainer) managerContainer.addEventListener('scroll', (e) => handleScroll(e.target.scrollTop), { passive: true });
-            document.getElementById('viewer').addEventListener('scroll', (e) => handleScroll(e.target.scrollTop), { passive: true });
-        }, 500);
-
-        // Attach scroll listener to iframe contents (for paginated mode)
         window.rendition.hooks.content.register(function(contents) {
+            // Scroll inside iframe
             contents.window.addEventListener('scroll', function() {
-                handleScroll(contents.window.pageYOffset || contents.document.documentElement.scrollTop);
+                const st = contents.window.pageYOffset || contents.document.documentElement.scrollTop;
+                handleScroll(st);
             }, { passive: true });
 
-            // Fail-safe visibility trigger
             contents.document.addEventListener('click', function() {
-                if (!document.getElementById('set-pin-taskbar').checked) taskbar.classList.remove('hidden');
+                if (!document.getElementById('set-pin-taskbar').checked) {
+                    taskbar.classList.remove('hidden');
+                }
             });
 
-            // Mobile Swipe Logic
-            let touchStartX = 0; let touchEndX = 0;
+            // Mobile Swipe
+            let touchStartX = 0; 
             contents.document.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; }, { passive: true });
             contents.document.addEventListener('touchend', e => {
-                touchEndX = e.changedTouches[0].screenX;
+                const touchEndX = e.changedTouches[0].screenX;
                 const threshold = 60; 
                 if (touchEndX < touchStartX - threshold) window.rendition.next();
                 if (touchEndX > touchStartX + threshold) window.rendition.prev();
             }, { passive: true });
         });
 
-        // 4. Generate TOC & Map Progress Locations
+        // Generate TOC
         window.book.loaded.navigation.then(function(toc) {
             const tocList = document.getElementById('toc-list');
             tocList.innerHTML = '';
-            
             toc.forEach(function(chapter, index) {
                 let li = document.createElement('li');
                 li.className = 'list-item';
-                li.innerHTML = `
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span>${chapter.label}</span>
-                        <span id="toc-page-${index}" style="font-size:12px; color:var(--text-muted); background:var(--border); padding:2px 6px; border-radius:4px;">...</span>
-                    </div>`;
+                li.innerHTML = `<span>${chapter.label}</span><span id="toc-page-${index}" style="font-size:12px; color:var(--text-muted);">...</span>`;
                 li.onclick = () => { window.rendition.display(chapter.href); window.closeAllModals(); };
                 tocList.appendChild(li);
-            });
-
-            // Calculate precise book length for slider and pages
-            window.book.locations.generate(1024).then(() => {
-                const loc = window.rendition.currentLocation();
-                if (slider && loc && loc.start) {
-                    slider.value = Math.round(window.book.locations.percentageFromCfi(loc.start.cfi) * 100);
-                }
-
-                toc.forEach(function(chapter, index) {
-                    let spineItem = window.book.spine.get(chapter.href);
-                    let pageNum = "";
-                    if(spineItem && spineItem.cfiBase) {
-                        let percentage = window.book.locations.percentageFromCfi(spineItem.cfiBase);
-                        pageNum = Math.max(1, Math.round(percentage * window.book.locations.total));
-                    }
-                    const pageSpan = document.getElementById('toc-page-' + index);
-                    if(pageSpan) pageSpan.innerText = pageNum ? `Pg. ${pageNum}` : '';
-                });
-            }).catch(() => {
-                toc.forEach((c, i) => {
-                    let el = document.getElementById('toc-page-' + i);
-                    if (el) el.innerText = '';
-                });
             });
         });
     });
@@ -185,11 +128,9 @@ window.openReader = async function(bookId, pushHistory = true) {
 
 window.closeReader = function(pushHistory = true) {
     document.getElementById('reader-container').style.display = 'none';
-    
     if(window.book) window.book.destroy();
     window.book = null;
     window.rendition = null;
-    
     if (pushHistory) window.showView('library');
 };
 
@@ -221,20 +162,8 @@ window.updateSettings = function() {
 window.changeReadMode = function() {
     const mode = document.getElementById('set-read-mode').value;
     localStorage.setItem('reader-mode', mode);
-
-    if (window.rendition && window.currentBookId) {
-        const location = window.rendition.currentLocation();
-        if (location && location.start) {
-            localStorage.setItem('bookmark-' + window.currentBookId, location.start.cfi);
-        }
-    }
-
     window.closeAllModals();
-    document.getElementById('chapter-title').innerText = "Changing mode...";
-    
-    setTimeout(() => {
-        window.openReader(window.currentBookId, false);
-    }, 100);
+    window.openReader(window.currentBookId, false);
 };
 
 window.toggleTOC = function() {

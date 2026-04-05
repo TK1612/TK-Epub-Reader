@@ -62,7 +62,7 @@ window.openReader = async function(bookId, pushHistory = true) {
         window.currentThemeCSS["html"] = { "overflow-x": "hidden" };
         window.currentThemeCSS["body"] = { 
             "max-width": "900px !important", 
-            "margin": "0 auto 0 0 !important", // Aligns container left so scrollbar aligns
+            "margin": "0 auto !important", // FIXED: Reverted back to perfectly center the text column
             "padding": "0 20px 80px 20px !important",
             "overflow-x": "hidden" 
         };
@@ -288,7 +288,6 @@ window.toggleSettings = function() {
     document.getElementById('settings-modal').classList.add('active'); 
 };
 
-// NEW: Segmented Control Set Text Align
 window.setTextAlign = function(align) {
     localStorage.setItem('text-align', align);
     window.updateSettings();
@@ -316,15 +315,21 @@ window.updateSettings = function() {
 
     const paraSpacingEl = document.getElementById('set-para-spacing');
     const paraSpacing = paraSpacingEl ? paraSpacingEl.value + 'em' : '0em';
+
+    // NEW: Get Indent Value
+    const indentEl = document.getElementById('set-indent');
+    const textIndent = indentEl ? indentEl.value + 'em' : '0em';
     
     document.getElementById('val-font').innerText = fontSize;
     document.getElementById('val-line').innerText = lineHeight;
     if (document.getElementById('val-para-spacing')) document.getElementById('val-para-spacing').innerText = paraSpacing;
+    if (document.getElementById('val-indent')) document.getElementById('val-indent').innerText = textIndent;
 
     if (window.currentThemeCSS) {
         window.currentThemeCSS["p"] = { 
             "margin-bottom": paraSpacing + " !important",
-            "text-align": textAlign + " !important"
+            "text-align": textAlign + " !important",
+            "text-indent": textIndent + " !important" // Injects text indent dynamically
         };
         if(window.currentThemeCSS["body"]) {
             window.currentThemeCSS["body"]["text-align"] = textAlign + " !important";

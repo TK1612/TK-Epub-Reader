@@ -33,21 +33,32 @@ window.openReader = async function(bookId, pushHistory = true) {
     
     window.rendition = window.book.renderTo("viewer", renderOptions);
     
-    window.rendition.themes.default({
-        "html": { "overflow-x": "hidden" },
-        "body": { 
-            "max-width": "900px !important", 
-            "margin": "0 auto !important", 
-            "padding-bottom": "80px !important", 
-            "overflow-x": "hidden" 
-        },
+    // FIXED: Conditional CSS injection based on Reading Mode
+    let themeCSS = {
         "img": { "max-width": "100% !important", "height": "auto !important", "display": "block !important", "margin": "0 auto !important", "position": "static !important" },
         "div": { "position": "static !important" },
         "::-webkit-scrollbar": { "width": "6px", "height": "6px" },
         "::-webkit-scrollbar-track": { "background": "transparent" },
         "::-webkit-scrollbar-thumb": { "background": "rgba(150, 150, 150, 0.4)", "border-radius": "10px" }
-    });
+    };
 
+    // If continuous, restrict width and hide X overflow. If paginated, LET IT BREATHE.
+    if (savedMode === 'continuous' || savedMode === 'scrolled') {
+        themeCSS["html"] = { "overflow-x": "hidden" };
+        themeCSS["body"] = { 
+            "max-width": "900px !important", 
+            "margin": "0 auto !important", 
+            "padding-bottom": "80px !important", 
+            "overflow-x": "hidden" 
+        };
+    } else {
+        themeCSS["body"] = { 
+            "padding": "0 10px !important", // Gives text breathing room on mobile
+            "margin": "0 !important" 
+        };
+    }
+
+    window.rendition.themes.default(themeCSS);
     window.rendition.themes.register("dark", { "body": { "background": "#000000", "color": "#e4e4e7" }});
     window.rendition.themes.register("light", { "body": { "background": "#ffffff", "color": "#18181b" }});
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
@@ -74,30 +85,36 @@ window.openReader = async function(bookId, pushHistory = true) {
         });
 
         window.rendition.hooks.content.register(function(contents) {
-            let lastScrollTop = 0;
             const taskbar = document.getElementById('bottom-taskbar');
             const pinCheckbox = document.getElementById('set-pin-taskbar');
 
-            let startX = 0;
-            let startY = 0;
+            // --- FIXED: HIGH PRECISION SWIPE DETECTOR ---
+            let touchStartX = 0;
+            let touchStartY = 0;
+            let touchStartTime = 0;
 
-            contents.window.addEventListener('touchstart', e => {
-                startX = e.touches[0].clientX;
-                startY = e.touches[0].clientY;
+            contents.document.addEventListener('touchstart', e => {
+                touchStartX = e.changedTouches[0].screenX;
+                touchStartY = e.changedTouches[0].screenY;
+                touchStartTime = Date.now();
             }, { passive: true });
 
-            contents.window.addEventListener('touchend', e => {
-                let endX = e.changedTouches[0].clientX;
-                let endY = e.changedTouches[0].clientY;
-                let diffX = startX - endX;
-                let diffY = startY - endY;
+            contents.document.addEventListener('touchend', e => {
+                let touchEndX = e.changedTouches[0].screenX;
+                let touchEndY = e.changedTouches[0].screenY;
+                let diffX = touchStartX - touchEndX; // Positive if swiped left
+                let diffY = touchStartY - touchEndY;
+                let timeTaken = Date.now() - touchStartTime;
 
-                if (Math.abs(diffX) > 50 && Math.abs(diffX) > Math.abs(diffY)) {
-                    if (diffX > 0) window.rendition.next();
-                    else window.rendition.prev();
+                // Fast swipe (< 800ms) that is mostly horizontal
+                if (timeTaken < 800 && Math.abs(diffX) > 40 && Math.abs(diffX) > Math.abs(diffY)) {
+                    if (diffX > 0) window.rendition.next(); // Swipe left to go to next page
+                    else window.rendition.prev(); // Swipe right to go to prev page
                 }
             }, { passive: true });
 
+            // Auto-hide scroll logic (only triggers in continuous mode)
+            let lastScrollTop = 0;
             contents.window.addEventListener('scroll', function() {
                 if (pinCheckbox.checked) {
                     taskbar.classList.remove('hidden');
@@ -112,6 +129,7 @@ window.openReader = async function(bookId, pushHistory = true) {
                 lastScrollTop = st <= 0 ? 0 : st;
             }, { passive: true });
 
+            // Tap anywhere to toggle menu (essential for paginated mode)
             contents.document.addEventListener('click', function(e) {
                 if (e.target.tagName.toLowerCase() === 'a') return;
                 const selection = contents.window.getSelection();
@@ -122,7 +140,7 @@ window.openReader = async function(bookId, pushHistory = true) {
             });
         });
 
-        // FIXED: Recursive TOC Generation to catch all nested sub-chapters
+        // Recursive TOC Generation
         window.book.loaded.navigation.then(function(toc) {
             const tocList = document.getElementById('toc-list');
             tocList.innerHTML = '';
@@ -133,7 +151,7 @@ window.openReader = async function(bookId, pushHistory = true) {
                     li.className = 'list-item';
                     li.dataset.href = chapter.href; 
                     
-                    let padding = level * 15; // Indents sub-chapters automatically
+                    let padding = level * 15; 
                     
                     li.innerHTML = `
                         <div style="display:flex; justify-content:space-between; align-items:center; padding-left: ${padding}px;">
@@ -149,16 +167,13 @@ window.openReader = async function(bookId, pushHistory = true) {
                     };
                     tocList.appendChild(li);
                     
-                    // Dig deeper if there are nested chapters
                     if (chapter.subitems && chapter.subitems.length > 0) {
                         flattenToc(chapter.subitems, level + 1);
                     }
                 });
             };
-            
             flattenToc(toc);
 
-            // Fetch page numbers
             window.book.locations.generate(1024).then(() => {
                 const pageSpans = document.querySelectorAll('.toc-page-num');
                 pageSpans.forEach(span => {

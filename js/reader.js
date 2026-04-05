@@ -61,12 +61,10 @@ window.openReader = async function(bookId, pushHistory = true) {
             "overflow-x": "hidden" 
         };
     } else {
-        // FIXED: Only apply touch-action blocks in paginated mode
-        themeCSS["html"] = { "touch-action": "pan-y !important" };
+        // FIXED: Zero padding or margins for Paginated Mode to stop the 1-Page bug natively
         themeCSS["body"] = { 
             "padding": "0 !important",
             "margin": "0 !important",
-            "touch-action": "pan-y !important"
         };
     }
 
@@ -114,63 +112,58 @@ window.openReader = async function(bookId, pushHistory = true) {
         });
 
         // -------------------------------------------------------------
-        // HOOKS: SWIPE (Paginated Only), CLICK, & SCROLL
+        // FIXED: THE "READEST" SEPARATED SWIPE & CLICK LOGIC
         // -------------------------------------------------------------
         window.rendition.hooks.content.register(function(contents) {
-            let isSwiping = false; 
+            let startX = 0;
+            let startY = 0;
+            let isSwiping = false; // The magic flag to separate swipes from clicks
             const iframeDoc = contents.document;
             
-            // ONLY bind swipe touch events if we are in paginated mode
-            if (savedMode === 'paginated') {
-                let startX = 0;
-                let startY = 0;
+            iframeDoc.addEventListener('touchstart', e => {
+                startX = e.changedTouches[0].screenX;
+                startY = e.changedTouches[0].screenY;
+                isSwiping = false; // Reset the flag on touch
+            }, { passive: true });
 
-                iframeDoc.addEventListener('touchstart', e => {
-                    startX = e.changedTouches[0].clientX;
-                    startY = e.changedTouches[0].clientY;
-                    isSwiping = false; 
-                }, { passive: true });
+            iframeDoc.addEventListener('touchmove', e => {
+                let currentX = e.changedTouches[0].screenX;
+                let currentY = e.changedTouches[0].screenY;
+                let diffX = Math.abs(startX - currentX);
+                let diffY = Math.abs(startY - currentY);
 
-                iframeDoc.addEventListener('touchmove', e => {
-                    let currentX = e.changedTouches[0].clientX;
-                    let currentY = e.changedTouches[0].clientY;
-                    let diffX = Math.abs(startX - currentX);
-                    let diffY = Math.abs(startY - currentY);
+                // If finger moves more than 10 pixels, it is officially a Swipe, not a Click
+                if (diffX > 10 || diffY > 10) {
+                    isSwiping = true;
+                }
+            }, { passive: true });
 
-                    if (diffX > 10 || diffY > 10) {
-                        isSwiping = true;
-                    }
-                }, { passive: true });
+            iframeDoc.addEventListener('touchend', e => {
+                // If it's a tap, let the 'click' event handle the UI toggle natively
+                if (!isSwiping) return;
 
-                iframeDoc.addEventListener('touchcancel', e => {
-                    isSwiping = false;
-                }, { passive: true });
+                // Handle the Page Swipe
+                let endX = e.changedTouches[0].screenX;
+                let endY = e.changedTouches[0].screenY;
+                let diffX = startX - endX; 
+                let diffY = Math.abs(startY - endY);
 
-                iframeDoc.addEventListener('touchend', e => {
-                    if (!isSwiping) return;
+                if (Math.abs(diffX) > 40 && Math.abs(diffX) > diffY) {
+                    if (diffX > 0) window.rendition.next();
+                    else window.rendition.prev();
+                }
+            }, { passive: true });
 
-                    let endX = e.changedTouches[0].clientX;
-                    let endY = e.changedTouches[0].clientY;
-                    let diffX = startX - endX; 
-                    let diffY = Math.abs(startY - endY);
-
-                    if (Math.abs(diffX) > 40 && Math.abs(diffX) > diffY * 1.5) {
-                        if (diffX > 0) window.rendition.next();
-                        else window.rendition.prev();
-                    }
-                    
-                    isSwiping = false; 
-                }, { passive: true });
-            }
-
-            // Click applies to all modes (toggles taskbar)
+            // This naturally catches Taps on Mobile AND Mouse Clicks on PC
             iframeDoc.addEventListener('click', e => {
-                if (isSwiping) return; 
+                if (isSwiping) return; // Prevent double-firing if a swipe finished
                 
+                // Ignore if clicking a link or highlighting text
                 if (e.target && e.target.closest('a')) return;
                 const selection = contents.window.getSelection();
                 if (selection && selection.toString().length > 0) return;
 
+                // Toggle Taskbar safely
                 const taskbar = document.getElementById('bottom-taskbar');
                 const pinCheckbox = document.getElementById('set-pin-taskbar');
                 if (taskbar && pinCheckbox && !pinCheckbox.checked) {
@@ -178,7 +171,7 @@ window.openReader = async function(bookId, pushHistory = true) {
                 }
             });
 
-            // Auto-hide scroll logic applies natively (Mostly affects continuous)
+            // Auto-hide scroll logic (Continuous mode)
             let lastScrollTop = 0;
             contents.window.addEventListener('scroll', function() {
                 const taskbar = document.getElementById('bottom-taskbar');

@@ -107,7 +107,6 @@ body { background: var(--bg-color); color: var(--text-color); overflow: hidden; 
 .book-card:hover .book-cover { box-shadow: 0 16px 32px rgba(0,0,0,0.2); }
 .book-info { padding: 16px 4px; }
 .book-title { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 6px; }
-.book-progress { font-size: 13px; color: var(--text-muted); }
 
 .delete-overlay { 
     position: absolute; top: 0; left: 0; width: 100%; height: 260px; 
@@ -123,7 +122,7 @@ body { background: var(--bg-color); color: var(--text-color); overflow: hidden; 
 
 /* --- FIXED READER & TASKBAR --- */
 #reader-container { display: block; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: var(--bg-color); z-index: 300; display: none; }
-#viewer { width: 100%; height: 100%; max-width: none; background: transparent; } /* REMOVED max-width to push scrollbar to edge */
+#viewer { width: 100%; height: 100%; max-width: none; background: transparent; } 
 
 .bottom-bar { 
     position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 800px;
@@ -166,6 +165,12 @@ input[type="text"], textarea, select {
 [data-theme="dark"] input[type="text"], [data-theme="dark"] textarea, [data-theme="dark"] select { background: rgba(255,255,255,0.05); }
 input[type="text"]:focus, textarea:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
 
+/* Dropdown visibility fix */
+select option {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+}
+
 input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; }
 input[type="color"] { border: none; border-radius: 8px; cursor: pointer; padding: 0; background: transparent; }
 input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent); cursor: pointer; }
@@ -185,6 +190,10 @@ mark { background: rgba(59, 130, 246, 0.4); color: var(--text-color); border-rad
 
 .setting-group { margin-bottom: 20px; }
 .setting-group label { display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: 500; margin-bottom: 10px; color: var(--text-color); }
+
+/* Active TOC Highlight */
+.active-toc { border-color: var(--accent) !important; background: rgba(59, 130, 246, 0.1) !important; }
+.active-toc .toc-label { color: var(--accent); font-weight: 600; }
 
 /* MOBILE RESPONSIVENESS */
 @media (max-width: 768px) {

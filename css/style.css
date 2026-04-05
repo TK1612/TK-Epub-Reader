@@ -95,23 +95,21 @@ body { background: var(--bg-color); color: var(--text-color); overflow: hidden; 
     left: 50%; 
     transform: translateX(-50%); 
     width: calc(100% - 40px);
-    max-width: 860px; /* Constrains it to the text box width */
+    max-width: 860px;
     display: flex; 
-    justify-content: flex-start; /* Aligns content from the left like the image */
+    justify-content: space-between; 
     align-items: center; 
-    gap: 15px;
     padding: 12px 20px; 
     background: var(--glass-surface); 
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid var(--border); 
-    border-radius: 16px; /* Gives the rounded pill shape */
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); /* Floating shadow */
+    border-radius: 16px; 
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); 
     z-index: 500; 
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s; 
 }
 
-/* Ensure hidden state keeps the -50% translation so it drops straight down */
 .bottom-bar.hidden { 
     transform: translate(-50%, 150%); 
     opacity: 0;
@@ -119,30 +117,24 @@ body { background: var(--bg-color); color: var(--text-color); overflow: hidden; 
 }
 
 .bar-group { display: flex; gap: 5px; align-items: center; }
-.bar-group:last-child { margin-left: auto; } /* Pushes the right-side icons to the far right edge */
 
 .chapter-title { 
+    position: absolute; 
+    left: 50%;
+    transform: translateX(-50%);
     font-size: 14px; 
     font-weight: 600; 
-    color: var(--text-color); /* Brightened to match the image text */
-    text-align: left; 
-    flex: 1; /* Fills middle space so long titles have room */
+    color: var(--text-color); 
+    text-align: center; 
+    max-width: 45%; 
     white-space: nowrap; 
     overflow: hidden; 
     text-overflow: ellipsis; 
 }
 
-/* --- FORCING THE BLUE ACCENT COLOR --- */
-.upload-btn {
-    background-color: var(--accent) !important;
-    color: #ffffff !important;
-    font-weight: 600;
-}
-
-/* Target the generated TOC list items to make chapter titles blue */
-#toc-list .list-item div span:first-child {
-    color: var(--accent) !important;
-    font-weight: 600;
+/* --- TOC ACTIVE HIGHLIGHT --- */
+.list-item.active-toc {
+    border: 1px solid var(--accent);
 }
 
 /* MODALS */
@@ -190,27 +182,14 @@ mark { background: rgba(59, 130, 246, 0.3); color: var(--text-color); border-rad
     vertical-align: middle;
     transition: background-color 0.2s, border-color 0.2s;
 }
-
-/* Checked state background */
-#set-pin-taskbar:checked {
-    background-color: var(--accent);
-    border-color: var(--accent);
-}
-
-/* Draw the white checkmark manually */
+#set-pin-taskbar:checked { background-color: var(--accent); border-color: var(--accent); }
 #set-pin-taskbar:checked::after {
-    content: '';
-    position: absolute;
-    top: 2px;
-    left: 7px;
-    width: 6px;
-    height: 12px;
-    border: solid white;
-    border-width: 0 2px 2px 0;
+    content: ''; position: absolute; top: 2px; left: 7px;
+    width: 6px; height: 12px; border: solid white; border-width: 0 2px 2px 0;
     transform: rotate(45deg);
 }
 
-/* --- MOBILE RESPONSIVENESS --- */
+/* --- MOBILE RESPONSIVENESS (Layout Engine Re-Written) --- */
 @media (max-width: 768px) {
     .library-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 15px; }
     .book-cover { height: 170px; }
@@ -220,23 +199,30 @@ mark { background: rgba(59, 130, 246, 0.3); color: var(--text-color); border-rad
         bottom: 15px;
         width: calc(100% - 20px); 
         flex-wrap: wrap; 
-        justify-content: center; 
-        padding: 12px; 
-        gap: 10px; 
+        justify-content: space-between; /* Ensures icons are spaced well horizontally */
+        padding: 15px; 
+        gap: 10px 0; /* Vertical gap only, no horizontal container gap */
         border-radius: 16px;
     }
-    .chapter-title { 
-        width: 100%; 
-        order: -1; 
-        margin-bottom: 5px; 
-        font-size: 13px; 
-        text-align: center;
-        flex: none; /* Override flex: 1 from desktop */
-    }
-    .bar-group { justify-content: center; gap: 10px; width: 100%; }
-    .bar-group:last-child { margin-left: 0; }
     
-    .icon-btn { font-size: 26px; padding: 12px; } 
+    .chapter-title { 
+        position: relative; 
+        left: 0;
+        transform: none;
+        width: 100%; 
+        max-width: 100%;
+        order: 1; /* Forces title to top row */
+        margin-bottom: 5px; 
+        font-size: 14px; 
+        text-align: center;
+    }
+    
+    .bar-group:first-child { order: 2; margin-left: 0; } /* Forces left-buttons to row 2 */
+    .bar-group:last-child { order: 3; margin-left: auto; } /* Forces right-buttons to row 2 */
+    
+    /* Slightly shrinks icons on mobile to prevent overcrowding when all 8 are visible */
+    .icon-btn { font-size: 22px; padding: 6px; } 
+    
     .right-modal { width: 90%; left: 5%; right: 5%; bottom: 80px; }
     .large-modal { width: 95%; max-height: 85vh; padding: 15px; }
 }

@@ -67,8 +67,20 @@ body { background: var(--bg-color); color: var(--text-color); overflow: hidden; 
 
 .icon-btn { background: transparent; border: none; color: var(--text-color); font-size: 22px; cursor: pointer; padding: 8px; border-radius: 8px; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
 .icon-btn:hover { background: var(--border); }
-.btn-primary, .upload-btn { background: var(--accent); color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; }
+.btn-primary { background: var(--accent); color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; }
 .btn-secondary { background: transparent; color: var(--text-color); border: 1px solid var(--border); padding: 10px 16px; border-radius: 8px; cursor: pointer; }
+
+/* FIXED: UPLOAD NOVEL BUTTON */
+.upload-btn {
+    background-color: var(--accent) !important;
+    color: #ffffff !important;
+    font-weight: 600;
+    border: none; 
+    padding: 10px 16px; 
+    border-radius: 8px; 
+    cursor: pointer; 
+    font-size: 14px; 
+}
 
 /* LIBRARY GRID & DELETE MODE */
 .library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 25px; }
@@ -116,26 +128,27 @@ body { background: var(--bg-color); color: var(--text-color); overflow: hidden; 
     pointer-events: none;
 }
 
-.bar-group { display: flex; gap: 5px; align-items: center; }
+/* FIXED: TASKBAR LAYOUT & TITLE TRUNCATION */
+.bar-group { 
+    display: flex; 
+    gap: 5px; 
+    align-items: center; 
+    flex-shrink: 0; /* Prevents icons from shrinking when title is long */
+}
 
 .chapter-title { 
-    position: absolute; 
-    left: 50%;
-    transform: translateX(-50%);
+    flex: 1 1 auto; /* Allows title to take up remaining middle space */
+    min-width: 0; /* Magic property that allows text-overflow to work inside flexbox */
+    margin: 0 15px; /* Creates padding between title and icons */
     font-size: 14px; 
     font-weight: 600; 
     color: var(--text-color); 
     text-align: center; 
-    max-width: 45%; 
     white-space: nowrap; 
     overflow: hidden; 
     text-overflow: ellipsis; 
 }
 
-/* --- TOC ACTIVE HIGHLIGHT --- */
-.list-item.active-toc {
-    border: 1px solid var(--accent);
-}
 
 /* MODALS */
 .modal { 
@@ -163,6 +176,13 @@ textarea { flex: 1; font-family: monospace; resize: none; }
 .scroll-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; list-style: none; }
 .list-item { padding: 12px; background: var(--bg-color); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; transition: background 0.2s; font-size: 14px;}
 .list-item:hover { background: var(--border); }
+
+/* FIXED: TOC ACTIVE HIGHLIGHT WITH GLASS BLUE */
+.list-item.active-toc {
+    border: 1px solid var(--accent);
+    background-color: rgba(59, 130, 246, 0.15); /* Glass blue tint */
+}
+
 mark { background: rgba(59, 130, 246, 0.3); color: var(--text-color); border-radius: 3px; padding: 0 2px;}
 .setting-group { margin-bottom: 15px; }
 .setting-group label { display: flex; justify-content: space-between; align-items: center; font-size: 13px; margin-bottom: 8px; color: var(--text-muted); }
@@ -189,7 +209,7 @@ mark { background: rgba(59, 130, 246, 0.3); color: var(--text-color); border-rad
     transform: rotate(45deg);
 }
 
-/* --- MOBILE RESPONSIVENESS (Layout Engine Re-Written) --- */
+/* --- MOBILE RESPONSIVENESS --- */
 @media (max-width: 768px) {
     .library-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 15px; }
     .book-cover { height: 170px; }
@@ -199,28 +219,23 @@ mark { background: rgba(59, 130, 246, 0.3); color: var(--text-color); border-rad
         bottom: 15px;
         width: calc(100% - 20px); 
         flex-wrap: wrap; 
-        justify-content: space-between; /* Ensures icons are spaced well horizontally */
+        justify-content: space-between; 
         padding: 15px; 
-        gap: 10px 0; /* Vertical gap only, no horizontal container gap */
+        gap: 10px 0; 
         border-radius: 16px;
     }
     
     .chapter-title { 
-        position: relative; 
-        left: 0;
-        transform: none;
-        width: 100%; 
-        max-width: 100%;
-        order: 1; /* Forces title to top row */
-        margin-bottom: 5px; 
+        flex: 1 1 100%; /* Forces the title to take the full width of the top row on mobile */
+        margin: 0 0 5px 0; 
+        order: 1; 
         font-size: 14px; 
         text-align: center;
     }
     
-    .bar-group:first-child { order: 2; margin-left: 0; } /* Forces left-buttons to row 2 */
-    .bar-group:last-child { order: 3; margin-left: auto; } /* Forces right-buttons to row 2 */
+    .bar-group:first-child { order: 2; margin-left: 0; } 
+    .bar-group:last-child { order: 3; margin-left: auto; } 
     
-    /* Slightly shrinks icons on mobile to prevent overcrowding when all 8 are visible */
     .icon-btn { font-size: 22px; padding: 6px; } 
     
     .right-modal { width: 90%; left: 5%; right: 5%; bottom: 80px; }

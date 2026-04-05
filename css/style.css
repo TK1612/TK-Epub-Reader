@@ -165,7 +165,6 @@ input[type="text"], textarea, select {
 [data-theme="dark"] input[type="text"], [data-theme="dark"] textarea, [data-theme="dark"] select { background: rgba(255,255,255,0.05); }
 input[type="text"]:focus, textarea:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
 
-/* Dropdown visibility fix */
 select option {
     background-color: var(--bg-color);
     color: var(--text-color);

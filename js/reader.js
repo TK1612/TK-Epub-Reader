@@ -21,11 +21,12 @@ window.openReader = async function(bookId, pushHistory = true) {
     const pinTaskbar = localStorage.getItem('pin-taskbar') !== 'false';
     document.getElementById('set-pin-taskbar').checked = pinTaskbar;
 
+    // FIXED: Added manager: "continuous" to enable cross-chapter scrolling natively
     let renderOptions = { 
         width: "100%", 
         height: "100%", 
         spread: "none",
-        manager: "default",
+        manager: savedMode === 'continuous' ? "continuous" : "default",
         flow: savedMode === 'continuous' || savedMode === 'scrolled' ? "scrolled-doc" : "paginated"
     };
     
@@ -36,18 +37,15 @@ window.openReader = async function(bookId, pushHistory = true) {
     });
     
     // -------------------------------------------------------------
-    // CSS THEME INJECTION (Restored to original + Line Spacing)
+    // CSS THEME INJECTION (Stored globally so Settings can update it)
     // -------------------------------------------------------------
-    let themeCSS = {
+    window.baseThemeCSS = {
         "img": { 
             "max-width": "100% !important", 
-            "max-height": "90vh !important", 
+            "height": "auto !important", // FIXED: Removed vh units to prevent tiny image bugs
             "object-fit": "contain !important",
             "display": "block !important", 
             "margin": "0 auto !important" 
-        },
-        "p": {
-            "margin-bottom": "4em !important" // Adds 4 line spacings between character dialogues/paragraphs
         },
         "::-webkit-scrollbar": { "width": "6px", "height": "6px" },
         "::-webkit-scrollbar-track": { "background": "transparent" },
@@ -55,21 +53,21 @@ window.openReader = async function(bookId, pushHistory = true) {
     };
 
     if (savedMode === 'continuous' || savedMode === 'scrolled') {
-        themeCSS["html"] = { "overflow-x": "hidden" };
-        themeCSS["body"] = { 
+        window.baseThemeCSS["html"] = { "overflow-x": "hidden" };
+        window.baseThemeCSS["body"] = { 
             "max-width": "900px !important", 
             "margin": "0 auto !important", 
             "padding": "0 20px 80px 20px !important",
             "overflow-x": "hidden" 
         };
     } else {
-        themeCSS["body"] = { 
+        window.baseThemeCSS["body"] = { 
             "padding": "0 !important",
             "margin": "0 !important",
         };
     }
 
-    window.rendition.themes.default(themeCSS);
+    window.rendition.themes.default(window.baseThemeCSS);
     window.rendition.themes.register("dark", { "body": { "background": "#000000", "color": "#e4e4e7" }});
     window.rendition.themes.register("light", { "body": { "background": "#ffffff", "color": "#18181b" }});
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
@@ -113,7 +111,7 @@ window.openReader = async function(bookId, pushHistory = true) {
         });
 
         // -------------------------------------------------------------
-        // HOOKS: SWIPE, CLICK, & NATIVE SCROLL (RESTORED)
+        // HOOKS: SWIPE (Paginated Only), CLICK, & SCROLL
         // -------------------------------------------------------------
         window.rendition.hooks.content.register(function(contents) {
             let startX = 0;
@@ -127,7 +125,6 @@ window.openReader = async function(bookId, pushHistory = true) {
                 isSwiping = false; 
             }, { passive: true });
 
-            // We use dynamic passthrough. If Continuous, passive is true (allows scrolling). If Paginated, passive is false (allows us to block native swipe-back).
             const isPassive = savedMode === 'continuous' ? true : false;
 
             iframeDoc.addEventListener('touchmove', e => {
@@ -140,7 +137,6 @@ window.openReader = async function(bookId, pushHistory = true) {
                     isSwiping = true;
                 }
 
-                // Block the mobile browser's native go-back swipe ONLY in paginated mode
                 if (savedMode === 'paginated') {
                     if (diffX > diffY && diffX > 10) {
                         if (e.cancelable) e.preventDefault();
@@ -160,7 +156,6 @@ window.openReader = async function(bookId, pushHistory = true) {
                 let diffX = startX - endX; 
                 let diffY = Math.abs(startY - endY);
 
-                // Execute custom swipe logic only for Paginated mode
                 if (savedMode === 'paginated' && Math.abs(diffX) > 40 && Math.abs(diffX) > diffY) {
                     if (diffX > 0) window.rendition.next();
                     else window.rendition.prev();
@@ -169,7 +164,6 @@ window.openReader = async function(bookId, pushHistory = true) {
                 isSwiping = false; 
             }, { passive: true });
 
-            // Click detection restored for all modes
             iframeDoc.addEventListener('click', e => {
                 if (isSwiping) return; 
                 
@@ -184,7 +178,6 @@ window.openReader = async function(bookId, pushHistory = true) {
                 }
             });
 
-            // Native auto-hide scroll logic restored for continuous mode
             let lastScrollTop = 0;
             contents.window.addEventListener('scroll', function() {
                 const taskbar = document.getElementById('bottom-taskbar');
@@ -285,8 +278,21 @@ window.updateSettings = function() {
     const fontFamily = document.getElementById('set-font-family').value;
     const textColor = document.getElementById('set-text-color').value;
     
+    // Process paragraph spacing
+    const paraSpacingEl = document.getElementById('set-para-spacing');
+    const paraSpacing = paraSpacingEl ? paraSpacingEl.value + 'em' : '0em';
+    
     document.getElementById('val-font').innerText = fontSize;
     document.getElementById('val-line').innerText = lineHeight;
+    if (document.getElementById('val-para-spacing')) {
+        document.getElementById('val-para-spacing').innerText = paraSpacing;
+    }
+
+    // Combine base theme with dynamic paragraph spacing
+    let dynamicTheme = Object.assign({}, window.baseThemeCSS, {
+        "p": { "margin-bottom": paraSpacing + " !important" }
+    });
+    window.rendition.themes.default(dynamicTheme);
 
     window.rendition.themes.fontSize(fontSize);
     window.rendition.themes.font(fontFamily);

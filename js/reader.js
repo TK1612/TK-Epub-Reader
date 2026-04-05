@@ -62,7 +62,7 @@ window.openReader = async function(bookId, pushHistory = true) {
         window.currentThemeCSS["html"] = { "overflow-x": "hidden" };
         window.currentThemeCSS["body"] = { 
             "max-width": "900px !important", 
-            "margin": "0 auto 0 0 !important", // FIXED: Aligns text to left so scrollbar isn't floating
+            "margin": "0 auto 0 0 !important", // Aligns container left so scrollbar aligns
             "padding": "0 20px 80px 20px !important",
             "overflow-x": "hidden" 
         };
@@ -85,7 +85,6 @@ window.openReader = async function(bookId, pushHistory = true) {
 
     window.updateSettings();
 
-    // FIXED: Centralized TOC Highlighting to survive mode changes
     const highlightCurrentChapter = (href) => {
         let navItem = window.book.navigation.get(href);
         if (!navItem) {
@@ -263,7 +262,7 @@ window.openReader = async function(bookId, pushHistory = true) {
                     if (currentLocation && currentLocation.start) {
                         let chapterLabel = document.getElementById('chapter-title').innerText;
                         updateAndSaveProgress(currentLocation, chapterLabel);
-                        highlightCurrentChapter(currentLocation.start.href); // Ensure TOC is highlighted after generation
+                        highlightCurrentChapter(currentLocation.start.href); 
                     }
                 }).catch(() => { updateTocSpans(); });
             } else {
@@ -289,6 +288,12 @@ window.toggleSettings = function() {
     document.getElementById('settings-modal').classList.add('active'); 
 };
 
+// NEW: Segmented Control Set Text Align
+window.setTextAlign = function(align) {
+    localStorage.setItem('text-align', align);
+    window.updateSettings();
+};
+
 window.updateSettings = function() {
     const isPinned = document.getElementById('set-pin-taskbar').checked;
     localStorage.setItem('pin-taskbar', isPinned);
@@ -300,6 +305,15 @@ window.updateSettings = function() {
     const fontFamily = document.getElementById('set-font-family').value;
     const textColor = document.getElementById('set-text-color').value;
     
+    // Process Alignment
+    const textAlign = localStorage.getItem('text-align') || 'left';
+    const leftBtn = document.getElementById('align-left');
+    const centerBtn = document.getElementById('align-center');
+    if(leftBtn && centerBtn) {
+        if(textAlign === 'left') { leftBtn.classList.add('active'); centerBtn.classList.remove('active'); }
+        else { centerBtn.classList.add('active'); leftBtn.classList.remove('active'); }
+    }
+
     const paraSpacingEl = document.getElementById('set-para-spacing');
     const paraSpacing = paraSpacingEl ? paraSpacingEl.value + 'em' : '0em';
     
@@ -308,7 +322,13 @@ window.updateSettings = function() {
     if (document.getElementById('val-para-spacing')) document.getElementById('val-para-spacing').innerText = paraSpacing;
 
     if (window.currentThemeCSS) {
-        window.currentThemeCSS["p"] = { "margin-bottom": paraSpacing + " !important" };
+        window.currentThemeCSS["p"] = { 
+            "margin-bottom": paraSpacing + " !important",
+            "text-align": textAlign + " !important"
+        };
+        if(window.currentThemeCSS["body"]) {
+            window.currentThemeCSS["body"]["text-align"] = textAlign + " !important";
+        }
         window.rendition.themes.default(window.currentThemeCSS);
     }
 
@@ -332,7 +352,6 @@ window.changeReadMode = function() {
     setTimeout(() => { window.openReader(window.currentBookId, false); }, 100);
 };
 
-// FIXED: Auto-Scroll to Active Element
 window.toggleTOC = function() {
     window.closeAllModals();
     document.getElementById('toc-modal').classList.add('active');
@@ -340,7 +359,6 @@ window.toggleTOC = function() {
     setTimeout(() => {
         const activeItem = document.querySelector('#toc-list .active-toc');
         if (activeItem) {
-            // Scrolls the active chapter to the middle of the TOC list gracefully
             activeItem.scrollIntoView({ behavior: 'auto', block: 'center' });
         }
     }, 10);

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TK Reader</title>
+    <title>Modern Web Reader</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js"></script>
@@ -107,6 +107,16 @@
             <h3>Reader Settings</h3>
             <button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button>
         </div>
+        
+        <div class="setting-group">
+            <label>Reading Mode</label>
+            <select id="set-read-mode" onchange="changeReadMode()">
+                <option value="continuous">Continuous Scroll (All Chapters)</option>
+                <option value="scrolled">Single Chapter Scroll (Click Next)</option>
+                <option value="paginated">Paginated (Swipe / Click Next)</option>
+            </select>
+        </div>
+
         <div class="setting-group">
             <label>Font Size <span id="val-font">18px</span></label>
             <input type="range" id="set-font" min="12" max="36" value="18" oninput="updateSettings()">
@@ -150,7 +160,6 @@
     
     <script>
         window.onload = () => {
-            // Setup initial history state
             history.replaceState({ view: 'library' }, '', '#library');
             loadLibrary();
         };

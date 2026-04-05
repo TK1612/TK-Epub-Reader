@@ -11,7 +11,6 @@ window.openReader = async function(bookId, pushHistory = true) {
     window.book = ePub(bookData.buffer);
     document.getElementById('reader-container').style.display = 'block';
     
-    // Load Reading Mode & Pin Status
     let savedMode = localStorage.getItem('reader-mode');
     if (!savedMode) {
         const isPC = window.innerWidth > 768 && !(/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent));
@@ -35,13 +34,7 @@ window.openReader = async function(bookId, pushHistory = true) {
     window.rendition = window.book.renderTo("viewer", renderOptions);
     
     window.rendition.themes.default({
-        "img": {
-            "max-width": "100% !important",
-            "height": "auto !important",
-            "display": "block !important",
-            "margin": "0 auto !important",
-            "position": "static !important"
-        },
+        "img": { "max-width": "100% !important", "height": "auto !important", "display": "block !important", "margin": "0 auto !important", "position": "static !important" },
         "div": { "position": "static !important" },
         "body": { "padding-bottom": "80px !important", "overflow-y": "auto !important" },
         "::-webkit-scrollbar": { "width": "6px", "height": "6px" },
@@ -74,36 +67,45 @@ window.openReader = async function(bookId, pushHistory = true) {
             });
         });
 
-        // Iframe Content Hooks (Handles both Swipe & Taskbar Logic internally)
+        // --- FIXED: BULLETPROOF SWIPE LOGIC ---
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let touchTime = 0;
+
+        const handleTouchStart = (e) => {
+            let touch = e.changedTouches ? e.changedTouches[0] : e;
+            touchStartX = touch.screenX;
+            touchStartY = touch.screenY;
+            touchTime = Date.now();
+        };
+
+        const handleTouchEnd = (e) => {
+            let touch = e.changedTouches ? e.changedTouches[0] : e;
+            let deltaX = touch.screenX - touchStartX;
+            let deltaY = Math.abs(touch.screenY - touchStartY);
+            let timeTaken = Date.now() - touchTime;
+
+            // Trigger if fast swipe (<500ms), long enough (>40px), and mostly horizontal
+            if (timeTaken < 500 && Math.abs(deltaX) > 40 && Math.abs(deltaX) > deltaY * 1.5) {
+                if (deltaX < 0) window.rendition.next(); // Swipe Left
+                else window.rendition.prev(); // Swipe Right
+            }
+        };
+
+        // Bind to external wrapper just in case
+        window.rendition.on('touchstart', handleTouchStart);
+        window.rendition.on('touchend', handleTouchEnd);
+
         window.rendition.hooks.content.register(function(contents) {
             let lastScrollTop = 0;
             const taskbar = document.getElementById('bottom-taskbar');
             const pinCheckbox = document.getElementById('set-pin-taskbar');
 
-            // --- MOBILE SWIPE LOGIC (Fixed for iframes) ---
-            let touchStartX = 0;
-            let touchStartY = 0;
+            // Bind swipe logic securely to internal iframe
+            contents.document.addEventListener('touchstart', handleTouchStart, { passive: true });
+            contents.document.addEventListener('touchend', handleTouchEnd, { passive: true });
 
-            contents.document.addEventListener('touchstart', e => {
-                touchStartX = e.changedTouches[0].screenX;
-                touchStartY = e.changedTouches[0].screenY;
-            }, { passive: true });
-
-            contents.document.addEventListener('touchend', e => {
-                let touchEndX = e.changedTouches[0].screenX;
-                let touchEndY = e.changedTouches[0].screenY;
-                
-                let deltaX = touchEndX - touchStartX;
-                let deltaY = Math.abs(touchEndY - touchStartY);
-
-                // Swipe must be horizontal-dominant to prevent scrolling from turning the page
-                if (Math.abs(deltaX) > 50 && Math.abs(deltaX) > deltaY) {
-                    if (deltaX < 0) window.rendition.next(); // Swiped left
-                    else window.rendition.prev(); // Swiped right
-                }
-            }, { passive: true });
-
-            // --- AUTO-HIDE SCROLL LOGIC ---
+            // Auto-hide scroll logic
             contents.window.addEventListener('scroll', function() {
                 if (pinCheckbox.checked) {
                     taskbar.classList.remove('hidden');
@@ -112,14 +114,13 @@ window.openReader = async function(bookId, pushHistory = true) {
                 let st = contents.window.scrollY || contents.document.documentElement.scrollTop;
                 if (Math.abs(lastScrollTop - st) <= 5) return;
 
-                if (st > lastScrollTop && st > 20) {
-                    taskbar.classList.add('hidden'); // Scrolling down
-                } else if (st < lastScrollTop) {
-                    taskbar.classList.remove('hidden'); // Scrolling up
-                }
+                if (st > lastScrollTop && st > 20) taskbar.classList.add('hidden');
+                else if (st < lastScrollTop) taskbar.classList.remove('hidden');
+                
                 lastScrollTop = st <= 0 ? 0 : st;
             }, { passive: true });
 
+            // Tap to toggle menu
             contents.document.addEventListener('click', function(e) {
                 if (e.target.tagName.toLowerCase() === 'a') return;
                 const selection = contents.window.getSelection();

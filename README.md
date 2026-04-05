@@ -28,6 +28,7 @@ A sleek, web-based EPUB reader featuring a modern Glassmorphism UI, continuous s
 * **[Phosphor Icons](https://phosphoricons.com/)** - Clean, consistent iconography used throughout the app.
 
 ## 📝 Usage Notes
-Deleting Books: Click the red "X" icon in the top right of the Library view to toggle Delete Mode.
-Taskbar: The bottom reader taskbar auto-hides when you scroll down to give you more screen space. You can pin it permanently via the Settings modal.
-Progress Math: Progress percentages are calculated precisely based on your current chapter against the total chapters in the book's spine, preventing progress tracking bugs on heavily formatted novels.
+* Deleting Books: Click the red "X" icon in the top right of the Library view to toggle Delete Mode.
+* Taskbar: The bottom reader taskbar auto-hides when you scroll down to give you more screen space. You can pin it permanently via the Settings modal.
+* Progress Math: Progress percentages are calculated precisely based on your current chapter against the total chapters in the book's spine, preventing progress tracking bugs on heavily formatted novels.
+* Super clean UI that i learned myself (fuck me).

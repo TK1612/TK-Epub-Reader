@@ -38,7 +38,6 @@ window.openReader = async function(bookId, pushHistory = true) {
         if (window.rendition) window.rendition.resize();
     });
 
-    // Generate our Master CSS immediately before rendering
     window.updateSettings();
 
     const highlightCurrentChapter = (href) => {
@@ -109,7 +108,6 @@ window.openReader = async function(bookId, pushHistory = true) {
         });
 
         window.rendition.hooks.content.register(function(contents) {
-            // FIXED: Automatically inject our Master CSS into every new chapter that loads
             let style = contents.document.createElement('style');
             style.id = 'instant-custom-theme';
             style.innerHTML = window.latestCustomCss || '';
@@ -262,25 +260,26 @@ window.setReaderTheme = function(theme) {
         if (theme === 'dark') colorPicker.value = '#e4e4e7';
         else if (theme === 'light') colorPicker.value = '#18181b';
         else if (theme === 'paper') colorPicker.value = '#1a1815';
+        else if (theme === 'blue') colorPicker.value = '#18181b'; // Automatically sets crisp dark text for light blue
     }
     window.updateSettings();
 };
 
-// FIXED: Completely bypassed ePub.js buggy themes in favor of direct robust DOM manipulation
 window.updateSettings = function() {
     const isPinned = document.getElementById('set-pin-taskbar').checked;
     localStorage.setItem('pin-taskbar', isPinned);
     if (isPinned) document.getElementById('bottom-taskbar').classList.remove('hidden');
 
     const readerTheme = localStorage.getItem('reader-theme') || (document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
-    ['dark', 'light', 'paper'].forEach(t => {
-        const btn = document.getElementById('theme-' + t);
-        if(btn) { if(t === readerTheme) btn.classList.add('active'); else btn.classList.remove('active'); }
-    });
+    
+    // Set active select value for UI
+    const themeSelect = document.getElementById('set-reader-theme');
+    if (themeSelect) themeSelect.value = readerTheme;
 
     let targetBgColor = '#ffffff'; 
     if (readerTheme === 'dark') targetBgColor = '#000000';
     else if (readerTheme === 'paper') targetBgColor = '#e2d6c1';
+    else if (readerTheme === 'blue') targetBgColor = '#ABC9E0'; // The new Light Blue Color
 
     // Synchronize Outer Frame Colors
     const readerContainer = document.getElementById('reader-container');
@@ -333,9 +332,9 @@ window.updateSettings = function() {
         }
     `;
 
-    // Instantly injects into active frames without page reloads or ePub.js bugs
+    // Instantly injects into active frames without page reloads
     if (window.rendition) {
-        window.rendition.themes.fontSize(fontSize); // Kept strictly for ePub.js pagination math calculation 
+        window.rendition.themes.fontSize(fontSize); 
         if (window.rendition.getContents) {
             window.rendition.getContents().forEach(content => {
                 let style = content.document.getElementById('instant-custom-theme');

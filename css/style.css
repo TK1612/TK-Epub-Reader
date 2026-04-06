@@ -1,3 +1,5 @@
+@import url('https://cdn.jsdelivr.net/npm/kopubbatang@1.0.0/kopubbatang.min.css');
+
 /* --- CORE STYLES & VARIABLES --- */
 :root {
     --bg-color: #ffffff;
@@ -162,7 +164,7 @@ body {
 .modal.active { display: flex; }
 .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
 
-/* FIXED: Allow the right modal to scroll if there are too many options */
+/* RIGHT MODAL (Settings) */
 .right-modal { bottom: 70px; right: 20px; width: 320px; max-height: 70vh; overflow-y: auto; }
 .center-modal { top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 500px; max-height: 80vh; }
 .large-modal { max-width: 800px; height: 80vh; }

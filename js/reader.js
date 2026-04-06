@@ -260,7 +260,7 @@ window.setReaderTheme = function(theme) {
         if (theme === 'dark') colorPicker.value = '#e4e4e7';
         else if (theme === 'light') colorPicker.value = '#18181b';
         else if (theme === 'paper') colorPicker.value = '#1a1815';
-        else if (theme === 'blue') colorPicker.value = '#18181b'; // Automatically sets crisp dark text for light blue
+        else if (theme === 'blue') colorPicker.value = '#18181b';
     }
     window.updateSettings();
 };
@@ -272,16 +272,14 @@ window.updateSettings = function() {
 
     const readerTheme = localStorage.getItem('reader-theme') || (document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
     
-    // Set active select value for UI
     const themeSelect = document.getElementById('set-reader-theme');
     if (themeSelect) themeSelect.value = readerTheme;
 
     let targetBgColor = '#ffffff'; 
     if (readerTheme === 'dark') targetBgColor = '#000000';
     else if (readerTheme === 'paper') targetBgColor = '#e2d6c1';
-    else if (readerTheme === 'blue') targetBgColor = '#ABC9E0'; // The new Light Blue Color
+    else if (readerTheme === 'blue') targetBgColor = '#ABC9E0';
 
-    // Synchronize Outer Frame Colors
     const readerContainer = document.getElementById('reader-container');
     const viewer = document.getElementById('viewer');
     if (readerContainer && viewer) {
@@ -310,13 +308,16 @@ window.updateSettings = function() {
     
     const savedMode = localStorage.getItem('reader-mode') || 'paginated';
 
-    // THE MASTER CSS: Forces all inline EPUB publisher backgrounds to yield so your theme is perfectly applied
+    // KOPUB LIGHT FONT-WEIGHT INJECTION 
+    // Automatically applies a lighter 300 weight for optimal reading if KoPub is chosen.
+    const fontWeight = fontFamily.includes('KoPub') ? '300' : 'normal';
+
     window.latestCustomCss = `
         * { background: transparent !important; background-color: transparent !important; }
         html, body { background: ${targetBgColor} !important; background-color: ${targetBgColor} !important; }
         html, body, p, div, span, h1, h2, h3, h4, h5, h6, li, a { color: ${textColor} !important; }
         p { margin-bottom: ${paraSpacing} !important; text-align: ${textAlign} !important; text-indent: ${textIndent} !important; line-height: ${lineHeight} !important; }
-        body { text-align: ${textAlign} !important; font-family: ${fontFamily} !important; }
+        body { text-align: ${textAlign} !important; font-family: ${fontFamily} !important; font-weight: ${fontWeight} !important; }
         img { max-width: 100% !important; display: block !important; margin: 0 auto !important; object-fit: contain !important; position: static !important; }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -332,7 +333,6 @@ window.updateSettings = function() {
         }
     `;
 
-    // Instantly injects into active frames without page reloads
     if (window.rendition) {
         window.rendition.themes.fontSize(fontSize); 
         if (window.rendition.getContents) {

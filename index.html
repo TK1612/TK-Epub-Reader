@@ -118,11 +118,12 @@
 
         <div class="setting-group">
             <label>Background Theme</label>
-            <div class="segment-control">
-                <button class="segment-btn" id="theme-dark" onclick="setReaderTheme('dark')">Black</button>
-                <button class="segment-btn" id="theme-light" onclick="setReaderTheme('light')">White</button>
-                <button class="segment-btn" id="theme-paper" onclick="setReaderTheme('paper')">Paper</button>
-            </div>
+            <select id="set-reader-theme" onchange="setReaderTheme(this.value)">
+                <option value="dark">Black</option>
+                <option value="light">White</option>
+                <option value="paper">Paper</option>
+                <option value="blue">Light Blue</option>
+            </select>
         </div>
 
         <div class="setting-group">

@@ -15,6 +15,7 @@ window.openReader = async function(bookId, pushHistory = true) {
     if (!savedMode) {
         const isPC = window.innerWidth > 768 && !(/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent));
         savedMode = isPC ? 'continuous' : 'paginated';
+        localStorage.setItem('reader-mode', savedMode);
     }
     document.getElementById('set-read-mode').value = savedMode;
     
@@ -37,54 +38,7 @@ window.openReader = async function(bookId, pushHistory = true) {
         if (window.rendition) window.rendition.resize();
     });
 
-    // -------------------------------------------------------------
-    // CSS THEME INJECTION & ALIGNMENT
-    // -------------------------------------------------------------
-    window.currentThemeCSS = {
-        "img": {
-            "max-width": "100% !important",
-            "display": "block !important",
-            "margin": "0 auto !important",
-            "object-fit": "contain !important",
-            "position": "static !important" 
-        },
-        "div": {
-            "position": "static !important" 
-        },
-        "::-webkit-scrollbar": { "width": "6px", "height": "6px" },
-        "::-webkit-scrollbar-track": { "background": "transparent" },
-        "::-webkit-scrollbar-thumb": { "background": "rgba(150, 150, 150, 0.4)", "border-radius": "10px" }
-    };
-
-    if (savedMode === 'continuous' || savedMode === 'scrolled') {
-        window.currentThemeCSS["img"]["height"] = "auto !important"; 
-        window.currentThemeCSS["html"] = { "overflow-x": "hidden" };
-        window.currentThemeCSS["body"] = { 
-            "max-width": "900px !important", 
-            "margin": "0 auto !important", 
-            "padding": "0 20px 80px 20px !important",
-            "overflow-x": "hidden" 
-        };
-    } else {
-        window.currentThemeCSS["img"]["max-height"] = "95vh !important";
-        window.currentThemeCSS["img"]["height"] = "auto !important";
-        window.currentThemeCSS["html"] = { "touch-action": "pan-y !important" };
-        window.currentThemeCSS["body"] = { 
-            "padding": "0 !important",
-            "margin": "0 !important",
-            "touch-action": "pan-y !important"
-        };
-    }
-
-    window.rendition.themes.default(window.currentThemeCSS);
-    
-    window.rendition.themes.register("dark", { "body": { "background": "#000000", "color": "#e4e4e7" }});
-    window.rendition.themes.register("light", { "body": { "background": "#ffffff", "color": "#18181b" }});
-    window.rendition.themes.register("paper", { "body": { "background": "#e2d6c1", "color": "#1a1815" }});
-    
-    let initTheme = localStorage.getItem('reader-theme') || (document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
-    window.rendition.themes.select(initTheme);
-
+    // Generate our Master CSS immediately before rendering
     window.updateSettings();
 
     const highlightCurrentChapter = (href) => {
@@ -155,6 +109,12 @@ window.openReader = async function(bookId, pushHistory = true) {
         });
 
         window.rendition.hooks.content.register(function(contents) {
+            // FIXED: Automatically inject our Master CSS into every new chapter that loads
+            let style = contents.document.createElement('style');
+            style.id = 'instant-custom-theme';
+            style.innerHTML = window.latestCustomCss || '';
+            contents.document.head.appendChild(style);
+
             let startX = 0; let startY = 0; let isSwiping = false; 
             const iframeDoc = contents.document;
             
@@ -306,27 +266,25 @@ window.setReaderTheme = function(theme) {
     window.updateSettings();
 };
 
+// FIXED: Completely bypassed ePub.js buggy themes in favor of direct robust DOM manipulation
 window.updateSettings = function() {
     const isPinned = document.getElementById('set-pin-taskbar').checked;
     localStorage.setItem('pin-taskbar', isPinned);
     if (isPinned) document.getElementById('bottom-taskbar').classList.remove('hidden');
 
-    if(!window.rendition) return;
-
-    // Apply Background Theme UI
     const readerTheme = localStorage.getItem('reader-theme') || (document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
     ['dark', 'light', 'paper'].forEach(t => {
         const btn = document.getElementById('theme-' + t);
         if(btn) { if(t === readerTheme) btn.classList.add('active'); else btn.classList.remove('active'); }
     });
 
-    // Sync the outer web page background with the internal ePub background
-    const readerContainer = document.getElementById('reader-container');
-    const viewer = document.getElementById('viewer');
     let targetBgColor = '#ffffff'; 
     if (readerTheme === 'dark') targetBgColor = '#000000';
     else if (readerTheme === 'paper') targetBgColor = '#e2d6c1';
 
+    // Synchronize Outer Frame Colors
+    const readerContainer = document.getElementById('reader-container');
+    const viewer = document.getElementById('viewer');
     if (readerContainer && viewer) {
         readerContainer.style.background = targetBgColor; 
         viewer.style.background = targetBgColor;
@@ -351,31 +309,50 @@ window.updateSettings = function() {
     const indentEl = document.getElementById('set-indent');
     const textIndent = indentEl ? indentEl.value + 'em' : '0em';
     
+    const savedMode = localStorage.getItem('reader-mode') || 'paginated';
+
+    // THE MASTER CSS: Forces all inline EPUB publisher backgrounds to yield so your theme is perfectly applied
+    window.latestCustomCss = `
+        * { background: transparent !important; background-color: transparent !important; }
+        html, body { background: ${targetBgColor} !important; background-color: ${targetBgColor} !important; }
+        html, body, p, div, span, h1, h2, h3, h4, h5, h6, li, a { color: ${textColor} !important; }
+        p { margin-bottom: ${paraSpacing} !important; text-align: ${textAlign} !important; text-indent: ${textIndent} !important; line-height: ${lineHeight} !important; }
+        body { text-align: ${textAlign} !important; font-family: ${fontFamily} !important; }
+        img { max-width: 100% !important; display: block !important; margin: 0 auto !important; object-fit: contain !important; position: static !important; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(150, 150, 150, 0.4); border-radius: 10px; }
+        ${savedMode === 'continuous' || savedMode === 'scrolled' ? 
+            `html { overflow-x: hidden !important; }
+             body { max-width: 900px !important; margin: 0 auto !important; padding: 0 20px 80px 20px !important; overflow-x: hidden !important; }
+             img { height: auto !important; }` 
+        : 
+            `html { touch-action: pan-y !important; }
+             body { padding: 0 !important; margin: 0 !important; touch-action: pan-y !important; }
+             img { max-height: 95vh !important; height: auto !important; }`
+        }
+    `;
+
+    // Instantly injects into active frames without page reloads or ePub.js bugs
+    if (window.rendition) {
+        window.rendition.themes.fontSize(fontSize); // Kept strictly for ePub.js pagination math calculation 
+        if (window.rendition.getContents) {
+            window.rendition.getContents().forEach(content => {
+                let style = content.document.getElementById('instant-custom-theme');
+                if (!style) {
+                    style = content.document.createElement('style');
+                    style.id = 'instant-custom-theme';
+                    content.document.head.appendChild(style);
+                }
+                style.innerHTML = window.latestCustomCss;
+            });
+        }
+    }
+
     document.getElementById('val-font').innerText = fontSize;
     document.getElementById('val-line').innerText = lineHeight;
     if (document.getElementById('val-para-spacing')) document.getElementById('val-para-spacing').innerText = paraSpacing;
     if (document.getElementById('val-indent')) document.getElementById('val-indent').innerText = textIndent;
-
-    if (window.currentThemeCSS) {
-        window.currentThemeCSS["p"] = { 
-            "margin-bottom": paraSpacing + " !important",
-            "text-align": textAlign + " !important",
-            "text-indent": textIndent + " !important" 
-        };
-        if(window.currentThemeCSS["body"]) {
-            window.currentThemeCSS["body"]["text-align"] = textAlign + " !important";
-        }
-        window.rendition.themes.default(window.currentThemeCSS);
-    }
-
-    window.rendition.themes.select(readerTheme);
-
-    // FIXED: Aggressive Brute-Force Overrides to guarantee the theme updates perfectly every time without overlapping
-    window.rendition.themes.override('background-color', targetBgColor + ' !important');
-    window.rendition.themes.override('color', textColor + ' !important');
-    window.rendition.themes.fontSize(fontSize);
-    window.rendition.themes.font(fontFamily);
-    window.rendition.themes.override('line-height', lineHeight + ' !important');
 };
 
 window.changeReadMode = function() {

@@ -61,7 +61,7 @@ window.openReader = async function(bookId, pushHistory = true) {
         window.currentThemeCSS["html"] = { "overflow-x": "hidden" };
         window.currentThemeCSS["body"] = { 
             "max-width": "900px !important", 
-            "margin": "0 auto !important", // Centers the text block perfectly
+            "margin": "0 auto !important", 
             "padding": "0 20px 80px 20px !important",
             "overflow-x": "hidden" 
         };
@@ -78,7 +78,6 @@ window.openReader = async function(bookId, pushHistory = true) {
 
     window.rendition.themes.default(window.currentThemeCSS);
     
-    // FIXED: Added the Paper Theme based on your screenshot hex colors
     window.rendition.themes.register("dark", { "body": { "background": "#000000", "color": "#e4e4e7" }});
     window.rendition.themes.register("light", { "body": { "background": "#ffffff", "color": "#18181b" }});
     window.rendition.themes.register("paper", { "body": { "background": "#e2d6c1", "color": "#1a1815" }});
@@ -296,7 +295,6 @@ window.setTextAlign = function(align) {
     window.updateSettings();
 };
 
-// NEW: Dynamically change reader themes & smartly adjust text color
 window.setReaderTheme = function(theme) {
     localStorage.setItem('reader-theme', theme);
     const colorPicker = document.getElementById('set-text-color');
@@ -315,26 +313,23 @@ window.updateSettings = function() {
 
     if(!window.rendition) return;
 
-    // Apply Background Theme UI & Logic
+    // Apply Background Theme UI
     const readerTheme = localStorage.getItem('reader-theme') || (document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
     ['dark', 'light', 'paper'].forEach(t => {
         const btn = document.getElementById('theme-' + t);
         if(btn) { if(t === readerTheme) btn.classList.add('active'); else btn.classList.remove('active'); }
     });
 
-    window.rendition.themes.select(readerTheme);
-
-    // Sync the outer web page background with the internal ePub background to prevent borders
+    // Sync the outer web page background with the internal ePub background
     const readerContainer = document.getElementById('reader-container');
     const viewer = document.getElementById('viewer');
+    let targetBgColor = '#ffffff'; 
+    if (readerTheme === 'dark') targetBgColor = '#000000';
+    else if (readerTheme === 'paper') targetBgColor = '#e2d6c1';
+
     if (readerContainer && viewer) {
-        if (readerTheme === 'dark') {
-            readerContainer.style.background = '#000000'; viewer.style.background = '#000000';
-        } else if (readerTheme === 'light') {
-            readerContainer.style.background = '#ffffff'; viewer.style.background = '#ffffff';
-        } else if (readerTheme === 'paper') {
-            readerContainer.style.background = '#e2d6c1'; viewer.style.background = '#e2d6c1';
-        }
+        readerContainer.style.background = targetBgColor; 
+        viewer.style.background = targetBgColor;
     }
 
     const fontSize = document.getElementById('set-font').value + 'px';
@@ -342,7 +337,6 @@ window.updateSettings = function() {
     const fontFamily = document.getElementById('set-font-family').value;
     const textColor = document.getElementById('set-text-color').value;
     
-    // Process Alignment & Spacing
     const textAlign = localStorage.getItem('text-align') || 'left';
     const leftBtn = document.getElementById('align-left');
     const centerBtn = document.getElementById('align-center');
@@ -374,10 +368,14 @@ window.updateSettings = function() {
         window.rendition.themes.default(window.currentThemeCSS);
     }
 
+    window.rendition.themes.select(readerTheme);
+
+    // FIXED: Aggressive Brute-Force Overrides to guarantee the theme updates perfectly every time without overlapping
+    window.rendition.themes.override('background-color', targetBgColor + ' !important');
+    window.rendition.themes.override('color', textColor + ' !important');
     window.rendition.themes.fontSize(fontSize);
     window.rendition.themes.font(fontFamily);
     window.rendition.themes.override('line-height', lineHeight + ' !important');
-    window.rendition.themes.override('color', textColor + ' !important');
 };
 
 window.changeReadMode = function() {

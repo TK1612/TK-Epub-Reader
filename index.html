@@ -117,6 +117,15 @@
         </div>
 
         <div class="setting-group">
+            <label>Background Theme</label>
+            <div class="segment-control">
+                <button class="segment-btn" id="theme-dark" onclick="setReaderTheme('dark')">Black</button>
+                <button class="segment-btn" id="theme-light" onclick="setReaderTheme('light')">White</button>
+                <button class="segment-btn" id="theme-paper" onclick="setReaderTheme('paper')">Paper</button>
+            </div>
+        </div>
+
+        <div class="setting-group">
             <label>Font Size <span id="val-font">18px</span></label>
             <input type="range" id="set-font" min="12" max="36" value="18" oninput="updateSettings()">
         </div>

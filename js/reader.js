@@ -11,7 +11,6 @@ window.openReader = async function(bookId, pushHistory = true) {
     window.book = ePub(bookData.buffer);
     document.getElementById('reader-container').style.display = 'block';
     
-    // Load Reading Mode & Pin Status
     let savedMode = localStorage.getItem('reader-mode');
     if (!savedMode) {
         const isPC = window.innerWidth > 768 && !(/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent));
@@ -62,7 +61,7 @@ window.openReader = async function(bookId, pushHistory = true) {
         window.currentThemeCSS["html"] = { "overflow-x": "hidden" };
         window.currentThemeCSS["body"] = { 
             "max-width": "900px !important", 
-            "margin": "0 auto !important", // FIXED: Reverted back to perfectly center the text column
+            "margin": "0 auto !important", // Centers the text block perfectly
             "padding": "0 20px 80px 20px !important",
             "overflow-x": "hidden" 
         };
@@ -78,10 +77,14 @@ window.openReader = async function(bookId, pushHistory = true) {
     }
 
     window.rendition.themes.default(window.currentThemeCSS);
+    
+    // FIXED: Added the Paper Theme based on your screenshot hex colors
     window.rendition.themes.register("dark", { "body": { "background": "#000000", "color": "#e4e4e7" }});
     window.rendition.themes.register("light", { "body": { "background": "#ffffff", "color": "#18181b" }});
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    window.rendition.themes.select(isDark ? "dark" : "light");
+    window.rendition.themes.register("paper", { "body": { "background": "#e2d6c1", "color": "#1a1815" }});
+    
+    let initTheme = localStorage.getItem('reader-theme') || (document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
+    window.rendition.themes.select(initTheme);
 
     window.updateSettings();
 
@@ -293,18 +296,53 @@ window.setTextAlign = function(align) {
     window.updateSettings();
 };
 
+// NEW: Dynamically change reader themes & smartly adjust text color
+window.setReaderTheme = function(theme) {
+    localStorage.setItem('reader-theme', theme);
+    const colorPicker = document.getElementById('set-text-color');
+    if (colorPicker) {
+        if (theme === 'dark') colorPicker.value = '#e4e4e7';
+        else if (theme === 'light') colorPicker.value = '#18181b';
+        else if (theme === 'paper') colorPicker.value = '#1a1815';
+    }
+    window.updateSettings();
+};
+
 window.updateSettings = function() {
     const isPinned = document.getElementById('set-pin-taskbar').checked;
     localStorage.setItem('pin-taskbar', isPinned);
     if (isPinned) document.getElementById('bottom-taskbar').classList.remove('hidden');
 
     if(!window.rendition) return;
+
+    // Apply Background Theme UI & Logic
+    const readerTheme = localStorage.getItem('reader-theme') || (document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
+    ['dark', 'light', 'paper'].forEach(t => {
+        const btn = document.getElementById('theme-' + t);
+        if(btn) { if(t === readerTheme) btn.classList.add('active'); else btn.classList.remove('active'); }
+    });
+
+    window.rendition.themes.select(readerTheme);
+
+    // Sync the outer web page background with the internal ePub background to prevent borders
+    const readerContainer = document.getElementById('reader-container');
+    const viewer = document.getElementById('viewer');
+    if (readerContainer && viewer) {
+        if (readerTheme === 'dark') {
+            readerContainer.style.background = '#000000'; viewer.style.background = '#000000';
+        } else if (readerTheme === 'light') {
+            readerContainer.style.background = '#ffffff'; viewer.style.background = '#ffffff';
+        } else if (readerTheme === 'paper') {
+            readerContainer.style.background = '#e2d6c1'; viewer.style.background = '#e2d6c1';
+        }
+    }
+
     const fontSize = document.getElementById('set-font').value + 'px';
     const lineHeight = document.getElementById('set-line').value;
     const fontFamily = document.getElementById('set-font-family').value;
     const textColor = document.getElementById('set-text-color').value;
     
-    // Process Alignment
+    // Process Alignment & Spacing
     const textAlign = localStorage.getItem('text-align') || 'left';
     const leftBtn = document.getElementById('align-left');
     const centerBtn = document.getElementById('align-center');
@@ -316,7 +354,6 @@ window.updateSettings = function() {
     const paraSpacingEl = document.getElementById('set-para-spacing');
     const paraSpacing = paraSpacingEl ? paraSpacingEl.value + 'em' : '0em';
 
-    // NEW: Get Indent Value
     const indentEl = document.getElementById('set-indent');
     const textIndent = indentEl ? indentEl.value + 'em' : '0em';
     
@@ -329,7 +366,7 @@ window.updateSettings = function() {
         window.currentThemeCSS["p"] = { 
             "margin-bottom": paraSpacing + " !important",
             "text-align": textAlign + " !important",
-            "text-indent": textIndent + " !important" // Injects text indent dynamically
+            "text-indent": textIndent + " !important" 
         };
         if(window.currentThemeCSS["body"]) {
             window.currentThemeCSS["body"]["text-align"] = textAlign + " !important";

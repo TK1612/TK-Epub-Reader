@@ -200,6 +200,19 @@ textarea { flex: 1; font-family: monospace; resize: none; }
     .large-modal { width: 95%; max-height: 85vh; padding: 15px; }
     #editor-view.active { height: calc(100vh - 100px); padding: 10px; }
     .editor-workspace { flex-direction: column; }
+    /* Spellcheck & Typo Scanner Styles */
+.spellcheck-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.spellcheck-item:hover { background: var(--surface); }
+.spellcheck-word { font-weight: 600; color: var(--danger); font-size: 14px; }
+.spellcheck-count { font-size: 12px; color: var(--text-muted); background: var(--border); padding: 2px 6px; border-radius: 4px; }
     .file-tree { width: 100%; height: 35%; flex: none; }
     .code-area { flex: 1; }
 }

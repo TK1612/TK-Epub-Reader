@@ -151,7 +151,6 @@ window.loadFileIntoEditor = async function(path, liElement) {
         if (path.match(/\.(png|jpe?g|gif|webp|svg)$/i)) {
             cmWrapper.style.display = 'none';
             imgWrapper.style.display = 'flex';
-            
             const uint8Array = await fileObj.async("uint8array");
             const blob = new Blob([uint8Array]);
             imgElement.src = URL.createObjectURL(blob);
@@ -370,52 +369,89 @@ window.saveTocEdits = async function() {
 window.openAddFileModal = function() {
     if (!window.activeZipEditor) return;
     document.getElementById('add-outside-file-input').value = "";
+    document.getElementById('selected-files-list').innerHTML = ""; 
     window.closeAllModals();
     document.getElementById('editor-add-file-modal').classList.add('active');
 };
 
+window.updateSelectedFilesList = function() {
+    const fileInput = document.getElementById('add-outside-file-input');
+    const listEl = document.getElementById('selected-files-list');
+    listEl.innerHTML = '';
+    
+    if (fileInput.files.length === 0) return;
+    
+    Array.from(fileInput.files).forEach(file => {
+        const item = document.createElement('div');
+        item.className = 'selected-file-item';
+        let icon = 'ph-file';
+        if (file.type.includes('image')) icon = 'ph-image';
+        else if (file.type.includes('css')) icon = 'ph-file-css';
+        else if (file.type.includes('html')) icon = 'ph-file-html';
+        item.innerHTML = `<i class="ph ${icon}"></i> <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${file.name}</span>`;
+        listEl.appendChild(item);
+    });
+};
+
 window.confirmAddOutsideFile = async function() {
     const fileInput = document.getElementById('add-outside-file-input');
-    if (fileInput.files.length === 0) return alert("Please select a file.");
+    if (fileInput.files.length === 0) return alert("Please select at least one file.");
     
-    const file = fileInput.files[0];
+    const btn = document.getElementById('confirm-add-file-btn');
+    const originalBtnText = btn.innerText;
+    btn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Importing...';
+    btn.disabled = true;
+
     const opfPath = Object.keys(window.activeZipEditor.files).find(p => p.endsWith('.opf'));
     const baseFolder = opfPath ? opfPath.substring(0, opfPath.lastIndexOf('/') + 1) : '';
     
-    let targetFolder = baseFolder;
-    let mediaType = "application/octet-stream";
-    
-    if (file.type.includes('image')) { targetFolder += 'Images/'; mediaType = file.type; }
-    else if (file.type.includes('css')) { targetFolder += 'Styles/'; mediaType = "text/css"; }
-    else if (file.type.includes('html')) { targetFolder += 'Text/'; mediaType = "application/xhtml+xml"; }
-    
-    const targetPath = targetFolder + file.name;
-    const arrayBuffer = await file.arrayBuffer();
-    
-    window.activeZipEditor.file(targetPath, arrayBuffer);
+    let xmlDoc = null;
+    let manifest = null;
     
     if (opfPath) {
-        const xmlDoc = new DOMParser().parseFromString(await window.activeZipEditor.file(opfPath).async("string"), "application/xml");
-        const manifest = xmlDoc.getElementsByTagName("manifest")[0];
+        const opfContent = await window.activeZipEditor.file(opfPath).async("string");
+        xmlDoc = new DOMParser().parseFromString(opfContent, "application/xml");
+        manifest = xmlDoc.getElementsByTagName("manifest")[0];
+    }
+    
+    for (let i = 0; i < fileInput.files.length; i++) {
+        const file = fileInput.files[i];
+        let targetFolder = baseFolder;
+        let mediaType = "application/octet-stream";
+        
+        if (file.type.includes('image')) { targetFolder += 'Images/'; mediaType = file.type; }
+        else if (file.type.includes('css')) { targetFolder += 'Styles/'; mediaType = "text/css"; }
+        else if (file.type.includes('html')) { targetFolder += 'Text/'; mediaType = "application/xhtml+xml"; }
+        else if (file.type.includes('font') || file.name.match(/\.(ttf|otf|woff2?)$/i)) { targetFolder += 'Fonts/'; mediaType = "font/" + file.name.split('.').pop(); }
+        
+        const targetPath = targetFolder + file.name;
+        const arrayBuffer = await file.arrayBuffer();
+        
+        window.activeZipEditor.file(targetPath, arrayBuffer);
+        
         if (manifest) {
-            const id = "file_" + Date.now();
+            const id = "file_" + Date.now() + "_" + i; 
             const item = xmlDoc.createElement("item");
             item.setAttribute("id", id);
-            const relativeHref = targetPath.replace(baseFolder, '');
-            item.setAttribute("href", relativeHref);
+            item.setAttribute("href", targetPath.replace(baseFolder, '')); 
             item.setAttribute("media-type", mediaType);
             manifest.appendChild(item);
-            window.activeZipEditor.file(opfPath, new XMLSerializer().serializeToString(xmlDoc));
         }
+    }
+    
+    if (opfPath && xmlDoc) {
+        window.activeZipEditor.file(opfPath, new XMLSerializer().serializeToString(xmlDoc));
     }
     
     await window.saveEditedFile();
     refreshFileTree();
+    
+    btn.innerHTML = originalBtnText;
+    btn.disabled = false;
     window.closeAllModals();
-    alert("File imported and registered in Manifest successfully!");
+    alert(`Successfully imported and registered ${fileInput.files.length} file(s)!`);
 };
 
-// --- UPDATED: TYPO & SPELLCHECK SCANNER (New UI & CJK Sorting) ---
 window.openSpellcheckModal = async function() {
     if (!window.activeZipEditor) return;
     
@@ -431,8 +467,6 @@ window.openSpellcheckModal = async function() {
     for (let path of htmlPaths) {
         const content = await window.activeZipEditor.file(path).async("string");
         const textOnly = content.replace(/<[^>]*>?/gm, ' ');
-        
-        // Matches English, Hangul, Kana, and Hanzi
         const words = textOnly.match(/[\w\uAC00-\uD7A3\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]+/g) || [];
         
         words.forEach(w => {

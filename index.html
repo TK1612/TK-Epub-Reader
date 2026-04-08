@@ -31,9 +31,7 @@
             <nav class="sidebar-nav">
                 <button onclick="showView('library')"><i class="ph ph-books"></i> Library</button>
                 <button onclick="showView('bookmarks')"><i class="ph ph-bookmarks"></i> Bookmarks</button>
-                
                 <button onclick="showView('editor')"><i class="ph ph-pencil-simple"></i> Edit Book</button>
-                
                 <div class="divider"></div>
                 <input type="file" id="upload-input" accept=".epub" multiple style="display: none;" onchange="handleUpload(event)">
                 <button class="upload-btn" onclick="document.getElementById('upload-input').click()"><i class="ph ph-upload-simple"></i> Upload Novel</button>
@@ -70,14 +68,14 @@
 
                 <div id="editor-workspace" class="editor-workspace" style="display: none;">
                     <div class="file-tree">
-                        <div style="padding: 15px; border-bottom: 1px solid var(--border); font-weight: 600;">EPUB Files</div>
+                        <div style="padding: 15px; border-bottom: 1px solid var(--border); font-weight: 600; background: var(--glass-bg);">EPUB Files</div>
                         <ul id="editor-file-list" class="scroll-list" style="padding: 10px;"></ul>
                     </div>
                     <div class="code-area">
                         <div class="editor-toolbar">
-                            <span id="editing-file-name" style="font-weight: 500; font-size: 14px;">No file selected</span>
+                            <span id="editing-file-name" style="font-weight: 500; font-size: 14px; color: var(--accent);">No file selected</span>
                             <div style="display: flex; gap: 10px;">
-                                <button class="btn-primary" onclick="saveEditedFile()"><i class="ph ph-floppy-disk"></i> Save File</button>
+                                <button id="save-file-btn" class="btn-primary" onclick="saveEditedFile()"><i class="ph ph-floppy-disk"></i> Save File</button>
                                 <button class="btn-secondary" onclick="closeEditorWorkspace()"><i class="ph ph-x"></i> Close</button>
                             </div>
                         </div>
@@ -111,6 +109,7 @@
             <h3>Reader Settings</h3>
             <button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button>
         </div>
+        
         <div class="setting-group">
             <label>Reading Mode</label>
             <select id="set-read-mode" onchange="changeReadMode()">

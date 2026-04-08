@@ -173,9 +173,6 @@ body {
 input[type="text"], textarea, select { width: 100%; padding: 10px; background: var(--bg-color); color: var(--text-color); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; font-size: 14px;}
 input[type="color"], input[type="checkbox"] { cursor: pointer; }
 textarea { flex: 1; font-family: monospace; resize: none; }
-.replace-bar { display: flex; gap: 10px; margin-bottom: 15px; }
-.editor-controls { display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px; }
-
 .scroll-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; list-style: none; }
 .list-item { padding: 12px; background: var(--bg-color); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; transition: background 0.2s; font-size: 14px;}
 .list-item:hover { background: var(--border); }
@@ -201,26 +198,54 @@ mark { background: rgba(59, 130, 246, 0.3); color: var(--text-color); border-rad
 #set-pin-taskbar:checked { background-color: var(--accent); border-color: var(--accent); }
 #set-pin-taskbar:checked::after { content: ''; position: absolute; top: 1px; left: 6px; width: 5px; height: 10px; border: solid white; border-width: 0 2px 2px 0; transform: rotate(45deg); }
 
-/* --- FIXED: EPUB EDITOR WORKSPACE STYLES --- */
+/* --- CALIBRE EDITOR WORKSPACE --- */
 #editor-view.active {
-    display: flex !important; /* Overrides the standard block display */
+    display: flex !important;
     flex-direction: column;
     height: calc(100vh - 70px);
     padding: 20px;
     gap: 15px;
 }
 
+.editor-main-toolbar {
+    display: flex; 
+    gap: 8px; 
+    padding: 10px; 
+    background: var(--surface);
+    border: 1px solid var(--border); 
+    border-radius: 12px;
+    overflow-x: auto;
+}
+
+.toolbar-btn {
+    background: transparent; 
+    border: 1px solid var(--border); 
+    color: var(--text-color);
+    padding: 8px 12px; 
+    border-radius: 8px; 
+    cursor: pointer; 
+    display: flex; 
+    align-items: center; 
+    gap: 6px; 
+    font-size: 13px; 
+    font-weight: 500;
+    white-space: nowrap;
+    transition: background 0.2s;
+}
+.toolbar-btn:hover { background: var(--border); }
+.toolbar-btn i { font-size: 16px; color: var(--accent); }
+
 .editor-workspace {
     display: flex;
     flex-direction: row;
     gap: 20px;
-    flex: 1; /* Forces the workspace to fill all remaining vertical space */
+    flex: 1;
     width: 100%;
     overflow: hidden;
 }
 
 .file-tree {
-    width: 320px; /* Slightly wider for longer file names */
+    width: 320px;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 12px;
@@ -228,29 +253,6 @@ mark { background: rgba(59, 130, 246, 0.3); color: var(--text-color); border-rad
     flex-direction: column;
     overflow: hidden;
     box-shadow: var(--shadow);
-}
-
-.file-tree-item {
-    padding: 10px 12px;
-    font-size: 13px;
-    color: var(--text-muted);
-    border-radius: 6px;
-    cursor: pointer;
-    word-break: break-all;
-    transition: background 0.2s, color 0.2s;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.file-tree-item i { font-size: 16px; color: var(--text-color); }
-.file-tree-item:hover { background: var(--border); color: var(--text-color); }
-.file-tree-item.active-file { 
-    background: rgba(59, 130, 246, 0.15); 
-    color: var(--text-color);
-    border-left: 3px solid var(--accent); 
-    border-radius: 0 6px 6px 0; 
-    font-weight: 600;
 }
 
 .code-area {
@@ -273,10 +275,19 @@ mark { background: rgba(59, 130, 246, 0.3); color: var(--text-color); border-rad
     border-bottom: 1px solid var(--border);
 }
 
+.local-find-replace {
+    display: flex; 
+    gap: 10px; 
+    padding: 10px 15px; 
+    background: var(--surface); 
+    border-bottom: 1px solid var(--border);
+}
+.local-find-replace input { margin-bottom: 0; padding: 8px; font-size: 13px; }
+
 #raw-code-editor {
     flex: 1;
     width: 100%;
-    height: 100%; /* Forces textarea to span bottom */
+    height: 100%;
     border: none;
     border-radius: 0;
     margin: 0;
@@ -289,6 +300,48 @@ mark { background: rgba(59, 130, 246, 0.3); color: var(--text-color); border-rad
     resize: none;
 }
 #raw-code-editor:focus { outline: none; }
+
+/* Calibre Folder Grouping Styles */
+.folder-group { border-bottom: 1px solid var(--border); }
+.folder-header {
+    padding: 10px 15px; 
+    font-weight: 600; 
+    font-size: 13px; 
+    cursor: pointer;
+    display: flex; 
+    align-items: center; 
+    gap: 8px; 
+    user-select: none;
+    transition: background 0.2s;
+}
+.folder-header:hover { background: var(--border); }
+.folder-header i.ph-caret-right { transition: transform 0.2s; }
+.folder-header.open i.ph-caret-right { transform: rotate(90deg); }
+
+.folder-content { display: none; padding-left: 0; background: rgba(0,0,0,0.02); }
+[data-theme="dark"] .folder-content { background: rgba(255,255,255,0.02); }
+.folder-content.open { display: block; }
+
+.file-tree-item {
+    padding: 8px 15px 8px 35px;
+    font-size: 13px;
+    color: var(--text-muted);
+    cursor: pointer;
+    word-break: break-all;
+    transition: background 0.2s, color 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-left: 3px solid transparent;
+}
+.file-tree-item i { font-size: 16px; color: var(--text-color); }
+.file-tree-item:hover { background: var(--border); color: var(--text-color); }
+.file-tree-item.active-file { 
+    background: rgba(59, 130, 246, 0.15); 
+    color: var(--text-color);
+    border-left: 3px solid var(--accent); 
+    font-weight: 600;
+}
 
 /* --- MOBILE RESPONSIVENESS --- */
 @media (max-width: 768px) {

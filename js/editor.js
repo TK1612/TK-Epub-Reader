@@ -2,7 +2,7 @@ window.activeZipEditor = null;
 window.activeEditingPath = null;
 window.activeBookIdForEditor = null;
 window.cmEditor = null; 
-window.originalEpubBuffer = null; // Stored for Revert functionality
+window.originalEpubBuffer = null; 
 
 const originalShowView = window.showView;
 window.showView = function(viewId) {
@@ -67,7 +67,7 @@ window.openEditorWorkspace = async function(bookId, bookTitle) {
 
     try {
         const bookData = await localforage.getItem(bookId);
-        window.originalEpubBuffer = bookData.buffer; // Snapshot for REVERT
+        window.originalEpubBuffer = bookData.buffer; 
         
         const zip = new JSZip();
         window.activeZipEditor = await zip.loadAsync(bookData.buffer);
@@ -137,16 +137,36 @@ window.loadFileIntoEditor = async function(path, liElement) {
     if (!window.activeZipEditor) return;
     document.querySelectorAll('.file-tree-item').forEach(el => el.classList.remove('active-file'));
     if (liElement) liElement.classList.add('active-file');
+    
     document.getElementById('editing-file-name').innerText = path;
-    window.cmEditor.setValue("Extracting file content...");
     window.activeEditingPath = path;
+
+    const cmWrapper = document.getElementById('codemirror-wrapper');
+    const imgWrapper = document.getElementById('image-viewer-wrapper');
+    const imgElement = document.getElementById('image-viewer');
 
     try {
         const fileObj = window.activeZipEditor.file(path);
-        if (path.match(/\.(png|jpe?g|gif|webp|ttf|otf|woff2?)$/i)) {
-            window.cmEditor.setValue("Binary file selected. Text editing not supported for images or fonts.");
+        
+        if (path.match(/\.(png|jpe?g|gif|webp|svg)$/i)) {
+            cmWrapper.style.display = 'none';
+            imgWrapper.style.display = 'flex';
+            
+            const uint8Array = await fileObj.async("uint8array");
+            const blob = new Blob([uint8Array]);
+            imgElement.src = URL.createObjectURL(blob);
             return;
         }
+
+        imgWrapper.style.display = 'none';
+        cmWrapper.style.display = 'flex';
+        window.cmEditor.setValue("Extracting file content...");
+
+        if (path.match(/\.(ttf|otf|woff2?)$/i)) {
+            window.cmEditor.setValue("Binary font file selected. Viewing/Editing not supported.");
+            return;
+        }
+
         const textContent = await fileObj.async("string");
         window.cmEditor.setValue(textContent);
         if(path.endsWith('.css')) window.cmEditor.setOption("mode", "css");
@@ -157,12 +177,35 @@ window.loadFileIntoEditor = async function(path, liElement) {
     }
 };
 
+window.editorReplaceSingle = function() {
+    if (!window.cmEditor) return;
+    const findStr = document.getElementById('editor-find').value;
+    const replaceStr = document.getElementById('editor-replace').value;
+    const useRegex = document.getElementById('editor-use-regex').checked;
+    if(!findStr) return;
+
+    let query = useRegex ? new RegExp(findStr) : findStr;
+    let cursor = window.cmEditor.getSearchCursor(query, window.cmEditor.getCursor());
+    
+    if (cursor.findNext()) {
+        cursor.replace(replaceStr);
+        window.cmEditor.setSelection(cursor.from(), cursor.to());
+    } else {
+        cursor = window.cmEditor.getSearchCursor(query);
+        if (cursor.findNext()) {
+            cursor.replace(replaceStr);
+            window.cmEditor.setSelection(cursor.from(), cursor.to());
+        }
+    }
+};
+
 window.editorReplaceAll = function() {
     if (!window.cmEditor) return;
     const findStr = document.getElementById('editor-find').value;
     const replaceStr = document.getElementById('editor-replace').value;
     const useRegex = document.getElementById('editor-use-regex').checked;
     if(!findStr) return;
+    
     let content = window.cmEditor.getValue();
     if (useRegex) {
         try { content = content.replace(new RegExp(findStr, 'g'), replaceStr); } 
@@ -173,7 +216,7 @@ window.editorReplaceAll = function() {
     window.cmEditor.setValue(content);
 };
 
-// --- FEATURE 1: GLOBAL SEARCH ---
+// --- GLOBAL SEARCH ---
 window.openGlobalEditSearch = function() {
     if (!window.activeZipEditor) return;
     window.closeAllModals();
@@ -213,12 +256,14 @@ window.runGlobalEditSearch = async function() {
         div.onclick = () => {
             window.closeAllModals();
             document.querySelectorAll('.file-tree-item').forEach(item => { if (item.title === res.path) item.click(); });
+            document.getElementById('editor-find').value = query;
+            document.getElementById('editor-use-regex').checked = useRegex;
         };
         resultsContainer.appendChild(div);
     });
 };
 
-// --- FEATURE 2: METADATA EDITOR ---
+// --- METADATA EDITOR ---
 window.openMetadataEditor = async function() {
     if (!window.activeZipEditor) return;
     const opfPath = Object.keys(window.activeZipEditor.files).find(p => p.endsWith('.opf'));
@@ -249,11 +294,11 @@ window.saveMetadata = async function() {
     } catch(e) { btn.innerText = "Error"; setTimeout(() => btn.innerText = "Save", 1500); }
 };
 
-// --- FEATURE 3: TOC EDITOR (NCX) ---
+// --- TOC EDITOR & H1 GENERATOR ---
 window.openTocEditor = async function() {
     if (!window.activeZipEditor) return;
     const ncxPath = Object.keys(window.activeZipEditor.files).find(p => p.endsWith('.ncx'));
-    if (!ncxPath) return alert("Advanced TOC editing requires an NCX file, which this book doesn't have.");
+    if (!ncxPath) return alert("Advanced TOC editing requires an NCX file.");
     
     window.currentNcxPath = ncxPath;
     const xmlDoc = new DOMParser().parseFromString(await window.activeZipEditor.file(ncxPath).async("string"), "application/xml");
@@ -274,6 +319,36 @@ window.openTocEditor = async function() {
     window.closeAllModals();
     document.getElementById('editor-toc-modal').classList.add('active');
 };
+
+window.generateTocFromHeadings = async function() {
+    if (!confirm("This will scan all HTML files and rebuild the TOC list based on the first <h1> or <h2> tag found. Continue?")) return;
+    
+    const htmlPaths = Object.keys(window.activeZipEditor.files).filter(p => p.match(/\.(html|xhtml|htm)$/i));
+    const listEl = document.getElementById('toc-edit-list');
+    listEl.innerHTML = '<div style="padding:10px;">Scanning files...</div>';
+    
+    let generatedList = [];
+    
+    for (let path of htmlPaths) {
+        const content = await window.activeZipEditor.file(path).async("string");
+        const match = content.match(/<h[12][^>]*>(.*?)<\/h[12]>/i);
+        if (match && match[1]) {
+            const cleanTitle = match[1].replace(/<[^>]*>?/gm, '').trim();
+            if(cleanTitle) generatedList.push(cleanTitle);
+        } else {
+            generatedList.push("Chapter (No Heading Found)");
+        }
+    }
+    
+    listEl.innerHTML = '';
+    generatedList.forEach((label, i) => {
+        const div = document.createElement('div');
+        div.className = 'toc-edit-row';
+        div.innerHTML = `<i class="ph ph-list"></i><input type="text" data-index="${i}" value="${label.replace(/"/g, '&quot;')}">`;
+        listEl.appendChild(div);
+    });
+};
+
 window.saveTocEdits = async function() {
     const btn = document.getElementById('save-toc-btn'); btn.innerText = "Saving...";
     try {
@@ -289,42 +364,49 @@ window.saveTocEdits = async function() {
         window.activeZipEditor.file(window.currentNcxPath, new XMLSerializer().serializeToString(xmlDoc));
         await window.saveEditedFile();
         btn.innerText = "Saved!";
-        setTimeout(() => { btn.innerText = "Update TOC XML"; window.closeAllModals(); }, 1000);
+        setTimeout(() => { btn.innerText = "Save TOC XML"; window.closeAllModals(); }, 1000);
     } catch(e) { btn.innerText = "Error"; }
 };
 
-// --- FEATURE 4: ADD FILE ---
+// --- ADD OUTSIDE FILE ---
 window.openAddFileModal = function() {
     if (!window.activeZipEditor) return;
-    document.getElementById('add-file-name').value = "OEBPS/new_chapter.xhtml";
+    document.getElementById('add-outside-file-input').value = "";
     window.closeAllModals();
     document.getElementById('editor-add-file-modal').classList.add('active');
 };
-window.confirmAddFile = async function() {
-    const filename = document.getElementById('add-file-name').value.trim();
-    if (!filename) return;
+
+window.confirmAddOutsideFile = async function() {
+    const fileInput = document.getElementById('add-outside-file-input');
+    if (fileInput.files.length === 0) return alert("Please select a file.");
     
-    const blankHtml = `<?xml version="1.0" encoding="utf-8"?>\n<!DOCTYPE html>\n<html xmlns="http://www.w3.org/1999/xhtml">\n<head>\n<title>New File</title>\n</head>\n<body>\n<h1>New File</h1>\n<p>Start editing here...</p>\n</body>\n</html>`;
-    window.activeZipEditor.file(filename, blankHtml);
-    
-    // Auto-Inject into OPF Manifest so standard ePub readers recognize it
+    const file = fileInput.files[0];
     const opfPath = Object.keys(window.activeZipEditor.files).find(p => p.endsWith('.opf'));
+    const baseFolder = opfPath ? opfPath.substring(0, opfPath.lastIndexOf('/') + 1) : '';
+    
+    let targetFolder = baseFolder;
+    let mediaType = "application/octet-stream";
+    
+    if (file.type.includes('image')) { targetFolder += 'Images/'; mediaType = file.type; }
+    else if (file.type.includes('css')) { targetFolder += 'Styles/'; mediaType = "text/css"; }
+    else if (file.type.includes('html')) { targetFolder += 'Text/'; mediaType = "application/xhtml+xml"; }
+    
+    const targetPath = targetFolder + file.name;
+    const arrayBuffer = await file.arrayBuffer();
+    
+    window.activeZipEditor.file(targetPath, arrayBuffer);
+    
     if (opfPath) {
         const xmlDoc = new DOMParser().parseFromString(await window.activeZipEditor.file(opfPath).async("string"), "application/xml");
         const manifest = xmlDoc.getElementsByTagName("manifest")[0];
-        const spine = xmlDoc.getElementsByTagName("spine")[0];
-        if (manifest && spine) {
-            const id = "new_file_" + Date.now();
+        if (manifest) {
+            const id = "file_" + Date.now();
             const item = xmlDoc.createElement("item");
             item.setAttribute("id", id);
-            item.setAttribute("href", filename.split('/').pop()); // Assumes same directory as opf
-            item.setAttribute("media-type", "application/xhtml+xml");
+            const relativeHref = targetPath.replace(baseFolder, '');
+            item.setAttribute("href", relativeHref);
+            item.setAttribute("media-type", mediaType);
             manifest.appendChild(item);
-            
-            const itemref = xmlDoc.createElement("itemref");
-            itemref.setAttribute("idref", id);
-            spine.appendChild(itemref);
-            
             window.activeZipEditor.file(opfPath, new XMLSerializer().serializeToString(xmlDoc));
         }
     }
@@ -332,10 +414,60 @@ window.confirmAddFile = async function() {
     await window.saveEditedFile();
     refreshFileTree();
     window.closeAllModals();
-    alert("File created and registered in Manifest!");
+    alert("File imported and registered in Manifest successfully!");
 };
 
-// --- FEATURE 5: EPUB DEBUGGER ---
+// --- UPDATED: TYPO & SPELLCHECK SCANNER (Hanzi, Kanji, Hiragana, Katakana Support) ---
+window.openSpellcheckModal = async function() {
+    if (!window.activeZipEditor) return;
+    const listEl = document.getElementById('spellcheck-list');
+    listEl.innerHTML = '<div style="padding:10px;">Scanning entire book for uncommon words...</div>';
+    window.closeAllModals();
+    document.getElementById('editor-spellcheck-modal').classList.add('active');
+
+    const htmlPaths = Object.keys(window.activeZipEditor.files).filter(p => p.match(/\.(html|xhtml|htm)$/i));
+    let wordMap = {};
+
+    for (let path of htmlPaths) {
+        const content = await window.activeZipEditor.file(path).async("string");
+        const textOnly = content.replace(/<[^>]*>?/gm, ' ');
+        
+        // FIXED REGEX: Now supports English, Korean (Hangul), Japanese (Kana), and CJK Ideographs (Hanzi/Kanji)
+        const words = textOnly.match(/[\w\uAC00-\uD7A3\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]+/g) || [];
+        
+        words.forEach(w => {
+            // FIXED: Ignore single English/Korean characters, BUT allow single CJK characters (since single Hanzi/Kanji can be valid typos)
+            if (w.length < 2 && !/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(w)) return; 
+            wordMap[w] = (wordMap[w] || 0) + 1;
+        });
+    }
+
+    let suspiciousWords = Object.keys(wordMap).filter(w => {
+        if (wordMap[w] === 1) return true;
+        if (/\d/.test(w) && /[a-zA-Z]/.test(w)) return true; 
+        return false;
+    });
+
+    listEl.innerHTML = '';
+    if (suspiciousWords.length === 0) {
+        listEl.innerHTML = '<div style="padding:10px; color:var(--success);">No rare words or obvious OCR typos found!</div>';
+        return;
+    }
+
+    suspiciousWords.slice(0, 100).forEach(word => {
+        const div = document.createElement('div');
+        div.className = 'spellcheck-item';
+        div.innerHTML = `<span class="spellcheck-word">${word}</span> <span class="spellcheck-count">${wordMap[word]} occurrence</span>`;
+        div.onclick = () => {
+            document.getElementById('editor-global-search-input').value = word;
+            document.getElementById('editor-global-use-regex').checked = false;
+            runGlobalEditSearch();
+            document.getElementById('editor-global-search-modal').classList.add('active');
+        };
+        listEl.appendChild(div);
+    });
+};
+
 window.runEpubDebugger = async function() {
     if (!window.activeZipEditor) return;
     const consoleEl = document.getElementById('debug-console');
@@ -355,7 +487,6 @@ window.runEpubDebugger = async function() {
         const href = item.getAttribute("href");
         if (!href) return;
         const fullPath = decodeURIComponent(opfFolder + href);
-        // JSZip file lookup
         if (!window.activeZipEditor.file(fullPath) && !window.activeZipEditor.folder(fullPath)) {
             consoleEl.innerHTML += `<div class="debug-log-item error">[BROKEN LINK] Manifest expects: ${fullPath}</div>`;
             errors++;
@@ -366,7 +497,6 @@ window.runEpubDebugger = async function() {
     else consoleEl.innerHTML += `<div class="debug-log-item">[WARNING] Found ${errors} missing files.</div>`;
 };
 
-// --- FEATURE 6: REVERT ---
 window.revertToOriginalSave = async function() {
     if (!window.activeBookIdForEditor || !window.originalEpubBuffer) return;
     if (confirm("Are you sure? This will wipe all edits made during this session and restore the book to how it was when you opened the Editor.")) {
@@ -378,16 +508,13 @@ window.revertToOriginalSave = async function() {
     }
 };
 
-window.toggleSpellcheck = function() {
-    if(!window.cmEditor) return;
-    const textArea = window.cmEditor.getTextArea();
-    const isSpellcheck = textArea.getAttribute("spellcheck") === "true";
-    textArea.setAttribute("spellcheck", !isSpellcheck);
-    alert("Native browser spellcheck: " + (!isSpellcheck ? "ON" : "OFF") + " (May require typing to trigger highlights)");
-};
-
 window.saveEditedFile = async function() {
     if (!window.activeZipEditor || !window.activeEditingPath) return alert("Open a file first.");
+    
+    if (window.activeEditingPath.match(/\.(png|jpe?g|gif|webp|svg|ttf|otf|woff2?)$/i)) {
+        return alert("Cannot save edits to binary image or font files.");
+    }
+
     const saveBtn = document.getElementById('save-file-btn');
     const originalHTML = saveBtn.innerHTML;
     saveBtn.innerHTML = '<i class="ph ph-spinner"></i> Saving...';

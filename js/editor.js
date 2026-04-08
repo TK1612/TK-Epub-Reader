@@ -20,6 +20,7 @@ window.showView = function(viewId) {
     if (viewId === 'editor') {
         document.getElementById('editor-setup').style.display = 'block';
         document.getElementById('editor-workspace').style.display = 'none';
+        document.getElementById('editor-main-toolbar').style.display = 'none';
         loadEditorBookList();
     }
     
@@ -56,43 +57,92 @@ window.loadEditorBookList = async function() {
 window.openEditorWorkspace = async function(bookId, bookTitle) {
     window.activeBookIdForEditor = bookId;
     document.getElementById('editor-setup').style.display = 'none';
-    document.getElementById('editor-workspace').style.display = 'flex'; // Uses Flex now instead of Block
+    document.getElementById('editor-workspace').style.display = 'flex'; 
+    document.getElementById('editor-main-toolbar').style.display = 'flex'; 
     
     const fileListEl = document.getElementById('editor-file-list');
-    fileListEl.innerHTML = '<li style="padding:10px; color:gray;">Extracting EPUB Archive...</li>';
+    fileListEl.innerHTML = '<div style="padding:15px; color:gray;">Extracting EPUB Archive...</div>';
     document.getElementById('raw-code-editor').value = "";
     document.getElementById('editing-file-name').innerText = "Loading...";
 
     try {
         const bookData = await localforage.getItem(bookId);
         const zip = new JSZip();
-        
         window.activeZipEditor = await zip.loadAsync(bookData.buffer);
-        fileListEl.innerHTML = ''; 
         
-        const editableFiles = Object.keys(window.activeZipEditor.files).filter(path => {
-            return !window.activeZipEditor.files[path].dir && 
-                   (path.endsWith('.html') || path.endsWith('.htm') || path.endsWith('.xhtml') || path.endsWith('.css') || path.endsWith('.opf') || path.endsWith('.ncx'));
+        // --- CATEGORIZATION ENGINE (CALIBRE STYLE) ---
+        const categories = { Text: [], Styles: [], Images: [], Fonts: [], Miscellaneous: [] };
+        
+        Object.keys(window.activeZipEditor.files).forEach(path => {
+            if (window.activeZipEditor.files[path].dir) return; // Skip folder metadata
+            
+            const lowerPath = path.toLowerCase();
+            if (lowerPath.match(/\.(html|xhtml|htm)$/)) categories.Text.push(path);
+            else if (lowerPath.match(/\.(css)$/)) categories.Styles.push(path);
+            else if (lowerPath.match(/\.(png|jpe?g|gif|svg|webp)$/)) categories.Images.push(path);
+            else if (lowerPath.match(/\.(ttf|otf|woff2?)$/)) categories.Fonts.push(path);
+            else categories.Miscellaneous.push(path);
         });
 
-        editableFiles.forEach(path => {
-            const li = document.createElement('li');
-            li.className = 'file-tree-item';
+        fileListEl.innerHTML = ''; // Clear loading text
+        
+        // Build the Accordion UI
+        Object.keys(categories).forEach(catName => {
+            if (categories[catName].length === 0) return; // Skip empty folders
             
-            let icon = 'ph-file-code';
-            if (path.endsWith('.css')) icon = 'ph-file-css';
-            else if (path.endsWith('.html') || path.endsWith('.xhtml')) icon = 'ph-file-html';
+            let catIcon = 'ph-folder';
+            if (catName === 'Text') catIcon = 'ph-text-t';
+            if (catName === 'Styles') catIcon = 'ph-paint-brush';
+            if (catName === 'Images') catIcon = 'ph-image';
+            if (catName === 'Fonts') catIcon = 'ph-text-aa';
 
-            li.innerHTML = `<i class="ph ${icon}"></i> ${path}`;
-            li.onclick = () => loadFileIntoEditor(path, li);
-            fileListEl.appendChild(li);
+            const group = document.createElement('div');
+            group.className = 'folder-group';
+            
+            // Folder Header
+            const header = document.createElement('div');
+            header.className = 'folder-header open'; // Open by default
+            header.innerHTML = `<i class="ph ph-caret-right"></i> <i class="ph ${catIcon}" style="color:var(--accent);"></i> ${catName} (${categories[catName].length})`;
+            
+            // Folder Content List
+            const content = document.createElement('div');
+            content.className = 'folder-content open';
+
+            // Toggle logic
+            header.onclick = () => {
+                header.classList.toggle('open');
+                content.classList.toggle('open');
+            };
+
+            // Add files to folder
+            categories[catName].forEach(path => {
+                const li = document.createElement('div');
+                li.className = 'file-tree-item';
+                
+                let fileIcon = 'ph-file-code';
+                if (catName === 'Styles') fileIcon = 'ph-file-css';
+                else if (catName === 'Images') fileIcon = 'ph-image';
+
+                // Display just the filename for cleaner UI, but keep path in logic
+                const fileNameOnly = path.split('/').pop();
+                
+                li.innerHTML = `<i class="ph ${fileIcon}"></i> ${fileNameOnly}`;
+                li.title = path; // Show full path on hover
+                
+                li.onclick = () => loadFileIntoEditor(path, li);
+                content.appendChild(li);
+            });
+
+            group.appendChild(header);
+            group.appendChild(content);
+            fileListEl.appendChild(group);
         });
 
         document.getElementById('editing-file-name').innerText = "Workspace Ready: " + bookTitle;
 
     } catch (error) {
         console.error("Failed to unzip book:", error);
-        fileListEl.innerHTML = '<li style="padding:10px; color:red;">Error extracting file.</li>';
+        fileListEl.innerHTML = '<div style="padding:15px; color:red;">Error extracting file.</div>';
     }
 };
 
@@ -108,6 +158,13 @@ window.loadFileIntoEditor = async function(path, liElement) {
 
     try {
         const fileObj = window.activeZipEditor.file(path);
+        
+        // Prevent trying to open Images or Fonts in the text editor
+        if (path.match(/\.(png|jpe?g|gif|webp|ttf|otf|woff2?)$/i)) {
+            document.getElementById('raw-code-editor').value = "Binary file selected. Text editing not supported for images or fonts.";
+            return;
+        }
+
         const textContent = await fileObj.async("string");
         document.getElementById('raw-code-editor').value = textContent;
     } catch (error) {
@@ -116,7 +173,28 @@ window.loadFileIntoEditor = async function(path, liElement) {
     }
 };
 
-// FIXED: The Core Repackaging Engine
+// NEW: Local Regex Find & Replace function
+window.editorReplaceAll = function() {
+    const findStr = document.getElementById('editor-find').value;
+    const replaceStr = document.getElementById('editor-replace').value;
+    const textarea = document.getElementById('raw-code-editor');
+    
+    if(!findStr) return;
+    
+    try {
+        // Try parsing as Regex first
+        const regex = new RegExp(findStr, 'g');
+        textarea.value = textarea.value.replace(regex, replaceStr);
+    } catch(e) {
+        // If Regex fails (e.g. they typed a literal [ or *), fallback to standard string replace
+        textarea.value = textarea.value.split(findStr).join(replaceStr);
+    }
+    
+    // Quick flash effect to show it worked
+    textarea.style.backgroundColor = 'var(--surface)';
+    setTimeout(() => { textarea.style.backgroundColor = 'var(--bg-color)'; }, 200);
+};
+
 window.saveEditedFile = async function() {
     if (!window.activeZipEditor || !window.activeEditingPath) {
         alert("Please open a file from the left sidebar first.");
@@ -126,37 +204,25 @@ window.saveEditedFile = async function() {
     const saveBtn = document.getElementById('save-file-btn');
     const originalHTML = saveBtn.innerHTML;
     
-    // UI Loading State
     saveBtn.innerHTML = '<i class="ph ph-spinner"></i> Saving...';
     saveBtn.disabled = true;
 
     try {
-        // 1. Get the newly edited code
         const newCode = document.getElementById('raw-code-editor').value;
-        
-        // 2. Inject it back into the target file in the JSZip memory archive
         window.activeZipEditor.file(window.activeEditingPath, newCode);
         
-        // 3. Compress the entire ZIP back into an ArrayBuffer (This is the heavy lifting)
         const newEpubBuffer = await window.activeZipEditor.generateAsync({
             type: "arraybuffer",
             compression: "DEFLATE",
-            compressionOptions: { level: 6 } // Good balance of speed and file size
+            compressionOptions: { level: 6 } 
         });
 
-        // 4. Fetch the original database entry to retain cover art, title, and ID
         const oldData = await localforage.getItem(window.activeBookIdForEditor);
-        
-        // 5. Swap the old buffer with the new edited buffer
         oldData.buffer = newEpubBuffer;
         
-        // 6. Overwrite the database
         await localforage.setItem(window.activeBookIdForEditor, oldData);
-
-        // 7. Clear location cache so the reader doesn't load stale, pre-edited pagination
         localStorage.removeItem('locations-' + window.activeBookIdForEditor);
 
-        // Success UI
         saveBtn.innerHTML = '<i class="ph ph-check-circle"></i> Saved!';
         saveBtn.style.backgroundColor = 'var(--accent)';
         
@@ -181,4 +247,5 @@ window.closeEditorWorkspace = function() {
     
     document.getElementById('editor-setup').style.display = 'block';
     document.getElementById('editor-workspace').style.display = 'none';
+    document.getElementById('editor-main-toolbar').style.display = 'none';
 };

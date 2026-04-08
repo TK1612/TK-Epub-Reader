@@ -219,13 +219,13 @@ textarea { flex: 1; font-family: monospace; resize: none; }
 
 .spellcheck-word { 
     font-weight: 600; 
-    color: var(--danger); 
+    color: var(--text-color); /* This makes it white in dark mode and black in light mode */
     font-size: 14px; 
     font-family: 'Courier New', Courier, monospace;
-    background: rgba(239, 68, 68, 0.1);
+    background: var(--surface); /* Removes the faint red background */
     padding: 3px 8px;
     border-radius: 6px;
-    border: 1px solid rgba(239, 68, 68, 0.2);
+    border: 1px solid var(--border); /* Removes the red border */
 }
 
 .spellcheck-count { 

@@ -1,6 +1,7 @@
 window.activeZipEditor = null;
 window.activeEditingPath = null;
 window.activeBookIdForEditor = null;
+window.cmEditor = null; // CodeMirror Instance
 
 const originalShowView = window.showView;
 window.showView = function(viewId) {
@@ -47,9 +48,7 @@ window.loadEditorBookList = async function() {
             </div>
         `;
 
-        card.onclick = () => {
-            openEditorWorkspace(key, value.title);
-        };
+        card.onclick = () => openEditorWorkspace(key, value.title);
         grid.appendChild(card);
     });
 };
@@ -60,9 +59,19 @@ window.openEditorWorkspace = async function(bookId, bookTitle) {
     document.getElementById('editor-workspace').style.display = 'flex'; 
     document.getElementById('editor-main-toolbar').style.display = 'flex'; 
     
+    // Initialize CodeMirror if it hasn't been created yet
+    if (!window.cmEditor) {
+        window.cmEditor = CodeMirror.fromTextArea(document.getElementById('raw-code-editor'), {
+            lineNumbers: true,
+            mode: "htmlmixed",
+            theme: document.documentElement.getAttribute('data-theme') === 'dark' ? 'material-darker' : 'default',
+            lineWrapping: true
+        });
+    }
+
     const fileListEl = document.getElementById('editor-file-list');
     fileListEl.innerHTML = '<div style="padding:15px; color:gray;">Extracting EPUB Archive...</div>';
-    document.getElementById('raw-code-editor').value = "";
+    window.cmEditor.setValue("");
     document.getElementById('editing-file-name').innerText = "Loading...";
 
     try {
@@ -70,12 +79,10 @@ window.openEditorWorkspace = async function(bookId, bookTitle) {
         const zip = new JSZip();
         window.activeZipEditor = await zip.loadAsync(bookData.buffer);
         
-        // --- CATEGORIZATION ENGINE (CALIBRE STYLE) ---
         const categories = { Text: [], Styles: [], Images: [], Fonts: [], Miscellaneous: [] };
         
         Object.keys(window.activeZipEditor.files).forEach(path => {
-            if (window.activeZipEditor.files[path].dir) return; // Skip folder metadata
-            
+            if (window.activeZipEditor.files[path].dir) return; 
             const lowerPath = path.toLowerCase();
             if (lowerPath.match(/\.(html|xhtml|htm)$/)) categories.Text.push(path);
             else if (lowerPath.match(/\.(css)$/)) categories.Styles.push(path);
@@ -84,12 +91,10 @@ window.openEditorWorkspace = async function(bookId, bookTitle) {
             else categories.Miscellaneous.push(path);
         });
 
-        fileListEl.innerHTML = ''; // Clear loading text
+        fileListEl.innerHTML = ''; 
         
-        // Build the Accordion UI
         Object.keys(categories).forEach(catName => {
-            if (categories[catName].length === 0) return; // Skip empty folders
-            
+            if (categories[catName].length === 0) return; 
             let catIcon = 'ph-folder';
             if (catName === 'Text') catIcon = 'ph-text-t';
             if (catName === 'Styles') catIcon = 'ph-paint-brush';
@@ -99,22 +104,18 @@ window.openEditorWorkspace = async function(bookId, bookTitle) {
             const group = document.createElement('div');
             group.className = 'folder-group';
             
-            // Folder Header
             const header = document.createElement('div');
-            header.className = 'folder-header open'; // Open by default
+            header.className = 'folder-header open'; 
             header.innerHTML = `<i class="ph ph-caret-right"></i> <i class="ph ${catIcon}" style="color:var(--accent);"></i> ${catName} (${categories[catName].length})`;
             
-            // Folder Content List
             const content = document.createElement('div');
             content.className = 'folder-content open';
 
-            // Toggle logic
             header.onclick = () => {
                 header.classList.toggle('open');
                 content.classList.toggle('open');
             };
 
-            // Add files to folder
             categories[catName].forEach(path => {
                 const li = document.createElement('div');
                 li.className = 'file-tree-item';
@@ -123,11 +124,9 @@ window.openEditorWorkspace = async function(bookId, bookTitle) {
                 if (catName === 'Styles') fileIcon = 'ph-file-css';
                 else if (catName === 'Images') fileIcon = 'ph-image';
 
-                // Display just the filename for cleaner UI, but keep path in logic
                 const fileNameOnly = path.split('/').pop();
-                
                 li.innerHTML = `<i class="ph ${fileIcon}"></i> ${fileNameOnly}`;
-                li.title = path; // Show full path on hover
+                li.title = path; 
                 
                 li.onclick = () => loadFileIntoEditor(path, li);
                 content.appendChild(li);
@@ -139,6 +138,7 @@ window.openEditorWorkspace = async function(bookId, bookTitle) {
         });
 
         document.getElementById('editing-file-name').innerText = "Workspace Ready: " + bookTitle;
+        setTimeout(() => window.cmEditor.refresh(), 100);
 
     } catch (error) {
         console.error("Failed to unzip book:", error);
@@ -153,46 +153,185 @@ window.loadFileIntoEditor = async function(path, liElement) {
     if (liElement) liElement.classList.add('active-file');
     
     document.getElementById('editing-file-name').innerText = path;
-    document.getElementById('raw-code-editor').value = "Extracting file content...";
+    window.cmEditor.setValue("Extracting file content...");
     window.activeEditingPath = path;
 
     try {
         const fileObj = window.activeZipEditor.file(path);
         
-        // Prevent trying to open Images or Fonts in the text editor
         if (path.match(/\.(png|jpe?g|gif|webp|ttf|otf|woff2?)$/i)) {
-            document.getElementById('raw-code-editor').value = "Binary file selected. Text editing not supported for images or fonts.";
+            window.cmEditor.setValue("Binary file selected. Text editing not supported for images or fonts.");
             return;
         }
 
         const textContent = await fileObj.async("string");
-        document.getElementById('raw-code-editor').value = textContent;
+        window.cmEditor.setValue(textContent);
+        
+        // Set syntax highlighting mode dynamically
+        if(path.endsWith('.css')) window.cmEditor.setOption("mode", "css");
+        else if(path.endsWith('.opf') || path.endsWith('.ncx')) window.cmEditor.setOption("mode", "xml");
+        else window.cmEditor.setOption("mode", "htmlmixed");
+
     } catch (error) {
         console.error("Could not read file:", error);
-        document.getElementById('raw-code-editor').value = "Error reading file content.";
+        window.cmEditor.setValue("Error reading file content.");
     }
 };
 
-// NEW: Local Regex Find & Replace function
+// FEATURE: Local Regex Find & Replace (Using CodeMirror)
 window.editorReplaceAll = function() {
+    if (!window.cmEditor) return;
+    
     const findStr = document.getElementById('editor-find').value;
     const replaceStr = document.getElementById('editor-replace').value;
-    const textarea = document.getElementById('raw-code-editor');
+    const useRegex = document.getElementById('editor-use-regex').checked;
     
     if(!findStr) return;
     
-    try {
-        // Try parsing as Regex first
-        const regex = new RegExp(findStr, 'g');
-        textarea.value = textarea.value.replace(regex, replaceStr);
-    } catch(e) {
-        // If Regex fails (e.g. they typed a literal [ or *), fallback to standard string replace
-        textarea.value = textarea.value.split(findStr).join(replaceStr);
+    let content = window.cmEditor.getValue();
+    
+    if (useRegex) {
+        try {
+            const regex = new RegExp(findStr, 'g');
+            content = content.replace(regex, replaceStr);
+        } catch(e) {
+            alert("Invalid Regex pattern!");
+            return;
+        }
+    } else {
+        content = content.split(findStr).join(replaceStr);
     }
     
-    // Quick flash effect to show it worked
-    textarea.style.backgroundColor = 'var(--surface)';
-    setTimeout(() => { textarea.style.backgroundColor = 'var(--bg-color)'; }, 200);
+    window.cmEditor.setValue(content);
+};
+
+// FEATURE: Global Editor Search
+window.openGlobalEditSearch = function() {
+    if (!window.activeZipEditor) return alert("Open a book first!");
+    window.closeAllModals();
+    document.getElementById('editor-global-search-results').innerHTML = '';
+    document.getElementById('editor-global-search-modal').classList.add('active');
+};
+
+window.runGlobalEditSearch = async function() {
+    const query = document.getElementById('editor-global-search-input').value;
+    const useRegex = document.getElementById('editor-global-use-regex').checked;
+    const resultsContainer = document.getElementById('editor-global-search-results');
+    
+    if (!query) return;
+    resultsContainer.innerHTML = '<div style="padding: 10px;">Searching all files...</div>';
+    
+    let regex;
+    if (useRegex) {
+        try { regex = new RegExp(query, 'gi'); } catch(e) { return alert("Invalid Regex!"); }
+    }
+
+    const htmlPaths = Object.keys(window.activeZipEditor.files).filter(p => p.match(/\.(html|xhtml|htm)$/i));
+    let allResults = [];
+
+    for (let path of htmlPaths) {
+        const content = await window.activeZipEditor.file(path).async("string");
+        
+        let matchIndex = -1;
+        if (useRegex) {
+            const match = regex.exec(content);
+            if(match) matchIndex = match.index;
+        } else {
+            matchIndex = content.toLowerCase().indexOf(query.toLowerCase());
+        }
+
+        if (matchIndex !== -1) {
+            // Grab a snippet of surrounding text
+            const start = Math.max(0, matchIndex - 40);
+            const snippet = content.substring(start, matchIndex + query.length + 40).replace(/</g, '&lt;');
+            allResults.push({ path: path, snippet: snippet });
+        }
+    }
+
+    resultsContainer.innerHTML = '';
+    if (allResults.length === 0) {
+        resultsContainer.innerHTML = '<div style="padding: 10px;">No results found.</div>';
+        return;
+    }
+
+    allResults.forEach(res => {
+        const div = document.createElement('div');
+        div.className = 'search-result-item';
+        div.innerHTML = `<div class="search-result-file">${res.path}</div><div class="search-result-text">...${res.snippet}...</div>`;
+        div.onclick = () => {
+            window.closeAllModals();
+            // Automatically find and click the file in the sidebar tree
+            const treeItems = document.querySelectorAll('.file-tree-item');
+            treeItems.forEach(item => { if (item.title === res.path) item.click(); });
+        };
+        resultsContainer.appendChild(div);
+    });
+};
+
+// FEATURE: Metadata Editor
+window.openMetadataEditor = async function() {
+    if (!window.activeZipEditor) return alert("Open a book first!");
+    
+    // Find the OPF file which holds metadata
+    const opfPath = Object.keys(window.activeZipEditor.files).find(p => p.endsWith('.opf'));
+    if (!opfPath) return alert("Could not locate metadata (.opf) file in this EPUB.");
+
+    window.currentOpfPath = opfPath;
+    const opfContent = await window.activeZipEditor.file(opfPath).async("string");
+    
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(opfContent, "application/xml");
+    
+    const titleNode = xmlDoc.getElementsByTagName("dc:title")[0] || xmlDoc.getElementsByTagName("title")[0];
+    const authorNode = xmlDoc.getElementsByTagName("dc:creator")[0] || xmlDoc.getElementsByTagName("creator")[0];
+
+    document.getElementById('meta-title-input').value = titleNode ? titleNode.textContent : "";
+    document.getElementById('meta-author-input').value = authorNode ? authorNode.textContent : "";
+
+    window.closeAllModals();
+    document.getElementById('editor-metadata-modal').classList.add('active');
+};
+
+window.saveMetadata = async function() {
+    const newTitle = document.getElementById('meta-title-input').value;
+    const newAuthor = document.getElementById('meta-author-input').value;
+    const btn = document.getElementById('save-meta-btn');
+    
+    btn.innerText = "Saving...";
+    
+    try {
+        const opfContent = await window.activeZipEditor.file(window.currentOpfPath).async("string");
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(opfContent, "application/xml");
+        
+        const titleNode = xmlDoc.getElementsByTagName("dc:title")[0] || xmlDoc.getElementsByTagName("title")[0];
+        const authorNode = xmlDoc.getElementsByTagName("dc:creator")[0] || xmlDoc.getElementsByTagName("creator")[0];
+        
+        if (titleNode) titleNode.textContent = newTitle;
+        if (authorNode) authorNode.textContent = newAuthor;
+
+        const serializer = new XMLSerializer();
+        const newOpfContent = serializer.serializeToString(xmlDoc);
+        
+        window.activeZipEditor.file(window.currentOpfPath, newOpfContent);
+        await window.saveEditedFile(); // Trigger the main compression save
+        
+        btn.innerText = "Saved!";
+        setTimeout(() => { btn.innerText = "Save Metadata"; window.closeAllModals(); }, 1500);
+        
+    } catch(e) {
+        console.error(e);
+        btn.innerText = "Error Saving";
+        setTimeout(() => btn.innerText = "Save Metadata", 1500);
+    }
+};
+
+window.toggleSpellcheck = function() {
+    if(!window.cmEditor) return;
+    const textArea = window.cmEditor.getTextArea();
+    const isSpellcheck = textArea.getAttribute("spellcheck") === "true";
+    textArea.setAttribute("spellcheck", !isSpellcheck);
+    alert("Native browser spellcheck: " + (!isSpellcheck ? "ON" : "OFF") + " (May require typing to trigger highlights)");
 };
 
 window.saveEditedFile = async function() {
@@ -208,7 +347,8 @@ window.saveEditedFile = async function() {
     saveBtn.disabled = true;
 
     try {
-        const newCode = document.getElementById('raw-code-editor').value;
+        // Grab the code from CodeMirror instead of textarea
+        const newCode = window.cmEditor.getValue();
         window.activeZipEditor.file(window.activeEditingPath, newCode);
         
         const newEpubBuffer = await window.activeZipEditor.generateAsync({

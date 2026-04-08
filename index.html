@@ -12,6 +12,13 @@
     <link rel="manifest" href="assets/site.webmanifest">
     <meta name="theme-color" content="#18181b">
     
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/material-darker.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/xml/xml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/css/css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/htmlmixed/htmlmixed.min.js"></script>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
@@ -67,15 +74,14 @@
                 </div>
 
                 <div id="editor-main-toolbar" class="editor-main-toolbar" style="display: none;">
-                    <button class="toolbar-btn" onclick="alert('Metadata Editor coming soon!')"><i class="ph ph-info"></i> Metadata</button>
-                    <button class="toolbar-btn" onclick="alert('TOC Editor coming soon!')"><i class="ph ph-list-numbers"></i> Edit TOC</button>
-                    <button class="toolbar-btn" onclick="alert('Global Search & Replace coming soon!')"><i class="ph ph-magnifying-glass-plus"></i> Global Search</button>
+                    <button class="toolbar-btn" onclick="openMetadataEditor()"><i class="ph ph-info"></i> Metadata</button>
+                    <button class="toolbar-btn" onclick="alert('TOC XML Editor coming next!')"><i class="ph ph-list-numbers"></i> Edit TOC</button>
+                    <button class="toolbar-btn" onclick="openGlobalEditSearch()"><i class="ph ph-magnifying-glass-plus"></i> Global Search</button>
                     <div style="width: 1px; background: var(--border); margin: 0 5px;"></div>
-                    <button class="toolbar-btn" onclick="alert('Add File coming soon!')"><i class="ph ph-file-plus"></i> Add File</button>
-                    <button class="toolbar-btn" onclick="alert('Spellcheck coming soon!')"><i class="ph ph-text-aa"></i> Spellcheck</button>
-                    <button class="toolbar-btn" onclick="alert('EPUB Debugger coming soon!')"><i class="ph ph-bug"></i> Debug</button>
+                    <button class="toolbar-btn" onclick="alert('Add File feature coming soon!')"><i class="ph ph-file-plus"></i> Add File</button>
+                    <button class="toolbar-btn" onclick="toggleSpellcheck()"><i class="ph ph-text-aa"></i> Spellcheck</button>
                     <div style="width: 1px; background: var(--border); margin: 0 5px;"></div>
-                    <button class="toolbar-btn" onclick="alert('Revert to older save coming soon!')"><i class="ph ph-clock-counter-clockwise"></i> Revert</button>
+                    <button class="toolbar-btn" onclick="alert('Revert requires versioning (Coming Soon)')"><i class="ph ph-clock-counter-clockwise"></i> Revert</button>
                 </div>
 
                 <div id="editor-workspace" class="editor-workspace" style="display: none;">
@@ -94,12 +100,19 @@
                         </div>
                         
                         <div class="local-find-replace">
-                            <input type="text" id="editor-find" placeholder="Find (Regex)">
-                            <input type="text" id="editor-replace" placeholder="Replace with">
-                            <button class="btn-secondary" style="padding: 8px 12px;" onclick="editorReplaceAll()">Replace All</button>
+                            <div style="display: flex; align-items: center; gap: 5px; flex: 1;">
+                                <input type="text" id="editor-find" placeholder="Find..." style="flex:1;">
+                                <label style="display:flex; align-items:center; gap:5px; font-size:12px; cursor:pointer; color:var(--text-muted); margin-right:10px;">
+                                    <input type="checkbox" id="editor-use-regex"> Regex
+                                </label>
+                            </div>
+                            <input type="text" id="editor-replace" placeholder="Replace with" style="flex:1;">
+                            <button class="btn-secondary" style="padding: 8px 12px; white-space: nowrap;" onclick="editorReplaceAll()">Replace All</button>
                         </div>
 
-                        <textarea id="raw-code-editor" spellcheck="false" placeholder="Select an HTML or CSS file from the left menu to view its source code..."></textarea>
+                        <div id="codemirror-wrapper" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg-color);">
+                            <textarea id="raw-code-editor" style="display: none;"></textarea>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -136,12 +149,42 @@
         <div id="search-results" class="scroll-list"></div>
     </div>
 
+    <div id="editor-global-search-modal" class="modal center-modal large-modal">
+        <div class="modal-header">
+            <h3>Global Search (All HTML Files)</h3>
+            <button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button>
+        </div>
+        <div class="search-controls" style="display:flex; gap:10px; align-items: center;">
+            <input type="text" id="editor-global-search-input" placeholder="Regex or String..." style="flex:1;">
+            <label style="display:flex; align-items:center; gap:5px; font-size:12px; cursor:pointer; color:var(--text-muted);">
+                <input type="checkbox" id="editor-global-use-regex"> Regex
+            </label>
+            <button class="btn-primary" style="margin-bottom:10px;" onclick="runGlobalEditSearch()">Search All</button>
+        </div>
+        <div id="editor-global-search-results" class="scroll-list" style="margin-top: 10px;"></div>
+    </div>
+
+    <div id="editor-metadata-modal" class="modal center-modal">
+        <div class="modal-header">
+            <h3>Edit Book Metadata</h3>
+            <button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button>
+        </div>
+        <div class="setting-group">
+            <label>Book Title</label>
+            <input type="text" id="meta-title-input">
+        </div>
+        <div class="setting-group">
+            <label>Author / Creator</label>
+            <input type="text" id="meta-author-input">
+        </div>
+        <button id="save-meta-btn" class="btn-primary" style="width: 100%; margin-top: 10px;" onclick="saveMetadata()">Save Metadata</button>
+    </div>
+
     <div id="settings-modal" class="modal right-modal">
         <div class="modal-header">
             <h3>Reader Settings</h3>
             <button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button>
         </div>
-        
         <div class="setting-group">
             <label>Reading Mode</label>
             <select id="set-read-mode" onchange="changeReadMode()">
@@ -150,7 +193,6 @@
                 <option value="paginated">Paginated (Swipe / Click Next)</option>
             </select>
         </div>
-
         <div class="setting-group">
             <label>Background Theme</label>
             <select id="set-reader-theme" onchange="setReaderTheme(this.value)">
@@ -160,24 +202,10 @@
                 <option value="blue">Light Blue</option>
             </select>
         </div>
-
-        <div class="setting-group">
-            <label>Font Size <span id="val-font">18px</span></label>
-            <input type="range" id="set-font" min="12" max="36" value="18" oninput="updateSettings()">
-        </div>
-        <div class="setting-group">
-            <label>Line Height <span id="val-line">1.5</span></label>
-            <input type="range" id="set-line" min="1" max="3" step="0.1" value="1.5" oninput="updateSettings()">
-        </div>
-        <div class="setting-group">
-            <label>Paragraph Spacing <span id="val-para-spacing">0em</span></label>
-            <input type="range" id="set-para-spacing" min="0" max="5" step="0.5" value="0" oninput="updateSettings()">
-        </div>
-        <div class="setting-group">
-            <label>Text Indent <span id="val-indent">0em</span></label>
-            <input type="range" id="set-indent" min="0" max="5" step="0.5" value="0" oninput="updateSettings()">
-        </div>
-
+        <div class="setting-group"><label>Font Size <span id="val-font">18px</span></label><input type="range" id="set-font" min="12" max="36" value="18" oninput="updateSettings()"></div>
+        <div class="setting-group"><label>Line Height <span id="val-line">1.5</span></label><input type="range" id="set-line" min="1" max="3" step="0.1" value="1.5" oninput="updateSettings()"></div>
+        <div class="setting-group"><label>Paragraph Spacing <span id="val-para-spacing">0em</span></label><input type="range" id="set-para-spacing" min="0" max="5" step="0.5" value="0" oninput="updateSettings()"></div>
+        <div class="setting-group"><label>Text Indent <span id="val-indent">0em</span></label><input type="range" id="set-indent" min="0" max="5" step="0.5" value="0" oninput="updateSettings()"></div>
         <div class="setting-group">
             <label>Text Align</label>
             <div class="segment-control">
@@ -185,7 +213,6 @@
                 <button class="segment-btn" id="align-center" onclick="setTextAlign('center')">Center</button>
             </div>
         </div>
-
         <div class="setting-group">
             <label>Font Family</label>
             <select id="set-font-family" onchange="updateSettings()">
@@ -198,17 +225,9 @@
                 <option value="Arial, Helvetica, sans-serif">Arial</option>
             </select>
         </div>
-        <div class="setting-group">
-            <label>Text Color
-                <input type="color" id="set-text-color" value="#e4e4e7" onchange="updateSettings()" style="width: 30px; height: 30px;">
-            </label>
-        </div>
-        
+        <div class="setting-group"><label>Text Color<input type="color" id="set-text-color" value="#e4e4e7" onchange="updateSettings()" style="width: 30px; height: 30px;"></label></div>
         <div class="setting-group" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);">
-            <label style="cursor: pointer;">
-                Pin Taskbar (Don't Hide)
-                <input type="checkbox" id="set-pin-taskbar" onchange="updateSettings()" style="width: auto;">
-            </label>
+            <label style="cursor: pointer;">Pin Taskbar (Don't Hide)<input type="checkbox" id="set-pin-taskbar" onchange="updateSettings()" style="width: auto;"></label>
         </div>
     </div>
 

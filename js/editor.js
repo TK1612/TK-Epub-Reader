@@ -1,13 +1,10 @@
-// A global variable to hold the JSZip instance ONLY when editing
 window.activeZipEditor = null;
 window.activeEditingPath = null;
 window.activeBookIdForEditor = null;
 
-// Ensure showView in your ui.js is updated to handle the 'editor' route if it doesn't automatically
 const originalShowView = window.showView;
 window.showView = function(viewId) {
     if (typeof originalShowView === 'function') {
-        // Run your existing showView logic
         document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
         const targetView = document.getElementById(viewId + '-view');
         if(targetView) targetView.classList.add('active');
@@ -20,14 +17,12 @@ window.showView = function(viewId) {
         document.getElementById('page-title').innerText = title;
     }
 
-    // If we navigate TO the editor, load the books
     if (viewId === 'editor') {
         document.getElementById('editor-setup').style.display = 'block';
         document.getElementById('editor-workspace').style.display = 'none';
         loadEditorBookList();
     }
     
-    // If we navigate AWAY from the editor, safely garbage collect the ZIP memory
     if (viewId !== 'editor' && window.activeZipEditor !== null) {
         closeEditorWorkspace();
     }
@@ -61,7 +56,7 @@ window.loadEditorBookList = async function() {
 window.openEditorWorkspace = async function(bookId, bookTitle) {
     window.activeBookIdForEditor = bookId;
     document.getElementById('editor-setup').style.display = 'none';
-    document.getElementById('editor-workspace').style.display = 'flex';
+    document.getElementById('editor-workspace').style.display = 'flex'; // Uses Flex now instead of Block
     
     const fileListEl = document.getElementById('editor-file-list');
     fileListEl.innerHTML = '<li style="padding:10px; color:gray;">Extracting EPUB Archive...</li>';
@@ -72,12 +67,9 @@ window.openEditorWorkspace = async function(bookId, bookTitle) {
         const bookData = await localforage.getItem(bookId);
         const zip = new JSZip();
         
-        // This is the "Lazy Load". It only unzips into memory right now.
         window.activeZipEditor = await zip.loadAsync(bookData.buffer);
+        fileListEl.innerHTML = ''; 
         
-        fileListEl.innerHTML = ''; // Clear loading text
-        
-        // Filter for files we can actually edit (HTML, XML, CSS)
         const editableFiles = Object.keys(window.activeZipEditor.files).filter(path => {
             return !window.activeZipEditor.files[path].dir && 
                    (path.endsWith('.html') || path.endsWith('.htm') || path.endsWith('.xhtml') || path.endsWith('.css') || path.endsWith('.opf') || path.endsWith('.ncx'));
@@ -87,13 +79,11 @@ window.openEditorWorkspace = async function(bookId, bookTitle) {
             const li = document.createElement('li');
             li.className = 'file-tree-item';
             
-            // Add a little icon based on file type
             let icon = 'ph-file-code';
             if (path.endsWith('.css')) icon = 'ph-file-css';
             else if (path.endsWith('.html') || path.endsWith('.xhtml')) icon = 'ph-file-html';
 
             li.innerHTML = `<i class="ph ${icon}"></i> ${path}`;
-            
             li.onclick = () => loadFileIntoEditor(path, li);
             fileListEl.appendChild(li);
         });
@@ -109,7 +99,6 @@ window.openEditorWorkspace = async function(bookId, bookTitle) {
 window.loadFileIntoEditor = async function(path, liElement) {
     if (!window.activeZipEditor) return;
 
-    // UI Updates
     document.querySelectorAll('.file-tree-item').forEach(el => el.classList.remove('active-file'));
     if (liElement) liElement.classList.add('active-file');
     
@@ -118,7 +107,6 @@ window.loadFileIntoEditor = async function(path, liElement) {
     window.activeEditingPath = path;
 
     try {
-        // Extract JUST this specific file as a text string from the ZIP memory
         const fileObj = window.activeZipEditor.file(path);
         const textContent = await fileObj.async("string");
         document.getElementById('raw-code-editor').value = textContent;
@@ -128,13 +116,65 @@ window.loadFileIntoEditor = async function(path, liElement) {
     }
 };
 
+// FIXED: The Core Repackaging Engine
 window.saveEditedFile = async function() {
-    alert("Saving logic will go here! This will take the text, repackage the zip, and save to localForage.");
-    // We will build the repackaging function in the next step!
+    if (!window.activeZipEditor || !window.activeEditingPath) {
+        alert("Please open a file from the left sidebar first.");
+        return;
+    }
+
+    const saveBtn = document.getElementById('save-file-btn');
+    const originalHTML = saveBtn.innerHTML;
+    
+    // UI Loading State
+    saveBtn.innerHTML = '<i class="ph ph-spinner"></i> Saving...';
+    saveBtn.disabled = true;
+
+    try {
+        // 1. Get the newly edited code
+        const newCode = document.getElementById('raw-code-editor').value;
+        
+        // 2. Inject it back into the target file in the JSZip memory archive
+        window.activeZipEditor.file(window.activeEditingPath, newCode);
+        
+        // 3. Compress the entire ZIP back into an ArrayBuffer (This is the heavy lifting)
+        const newEpubBuffer = await window.activeZipEditor.generateAsync({
+            type: "arraybuffer",
+            compression: "DEFLATE",
+            compressionOptions: { level: 6 } // Good balance of speed and file size
+        });
+
+        // 4. Fetch the original database entry to retain cover art, title, and ID
+        const oldData = await localforage.getItem(window.activeBookIdForEditor);
+        
+        // 5. Swap the old buffer with the new edited buffer
+        oldData.buffer = newEpubBuffer;
+        
+        // 6. Overwrite the database
+        await localforage.setItem(window.activeBookIdForEditor, oldData);
+
+        // 7. Clear location cache so the reader doesn't load stale, pre-edited pagination
+        localStorage.removeItem('locations-' + window.activeBookIdForEditor);
+
+        // Success UI
+        saveBtn.innerHTML = '<i class="ph ph-check-circle"></i> Saved!';
+        saveBtn.style.backgroundColor = 'var(--accent)';
+        
+        setTimeout(() => {
+            saveBtn.innerHTML = originalHTML;
+            saveBtn.disabled = false;
+            saveBtn.style.backgroundColor = '';
+        }, 2000);
+
+    } catch (error) {
+        console.error("Save failed:", error);
+        alert("Failed to save the book. Check console for details.");
+        saveBtn.innerHTML = originalHTML;
+        saveBtn.disabled = false;
+    }
 };
 
 window.closeEditorWorkspace = function() {
-    // Garbage collection: Nuke the ZIP from memory when we close it
     window.activeZipEditor = null;
     window.activeEditingPath = null;
     window.activeBookIdForEditor = null;

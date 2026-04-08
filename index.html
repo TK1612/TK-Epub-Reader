@@ -152,13 +152,19 @@
     </div>
 
     <div id="editor-add-file-modal" class="modal center-modal">
-        <div class="modal-header"><h3>Import Outside File</h3><button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button></div>
+        <div class="modal-header"><h3>Import Outside Files</h3><button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button></div>
+        
         <div class="setting-group">
-            <label>Select file from your computer</label>
-            <input type="file" id="add-outside-file-input" style="margin-top: 10px;">
+            <input type="file" id="add-outside-file-input" multiple style="display: none;" onchange="updateSelectedFilesList()">
+            <div class="file-upload-dropzone" onclick="document.getElementById('add-outside-file-input').click()">
+                <i class="ph ph-upload-simple"></i>
+                <span>Click here to browse and select files</span>
+            </div>
+            <div id="selected-files-list" class="selected-files-list"></div>
         </div>
-        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 15px;">* Images, Stylesheets, and HTML files will be auto-categorized into the EPUB manifest.</p>
-        <button id="confirm-add-file-btn" class="btn-primary" style="width: 100%;" onclick="confirmAddOutsideFile()">Import File</button>
+        
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 15px;">* Select multiple Images, Stylesheets, or HTML files. They will be auto-categorized into the EPUB manifest.</p>
+        <button id="confirm-add-file-btn" class="btn-primary" style="width: 100%;" onclick="confirmAddOutsideFile()">Import Files</button>
     </div>
 
     <div id="editor-spellcheck-modal" class="modal center-modal large-modal">
@@ -166,7 +172,7 @@
             <div><h3>Typo & Word Inspector</h3><span style="font-size:12px; color:var(--text-muted);">Extracts rare/uncommon words that may be typos. Click a word to search for it.</span></div>
             <button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button>
         </div>
-        <div id="spellcheck-list" class="scroll-list" style="background:var(--bg-color); border:1px solid var(--border); border-radius:8px; padding:10px;"></div>
+        <div id="spellcheck-list" class="scroll-list" style="background:var(--bg-color); border:1px solid var(--border); border-radius:8px; padding:0;"></div>
     </div>
 
     <div id="editor-debug-modal" class="modal center-modal large-modal"><div class="modal-header"><h3>EPUB Debugger & Validator</h3><button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button></div><div id="debug-console" class="scroll-list" style="background:var(--bg-color); border:1px solid var(--border); border-radius:8px; padding:10px;"></div></div>

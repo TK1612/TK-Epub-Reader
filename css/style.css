@@ -200,7 +200,7 @@ textarea { flex: 1; font-family: monospace; resize: none; }
     .large-modal { width: 95%; max-height: 85vh; padding: 15px; }
     #editor-view.active { height: calc(100vh - 100px); padding: 10px; }
     .editor-workspace { flex-direction: column; }
-    /* Spellcheck & Typo Scanner Styles */
+/* Spellcheck & Typo Scanner Styles */
 .spellcheck-item {
     display: flex;
     justify-content: space-between;

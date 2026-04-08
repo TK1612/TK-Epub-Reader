@@ -216,13 +216,13 @@ window.editorReplaceAll = function() {
     window.cmEditor.setValue(content);
 };
 
-// --- GLOBAL SEARCH ---
 window.openGlobalEditSearch = function() {
     if (!window.activeZipEditor) return;
     window.closeAllModals();
     document.getElementById('editor-global-search-results').innerHTML = '';
     document.getElementById('editor-global-search-modal').classList.add('active');
 };
+
 window.runGlobalEditSearch = async function() {
     const query = document.getElementById('editor-global-search-input').value;
     const useRegex = document.getElementById('editor-global-use-regex').checked;
@@ -263,7 +263,6 @@ window.runGlobalEditSearch = async function() {
     });
 };
 
-// --- METADATA EDITOR ---
 window.openMetadataEditor = async function() {
     if (!window.activeZipEditor) return;
     const opfPath = Object.keys(window.activeZipEditor.files).find(p => p.endsWith('.opf'));
@@ -278,6 +277,7 @@ window.openMetadataEditor = async function() {
     window.closeAllModals();
     document.getElementById('editor-metadata-modal').classList.add('active');
 };
+
 window.saveMetadata = async function() {
     const btn = document.getElementById('save-meta-btn'); btn.innerText = "Saving...";
     try {
@@ -294,7 +294,6 @@ window.saveMetadata = async function() {
     } catch(e) { btn.innerText = "Error"; setTimeout(() => btn.innerText = "Save", 1500); }
 };
 
-// --- TOC EDITOR & H1 GENERATOR ---
 window.openTocEditor = async function() {
     if (!window.activeZipEditor) return;
     const ncxPath = Object.keys(window.activeZipEditor.files).find(p => p.endsWith('.ncx'));
@@ -368,7 +367,6 @@ window.saveTocEdits = async function() {
     } catch(e) { btn.innerText = "Error"; }
 };
 
-// --- ADD OUTSIDE FILE ---
 window.openAddFileModal = function() {
     if (!window.activeZipEditor) return;
     document.getElementById('add-outside-file-input').value = "";
@@ -417,11 +415,13 @@ window.confirmAddOutsideFile = async function() {
     alert("File imported and registered in Manifest successfully!");
 };
 
-// --- UPDATED: TYPO & SPELLCHECK SCANNER (Hanzi, Kanji, Hiragana, Katakana Support) ---
+// --- UPDATED: TYPO & SPELLCHECK SCANNER (New UI & CJK Sorting) ---
 window.openSpellcheckModal = async function() {
     if (!window.activeZipEditor) return;
+    
     const listEl = document.getElementById('spellcheck-list');
-    listEl.innerHTML = '<div style="padding:10px;">Scanning entire book for uncommon words...</div>';
+    listEl.innerHTML = '<div style="padding:30px; text-align:center;"><i class="ph ph-spinner ph-spin" style="font-size:32px; color:var(--accent);"></i><p style="margin-top:10px; color:var(--text-muted);">Scanning entire book for uncommon words...</p></div>';
+    
     window.closeAllModals();
     document.getElementById('editor-spellcheck-modal').classList.add('active');
 
@@ -432,11 +432,10 @@ window.openSpellcheckModal = async function() {
         const content = await window.activeZipEditor.file(path).async("string");
         const textOnly = content.replace(/<[^>]*>?/gm, ' ');
         
-        // FIXED REGEX: Now supports English, Korean (Hangul), Japanese (Kana), and CJK Ideographs (Hanzi/Kanji)
+        // Matches English, Hangul, Kana, and Hanzi
         const words = textOnly.match(/[\w\uAC00-\uD7A3\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]+/g) || [];
         
         words.forEach(w => {
-            // FIXED: Ignore single English/Korean characters, BUT allow single CJK characters (since single Hanzi/Kanji can be valid typos)
             if (w.length < 2 && !/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(w)) return; 
             wordMap[w] = (wordMap[w] || 0) + 1;
         });
@@ -448,16 +447,24 @@ window.openSpellcheckModal = async function() {
         return false;
     });
 
+    suspiciousWords.sort((a, b) => a.localeCompare(b));
+
     listEl.innerHTML = '';
     if (suspiciousWords.length === 0) {
-        listEl.innerHTML = '<div style="padding:10px; color:var(--success);">No rare words or obvious OCR typos found!</div>';
+        listEl.innerHTML = '<div style="padding:30px; text-align:center; color:var(--success);"><i class="ph ph-check-circle" style="font-size:48px;"></i><p style="margin-top:10px; font-weight:600;">No rare words or obvious OCR typos found!</p></div>';
         return;
     }
 
-    suspiciousWords.slice(0, 100).forEach(word => {
+    const header = document.createElement('div');
+    header.className = 'spellcheck-header';
+    header.innerHTML = `<span>Potential Typo / Word</span><span>Occurrences</span>`;
+    listEl.appendChild(header);
+
+    suspiciousWords.slice(0, 150).forEach(word => {
         const div = document.createElement('div');
         div.className = 'spellcheck-item';
-        div.innerHTML = `<span class="spellcheck-word">${word}</span> <span class="spellcheck-count">${wordMap[word]} occurrence</span>`;
+        div.innerHTML = `<span class="spellcheck-word">${word}</span> <span class="spellcheck-count">${wordMap[word]} <i class="ph ph-magnifying-glass"></i></span>`;
+        
         div.onclick = () => {
             document.getElementById('editor-global-search-input').value = word;
             document.getElementById('editor-global-use-regex').checked = false;

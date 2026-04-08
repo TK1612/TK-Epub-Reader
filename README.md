@@ -48,4 +48,4 @@ Transform the reader into a professional EPUB IDE with a single click. The edito
 * **Editor Memory Management:** The Editor workspace utilizes "lazy loading." It only unzips the EPUB archive into your browser's RAM when you explicitly open the "Edit Book" page, ensuring the main reading experience remains lightning-fast and lightweight.
 
 ---
-*Super clean UI built and learned from scratch.* 🥂
+*Gosh I hate myself save me.* 🥂

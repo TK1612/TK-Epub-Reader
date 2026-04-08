@@ -66,11 +66,24 @@
                     <div id="editor-book-list" class="library-grid"></div>
                 </div>
 
+                <div id="editor-main-toolbar" class="editor-main-toolbar" style="display: none;">
+                    <button class="toolbar-btn" onclick="alert('Metadata Editor coming soon!')"><i class="ph ph-info"></i> Metadata</button>
+                    <button class="toolbar-btn" onclick="alert('TOC Editor coming soon!')"><i class="ph ph-list-numbers"></i> Edit TOC</button>
+                    <button class="toolbar-btn" onclick="alert('Global Search & Replace coming soon!')"><i class="ph ph-magnifying-glass-plus"></i> Global Search</button>
+                    <div style="width: 1px; background: var(--border); margin: 0 5px;"></div>
+                    <button class="toolbar-btn" onclick="alert('Add File coming soon!')"><i class="ph ph-file-plus"></i> Add File</button>
+                    <button class="toolbar-btn" onclick="alert('Spellcheck coming soon!')"><i class="ph ph-text-aa"></i> Spellcheck</button>
+                    <button class="toolbar-btn" onclick="alert('EPUB Debugger coming soon!')"><i class="ph ph-bug"></i> Debug</button>
+                    <div style="width: 1px; background: var(--border); margin: 0 5px;"></div>
+                    <button class="toolbar-btn" onclick="alert('Revert to older save coming soon!')"><i class="ph ph-clock-counter-clockwise"></i> Revert</button>
+                </div>
+
                 <div id="editor-workspace" class="editor-workspace" style="display: none;">
                     <div class="file-tree">
-                        <div style="padding: 15px; border-bottom: 1px solid var(--border); font-weight: 600; background: var(--glass-bg);">EPUB Files</div>
-                        <ul id="editor-file-list" class="scroll-list" style="padding: 10px;"></ul>
+                        <div style="padding: 15px; border-bottom: 1px solid var(--border); font-weight: 600; background: var(--glass-bg);">File Browser</div>
+                        <div id="editor-file-list" class="scroll-list" style="padding: 0;"></div>
                     </div>
+                    
                     <div class="code-area">
                         <div class="editor-toolbar">
                             <span id="editing-file-name" style="font-weight: 500; font-size: 14px; color: var(--accent);">No file selected</span>
@@ -79,6 +92,13 @@
                                 <button class="btn-secondary" onclick="closeEditorWorkspace()"><i class="ph ph-x"></i> Close</button>
                             </div>
                         </div>
+                        
+                        <div class="local-find-replace">
+                            <input type="text" id="editor-find" placeholder="Find (Regex)">
+                            <input type="text" id="editor-replace" placeholder="Replace with">
+                            <button class="btn-secondary" style="padding: 8px 12px;" onclick="editorReplaceAll()">Replace All</button>
+                        </div>
+
                         <textarea id="raw-code-editor" spellcheck="false" placeholder="Select an HTML or CSS file from the left menu to view its source code..."></textarea>
                     </div>
                 </div>
@@ -102,6 +122,18 @@
                 <button class="icon-btn" onclick="rendition.next()"><i class="ph ph-caret-right"></i></button>
             </div>
         </div>
+    </div>
+
+    <div id="search-modal" class="modal center-modal">
+        <div class="modal-header">
+            <h3>Search Novel</h3>
+            <button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button>
+        </div>
+        <div class="search-controls" style="display:flex; gap:10px;">
+            <input type="text" id="global-search-input" placeholder="Type word or phrase...">
+            <button class="btn-primary" style="margin-bottom:10px;" onclick="runGlobalSearch()">Search</button>
+        </div>
+        <div id="search-results" class="scroll-list"></div>
     </div>
 
     <div id="settings-modal" class="modal right-modal">

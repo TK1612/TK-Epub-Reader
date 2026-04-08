@@ -372,3 +372,32 @@ mark { background: rgba(59, 130, 246, 0.3); color: var(--text-color); border-rad
     .file-tree { width: 100%; height: 35%; flex: none; }
     .code-area { flex: 1; }
 }
+/* --- CODEMIRROR FIXES FOR EDITOR --- */
+.CodeMirror {
+    height: 100% !important;
+    width: 100% !important;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    background: transparent !important;
+}
+.CodeMirror-scroll { overflow-x: auto; overflow-y: auto; }
+.CodeMirror-gutters { background: var(--surface) !important; border-right: 1px solid var(--border) !important; }
+
+/* Ensure dark theme applies seamlessly */
+[data-theme="dark"] .CodeMirror { color: #e4e4e7; }
+[data-theme="light"] .CodeMirror { color: #18181b; }
+
+.search-result-item {
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    background: var(--surface);
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.2s;
+}
+.search-result-item:hover { background: var(--border); }
+.search-result-file { font-weight: 600; color: var(--accent); margin-bottom: 4px; }
+.search-result-text { color: var(--text-muted); font-family: monospace; white-space: pre-wrap; word-break: break-all; }

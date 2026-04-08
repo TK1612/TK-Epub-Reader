@@ -1,321 +1,206 @@
-@import url('https://cdn.jsdelivr.net/npm/kopubbatang@1.0.0/kopubbatang.min.css');
-
-/* --- CORE STYLES & VARIABLES --- */
-:root {
-    --bg-color: #ffffff;
-    --surface: #f4f4f5;
-    --glass-bg: rgba(255, 255, 255, 0.75);
-    --glass-surface: rgba(244, 244, 245, 0.75);
-    --text-color: #18181b;
-    --text-muted: #71717a;
-    --border: #e4e4e7;
-    --accent: #3b82f6;
-    --danger: #ef4444;
-    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-}
-
-[data-theme="dark"] {
-    --bg-color: #000000;
-    --surface: #121212; 
-    --glass-bg: rgba(0, 0, 0, 0.75);
-    --glass-surface: rgba(18, 18, 18, 0.75);
-    --text-color: #e4e4e7;
-    --text-muted: #a1a1aa;
-    --border: #27272a;
-    --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
-}
-
-* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', system-ui, sans-serif; }
-
-body { 
-    background: var(--bg-color); 
-    color: var(--text-color); 
-    overflow: hidden; 
-    overscroll-behavior-y: none; 
-    overscroll-behavior-x: none; 
-}
-
-/* --- CUSTOM SCROLLBAR --- */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(150, 150, 150, 0.4); border-radius: 10px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(150, 150, 150, 0.7); }
-
-/* --- APP LAYOUT --- */
-#app { display: flex; flex-direction: row; height: 100vh; width: 100vw; position: relative; }
-
-#sidebar { 
-    position: absolute; top: 0; left: 0; height: 100%; width: 260px; 
-    background: var(--glass-surface); 
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border-right: 1px solid var(--border); 
-    transition: transform 0.3s ease; z-index: 200; display: flex; flex-direction: column; 
-    transform: translateX(0); 
-}
-#sidebar.collapsed { transform: translateX(-100%); }
-
-#main-content { flex: 1; display: flex; flex-direction: column; width: 100%; height: 100%; overflow-y: auto; }
-.top-bar { 
-    display: flex; justify-content: space-between; align-items: center; 
-    padding: 15px 20px; border-bottom: 1px solid var(--border); 
-    background: var(--glass-bg); 
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    position: sticky; top: 0; z-index: 10;
-}
-.view { display: none; padding: 30px; }
-.view.active { display: block; }
-
-/* UI ELEMENTS */
-.sidebar-header { display: flex; justify-content: space-between; align-items: center; padding: 20px; border-bottom: 1px solid var(--border); }
-.sidebar-nav { padding: 15px; display: flex; flex-direction: column; gap: 10px; }
-.sidebar-nav button { background: transparent; border: none; color: var(--text-color); padding: 12px; border-radius: 8px; text-align: left; cursor: pointer; font-size: 15px; display: flex; align-items: center; gap: 10px; transition: background 0.2s; }
-.sidebar-nav button:hover { background: var(--border); }
-.divider { height: 1px; background: var(--border); margin: 10px 0; }
-
-.icon-btn { background: transparent; border: none; color: var(--text-color); font-size: 22px; cursor: pointer; padding: 8px; border-radius: 8px; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
-.icon-btn:hover { background: var(--border); }
-.btn-primary { background: var(--accent); color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 8px; justify-content: center;}
-.btn-secondary { background: transparent; color: var(--text-color); border: 1px solid var(--border); padding: 10px 16px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 8px; justify-content: center;}
-
-/* UPLOAD NOVEL BUTTON */
-.upload-btn {
-    background-color: rgba(59, 130, 246, 0.15) !important;
-    color: var(--text-color) !important;
-    border: 1px solid var(--accent) !important;
-    font-weight: 600;
-    padding: 10px 16px; 
-    border-radius: 8px; 
-    cursor: pointer; 
-    font-size: 14px; 
-    transition: background-color 0.2s;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-.upload-btn:hover { background-color: rgba(59, 130, 246, 0.25) !important; }
-
-/* LIBRARY GRID & DELETE MODE */
-.library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 25px; }
-.book-card { background: var(--surface); border-radius: 12px; overflow: hidden; cursor: pointer; border: 1px solid var(--border); box-shadow: var(--shadow); position: relative; transition: transform 0.2s; }
-.book-card:hover { transform: translateY(-4px); }
-.book-cover { width: 100%; height: 240px; object-fit: cover; border-bottom: 1px solid var(--border); background: #111; }
-.book-info { padding: 15px; }
-.book-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
-.book-progress { font-size: 12px; color: var(--text-muted); }
-
-.delete-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(239, 68, 68, 0.7); display: flex; flex-direction: column; align-items: center; justify-content: center; color: white; font-size: 48px; opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 10; }
-.delete-overlay span { font-size: 14px; font-weight: bold; margin-top: 10px; }
-#library-grid.delete-mode .book-card .delete-overlay { opacity: 1; }
-#library-grid.delete-mode .book-card { border-color: var(--danger); transform: scale(0.98); box-shadow: none; }
-.delete-btn-active { background: var(--danger) !important; color: white !important; }
-
-/* --- FIXED READER & TASKBAR --- */
-#reader-container { 
-    display: none; 
-    position: fixed; 
-    top: 0; 
-    left: 0; 
-    width: 100vw; 
-    height: 100dvh; 
-    background: var(--bg-color); 
-    z-index: 300; 
-    touch-action: none; 
-    overscroll-behavior: none;
-}
-
-#viewer { 
-    width: 100%; 
-    height: 100%; 
-    margin: 0; 
-    padding: 0; 
-    background: var(--bg-color);
-    overflow: hidden; 
-}
-#viewer iframe { width: 100% !important; height: 100% !important; border: none; }
-
-.bottom-bar { 
-    position: fixed; 
-    bottom: 24px; 
-    left: 50%; 
-    transform: translateX(-50%); 
-    width: calc(100% - 40px);
-    max-width: 860px;
-    display: flex; 
-    align-items: center; 
-    padding: 12px 20px; 
-    background: var(--glass-surface); 
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid var(--border); 
-    border-radius: 16px; 
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); 
-    z-index: 500; 
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s; 
-}
-
-.bottom-bar.hidden { transform: translate(-50%, 150%); opacity: 0; pointer-events: none; }
-.bar-group { display: flex; gap: 5px; align-items: center; flex-shrink: 0; }
-.chapter-title { flex: 1 1 auto; min-width: 0; margin: 0 15px; font-size: 14px; font-weight: 600; color: var(--text-color); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1; }
-
-/* MODALS */
-.modal { display: none; position: fixed; background: var(--glass-surface); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--border); border-radius: 12px; padding: 25px; box-shadow: var(--shadow); z-index: 600; flex-direction: column; }
-.modal.active { display: flex; }
-.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-
-/* RIGHT MODAL (Settings) */
-.right-modal { bottom: 70px; right: 20px; width: 320px; max-height: 70vh; overflow-y: auto; }
-.center-modal { top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 500px; max-height: 80vh; }
-.large-modal { max-width: 800px; height: 80vh; }
-
-/* INPUTS & LISTS */
-input[type="text"], textarea, select { width: 100%; padding: 10px; background: var(--bg-color); color: var(--text-color); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; font-size: 14px;}
-input[type="color"], input[type="checkbox"] { cursor: pointer; }
-textarea { flex: 1; font-family: monospace; resize: none; }
-.replace-bar { display: flex; gap: 10px; margin-bottom: 15px; }
-.editor-controls { display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px; }
-
-.scroll-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; list-style: none; }
-.list-item { padding: 12px; background: var(--bg-color); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; transition: background 0.2s; font-size: 14px;}
-.list-item:hover { background: var(--border); }
-
-/* --- MODERN SEGMENTED CONTROL FOR ALIGNMENT --- */
-.segment-control { display: flex; gap: 8px; background: var(--surface); padding: 4px; border-radius: 8px; border: 1px solid var(--border); }
-.segment-btn { flex: 1; padding: 8px 0; background: transparent; border: none; color: var(--text-muted); font-size: 14px; font-weight: 500; border-radius: 6px; cursor: pointer; transition: all 0.2s ease; }
-.segment-btn:hover { color: var(--text-color); }
-.segment-btn.active { background: var(--bg-color); color: var(--text-color); box-shadow: var(--shadow); border: 1px solid var(--border); }
-
-/* TOC ACTIVE HIGHLIGHT WITH GLASS BLUE */
-.list-item.active-toc { border: 1px solid var(--accent) !important; background-color: rgba(59, 130, 246, 0.15) !important; }
-
-mark { background: rgba(59, 130, 246, 0.3); color: var(--text-color); border-radius: 3px; padding: 0 2px;}
-.setting-group { margin-bottom: 15px; }
-.setting-group label { display: flex; justify-content: space-between; align-items: center; font-size: 13px; margin-bottom: 8px; color: var(--text-muted); }
-
-#set-pin-taskbar { 
-    appearance: none; -webkit-appearance: none; width: 20px !important; height: 20px !important; 
-    border: 2px solid var(--border); border-radius: 4px; background-color: var(--bg-color); 
-    position: relative; cursor: pointer; margin: 0; vertical-align: middle; transition: background-color 0.2s, border-color 0.2s; 
-}
-#set-pin-taskbar:checked { background-color: var(--accent); border-color: var(--accent); }
-#set-pin-taskbar:checked::after { content: ''; position: absolute; top: 1px; left: 6px; width: 5px; height: 10px; border: solid white; border-width: 0 2px 2px 0; transform: rotate(45deg); }
-
-/* --- FIXED: EPUB EDITOR WORKSPACE STYLES --- */
-#editor-view.active {
-    display: flex !important; /* Overrides the standard block display */
-    flex-direction: column;
-    height: calc(100vh - 70px);
-    padding: 20px;
-    gap: 15px;
-}
-
-.editor-workspace {
-    display: flex;
-    flex-direction: row;
-    gap: 20px;
-    flex: 1; /* Forces the workspace to fill all remaining vertical space */
-    width: 100%;
-    overflow: hidden;
-}
-
-.file-tree {
-    width: 320px; /* Slightly wider for longer file names */
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    box-shadow: var(--shadow);
-}
-
-.file-tree-item {
-    padding: 10px 12px;
-    font-size: 13px;
-    color: var(--text-muted);
-    border-radius: 6px;
-    cursor: pointer;
-    word-break: break-all;
-    transition: background 0.2s, color 0.2s;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.file-tree-item i { font-size: 16px; color: var(--text-color); }
-.file-tree-item:hover { background: var(--border); color: var(--text-color); }
-.file-tree-item.active-file { 
-    background: rgba(59, 130, 246, 0.15); 
-    color: var(--text-color);
-    border-left: 3px solid var(--accent); 
-    border-radius: 0 6px 6px 0; 
-    font-weight: 600;
-}
-
-.code-area {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: var(--shadow);
-}
-
-.editor-toolbar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 15px;
-    background: var(--glass-bg);
-    border-bottom: 1px solid var(--border);
-}
-
-#raw-code-editor {
-    flex: 1;
-    width: 100%;
-    height: 100%; /* Forces textarea to span bottom */
-    border: none;
-    border-radius: 0;
-    margin: 0;
-    padding: 20px;
-    font-family: 'Courier New', Courier, monospace;
-    font-size: 14px;
-    line-height: 1.6;
-    background: var(--bg-color);
-    color: var(--text-color);
-    resize: none;
-}
-#raw-code-editor:focus { outline: none; }
-
-/* --- MOBILE RESPONSIVENESS --- */
-@media (max-width: 768px) {
-    .library-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 15px; }
-    .book-cover { height: 210px; }
-    .view { padding: 15px; }
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Epub Reader</title>
     
-    .bottom-bar { 
-        bottom: 15px;
-        width: calc(100% - 20px); 
-        flex-wrap: wrap; 
-        justify-content: space-between; 
-        padding: 15px; 
-        gap: 10px 0; 
-        border-radius: 16px;
-    }
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="icon" type="image/png" sizes="96x96" href="assets/favicon-96x96.png">
+    <link rel="icon" href="assets/favicon.ico">
+    <link rel="apple-touch-icon" sizes="192x192" href="assets/web-app-manifest-192x192.png">
+    <link rel="manifest" href="assets/site.webmanifest">
+    <meta name="theme-color" content="#18181b">
     
-    .chapter-title { flex: 1 1 100%; margin: 0 0 5px 0; order: 1; font-size: 14px; text-align: left; }
-    .bar-group:first-child { order: 2; margin-left: 0; } 
-    .bar-group:last-child { order: 3; margin-left: auto; } 
-    .icon-btn { font-size: 22px; padding: 6px; } 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
     
-    .right-modal { width: 90%; left: 5%; right: 5%; bottom: 80px; max-height: 70vh; overflow-y: auto;}
-    .large-modal { width: 95%; max-height: 85vh; padding: 15px; }
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
 
-    #editor-view.active { height: calc(100vh - 100px); padding: 10px; }
-    .editor-workspace { flex-direction: column; }
-    .file-tree { width: 100%; height: 35%; flex: none; }
-    .code-area { flex: 1; }
-}
+    <div id="app">
+        <aside id="sidebar" class="collapsed">
+            <div class="sidebar-header">
+                <h3>Menu</h3>
+                <button class="icon-btn" onclick="toggleSidebar()"><i class="ph ph-x"></i></button>
+            </div>
+            <nav class="sidebar-nav">
+                <button onclick="showView('library')"><i class="ph ph-books"></i> Library</button>
+                <button onclick="showView('bookmarks')"><i class="ph ph-bookmarks"></i> Bookmarks</button>
+                
+                <button onclick="showView('editor')"><i class="ph ph-pencil-simple"></i> Edit Book</button>
+                
+                <div class="divider"></div>
+                <input type="file" id="upload-input" accept=".epub" multiple style="display: none;" onchange="handleUpload(event)">
+                <button class="upload-btn" onclick="document.getElementById('upload-input').click()"><i class="ph ph-upload-simple"></i> Upload Novel</button>
+            </nav>
+        </aside>
+
+        <main id="main-content">
+            <header class="top-bar">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <button class="icon-btn" onclick="toggleSidebar()"><i class="ph ph-list"></i></button>
+                    <h2 id="page-title">Library</h2>
+                </div>
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    <button class="icon-btn" id="delete-mode-btn" onclick="toggleDeleteMode()" style="color: var(--danger);" title="Toggle Delete Mode">
+                        <i class="ph ph-x-circle"></i>
+                    </button>
+                    <button class="icon-btn" onclick="toggleDarkMode()" title="Toggle Dark Mode"><i class="ph ph-moon"></i></button>
+                </div>
+            </header>
+
+            <div id="library-view" class="view active">
+                <div class="library-grid" id="library-grid"></div>
+            </div>
+
+            <div id="bookmarks-view" class="view">
+                <ul id="bookmarks-list" class="scroll-list"></ul>
+            </div>
+
+            <div id="editor-view" class="view">
+                <div id="editor-setup">
+                    <p style="color: var(--text-muted); margin-bottom: 20px;">Select a book from your library to extract and edit its raw files.</p>
+                    <div id="editor-book-list" class="library-grid"></div>
+                </div>
+
+                <div id="editor-workspace" class="editor-workspace" style="display: none;">
+                    <div class="file-tree">
+                        <div style="padding: 15px; border-bottom: 1px solid var(--border); font-weight: 600;">EPUB Files</div>
+                        <ul id="editor-file-list" class="scroll-list" style="padding: 10px;"></ul>
+                    </div>
+                    <div class="code-area">
+                        <div class="editor-toolbar">
+                            <span id="editing-file-name" style="font-weight: 500; font-size: 14px;">No file selected</span>
+                            <div style="display: flex; gap: 10px;">
+                                <button class="btn-primary" onclick="saveEditedFile()"><i class="ph ph-floppy-disk"></i> Save File</button>
+                                <button class="btn-secondary" onclick="closeEditorWorkspace()"><i class="ph ph-x"></i> Close</button>
+                            </div>
+                        </div>
+                        <textarea id="raw-code-editor" spellcheck="false" placeholder="Select an HTML or CSS file from the left menu to view its source code..."></textarea>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="reader-container">
+        <div id="viewer"></div>
+        <div class="bottom-bar" id="bottom-taskbar">
+            <div class="bar-group">
+                <button class="icon-btn" onclick="closeReader()" title="Back to Library"><i class="ph ph-house"></i></button>
+                <button class="icon-btn" onclick="rendition.prev()"><i class="ph ph-caret-left"></i></button>
+            </div>
+            <div class="chapter-title" id="chapter-title">Loading...</div>
+            <div class="bar-group">
+                <button class="icon-btn" onclick="toggleTOC()" title="Table of Contents"><i class="ph ph-list-bullets"></i></button>
+                <button class="icon-btn" onclick="saveBookmark()" title="Save Bookmark"><i class="ph ph-heart"></i></button>
+                <button class="icon-btn" onclick="toggleSearch()" title="Global Search"><i class="ph ph-magnifying-glass"></i></button>
+                <button class="icon-btn" onclick="toggleSettings()" title="Settings"><i class="ph ph-faders"></i></button>
+                <button class="icon-btn" onclick="rendition.next()"><i class="ph ph-caret-right"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <div id="settings-modal" class="modal right-modal">
+        <div class="modal-header">
+            <h3>Reader Settings</h3>
+            <button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button>
+        </div>
+        <div class="setting-group">
+            <label>Reading Mode</label>
+            <select id="set-read-mode" onchange="changeReadMode()">
+                <option value="continuous">Continuous Scroll (All Chapters)</option>
+                <option value="scrolled">Single Chapter Scroll (Click Next)</option>
+                <option value="paginated">Paginated (Swipe / Click Next)</option>
+            </select>
+        </div>
+
+        <div class="setting-group">
+            <label>Background Theme</label>
+            <select id="set-reader-theme" onchange="setReaderTheme(this.value)">
+                <option value="dark">Black</option>
+                <option value="light">White</option>
+                <option value="paper">Paper</option>
+                <option value="blue">Light Blue</option>
+            </select>
+        </div>
+
+        <div class="setting-group">
+            <label>Font Size <span id="val-font">18px</span></label>
+            <input type="range" id="set-font" min="12" max="36" value="18" oninput="updateSettings()">
+        </div>
+        <div class="setting-group">
+            <label>Line Height <span id="val-line">1.5</span></label>
+            <input type="range" id="set-line" min="1" max="3" step="0.1" value="1.5" oninput="updateSettings()">
+        </div>
+        <div class="setting-group">
+            <label>Paragraph Spacing <span id="val-para-spacing">0em</span></label>
+            <input type="range" id="set-para-spacing" min="0" max="5" step="0.5" value="0" oninput="updateSettings()">
+        </div>
+        <div class="setting-group">
+            <label>Text Indent <span id="val-indent">0em</span></label>
+            <input type="range" id="set-indent" min="0" max="5" step="0.5" value="0" oninput="updateSettings()">
+        </div>
+
+        <div class="setting-group">
+            <label>Text Align</label>
+            <div class="segment-control">
+                <button class="segment-btn active" id="align-left" onclick="setTextAlign('left')">Left</button>
+                <button class="segment-btn" id="align-center" onclick="setTextAlign('center')">Center</button>
+            </div>
+        </div>
+
+        <div class="setting-group">
+            <label>Font Family</label>
+            <select id="set-font-family" onchange="updateSettings()">
+                <option value="system-ui">System Default</option>
+                <option value="serif">Standard Serif</option>
+                <option value="sans-serif">Standard Sans-Serif</option>
+                <option value="'KoPub Batang', serif">KoPub Batang (Korean)</option>
+                <option value="Georgia, serif">Georgia</option>
+                <option value="'Times New Roman', Times, serif">Times New Roman</option>
+                <option value="Arial, Helvetica, sans-serif">Arial</option>
+            </select>
+        </div>
+        <div class="setting-group">
+            <label>Text Color
+                <input type="color" id="set-text-color" value="#e4e4e7" onchange="updateSettings()" style="width: 30px; height: 30px;">
+            </label>
+        </div>
+        
+        <div class="setting-group" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);">
+            <label style="cursor: pointer;">
+                Pin Taskbar (Don't Hide)
+                <input type="checkbox" id="set-pin-taskbar" onchange="updateSettings()" style="width: auto;">
+            </label>
+        </div>
+    </div>
+
+    <div id="toc-modal" class="modal center-modal large-modal">
+        <div class="modal-header">
+            <h3>Table of Contents</h3>
+            <button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button>
+        </div>
+        <ul id="toc-list" class="scroll-list"></ul>
+    </div>
+
+    <script src="js/globals.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/library.js"></script>
+    <script src="js/reader.js"></script>
+    <script src="js/editor.js"></script>
+    <script src="js/tools.js"></script>
+    
+    <script>
+        window.onload = () => {
+            history.replaceState({ view: 'library' }, '', '#library');
+            loadLibrary();
+        };
+    </script>
+</body>
+</html>

@@ -31,6 +31,9 @@
             <nav class="sidebar-nav">
                 <button onclick="showView('library')"><i class="ph ph-books"></i> Library</button>
                 <button onclick="showView('bookmarks')"><i class="ph ph-bookmarks"></i> Bookmarks</button>
+                
+                <button onclick="showView('editor')"><i class="ph ph-pencil-simple"></i> Edit Book</button>
+                
                 <div class="divider"></div>
                 <input type="file" id="upload-input" accept=".epub" multiple style="display: none;" onchange="handleUpload(event)">
                 <button class="upload-btn" onclick="document.getElementById('upload-input').click()"><i class="ph ph-upload-simple"></i> Upload Novel</button>
@@ -58,6 +61,30 @@
             <div id="bookmarks-view" class="view">
                 <ul id="bookmarks-list" class="scroll-list"></ul>
             </div>
+
+            <div id="editor-view" class="view">
+                <div id="editor-setup">
+                    <p style="color: var(--text-muted); margin-bottom: 20px;">Select a book from your library to extract and edit its raw files.</p>
+                    <div id="editor-book-list" class="library-grid"></div>
+                </div>
+
+                <div id="editor-workspace" class="editor-workspace" style="display: none;">
+                    <div class="file-tree">
+                        <div style="padding: 15px; border-bottom: 1px solid var(--border); font-weight: 600;">EPUB Files</div>
+                        <ul id="editor-file-list" class="scroll-list" style="padding: 10px;"></ul>
+                    </div>
+                    <div class="code-area">
+                        <div class="editor-toolbar">
+                            <span id="editing-file-name" style="font-weight: 500; font-size: 14px;">No file selected</span>
+                            <div style="display: flex; gap: 10px;">
+                                <button class="btn-primary" onclick="saveEditedFile()"><i class="ph ph-floppy-disk"></i> Save File</button>
+                                <button class="btn-secondary" onclick="closeEditorWorkspace()"><i class="ph ph-x"></i> Close</button>
+                            </div>
+                        </div>
+                        <textarea id="raw-code-editor" spellcheck="false" placeholder="Select an HTML or CSS file from the left menu to view its source code..."></textarea>
+                    </div>
+                </div>
+            </div>
         </main>
     </div>
 
@@ -73,38 +100,9 @@
                 <button class="icon-btn" onclick="toggleTOC()" title="Table of Contents"><i class="ph ph-list-bullets"></i></button>
                 <button class="icon-btn" onclick="saveBookmark()" title="Save Bookmark"><i class="ph ph-heart"></i></button>
                 <button class="icon-btn" onclick="toggleSearch()" title="Global Search"><i class="ph ph-magnifying-glass"></i></button>
-                <button class="icon-btn" onclick="toggleEditMode()" title="Edit HTML"><i class="ph ph-code"></i></button>
                 <button class="icon-btn" onclick="toggleSettings()" title="Settings"><i class="ph ph-faders"></i></button>
                 <button class="icon-btn" onclick="rendition.next()"><i class="ph ph-caret-right"></i></button>
             </div>
-        </div>
-    </div>
-
-    <div id="search-modal" class="modal center-modal">
-        <div class="modal-header">
-            <h3>Search Novel</h3>
-            <button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button>
-        </div>
-        <div class="search-controls" style="display:flex; gap:10px;">
-            <input type="text" id="global-search-input" placeholder="Type word or phrase...">
-            <button class="btn-primary" style="margin-bottom:10px;" onclick="runGlobalSearch()">Search</button>
-        </div>
-        <div id="search-results" class="scroll-list"></div>
-    </div>
-
-    <div id="html-editor" class="modal center-modal large-modal">
-        <div class="modal-header">
-            <h3>Edit Current Page HTML</h3>
-            <button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button>
-        </div>
-        <div class="replace-bar">
-            <input type="text" id="find-input" placeholder="Find (Regex supported)">
-            <input type="text" id="replace-input" placeholder="Replace with">
-            <button class="btn-secondary" onclick="executeReplace()">Replace All</button>
-        </div>
-        <textarea id="html-textarea" spellcheck="false"></textarea>
-        <div class="editor-controls">
-            <button class="btn-primary" onclick="applyHTML()">Apply Changes</button>
         </div>
     </div>
 
@@ -113,7 +111,6 @@
             <h3>Reader Settings</h3>
             <button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button>
         </div>
-        
         <div class="setting-group">
             <label>Reading Mode</label>
             <select id="set-read-mode" onchange="changeReadMode()">
@@ -164,7 +161,8 @@
                 <option value="system-ui">System Default</option>
                 <option value="serif">Standard Serif</option>
                 <option value="sans-serif">Standard Sans-Serif</option>
-                <option value="'KoPub Batang', serif">KoPub Batang (Korean)</option> <option value="Georgia, serif">Georgia</option>
+                <option value="'KoPub Batang', serif">KoPub Batang (Korean)</option>
+                <option value="Georgia, serif">Georgia</option>
                 <option value="'Times New Roman', Times, serif">Times New Roman</option>
                 <option value="Arial, Helvetica, sans-serif">Arial</option>
             </select>
@@ -195,6 +193,7 @@
     <script src="js/ui.js"></script>
     <script src="js/library.js"></script>
     <script src="js/reader.js"></script>
+    <script src="js/editor.js"></script>
     <script src="js/tools.js"></script>
     
     <script>

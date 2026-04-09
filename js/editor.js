@@ -621,7 +621,7 @@ window.runEpubCleaner = async function() {
     btn.disabled = false;
 };
 
-// --- FIXED: DEBUGGER CLICK-TO-JUMP ---
+// FIXED: Flawless Click-to-Jump logic avoiding race conditions
 window.runEpubDebugger = async function() {
     if (!window.activeZipEditor) return;
     const consoleEl = document.getElementById('debug-console');
@@ -691,18 +691,16 @@ window.runEpubDebugger = async function() {
                              <div style="color:var(--text-muted); font-family:monospace; margin:4px 0;">${errorText}</div>
                              <div style="font-size:10px; color:var(--accent);"><i class="ph ph-mouse-pointer-click"></i> Click to fix in editor</div>`;
             
-            // EXACT SAME LOGIC AS GLOBAL SEARCH NOW
-            div.onclick = () => {
+            // FIXED: Prevent race condition by extracting logic out of .click()
+            div.onclick = async () => {
                 window.closeAllModals();
                 
                 let targetLi = null;
                 document.querySelectorAll('.file-tree-item').forEach(item => {
-                    if (item.title === path) {
-                        targetLi = item;
-                        item.click(); 
-                    }
+                    if (item.title === path) targetLi = item;
                 });
                 
+                // Expand folder visually without triggering a secondary load
                 if (targetLi) {
                     let folderContent = targetLi.closest('.folder-content');
                     if (folderContent && !folderContent.classList.contains('open')) {
@@ -710,26 +708,31 @@ window.runEpubDebugger = async function() {
                         let header = folderContent.previousElementSibling;
                         if (header) header.classList.add('open');
                     }
-                    
-                    if (lineNum >= 0) {
-                        setTimeout(() => {
-                            if (!window.cmEditor) return;
-                            window.cmEditor.refresh();
-                            
-                            const safeLine = Math.min(lineNum, window.cmEditor.lineCount() - 1);
-                            window.cmEditor.setCursor({line: safeLine, ch: 0});
-                            window.cmEditor.focus();
-                            
-                            try {
-                                const t = window.cmEditor.charCoords({line: safeLine, ch: 0}, "local").top; 
-                                const h = window.cmEditor.getScrollerElement().offsetHeight / 2; 
-                                window.cmEditor.scrollTo(null, t - h - 5);
-                            } catch(e) {}
-                            
-                            window.cmEditor.addLineClass(safeLine, 'background', 'error-line-highlight');
-                            setTimeout(() => window.cmEditor.removeLineClass(safeLine, 'background', 'error-line-highlight'), 4000);
-                        }, 400); 
-                    }
+                }
+                
+                // AWAIT the load precisely once
+                await window.loadFileIntoEditor(path, targetLi);
+                
+                // Wait safely for the browser to inject the text into CodeMirror DOM
+                if (lineNum >= 0) {
+                    setTimeout(() => {
+                        if (!window.cmEditor) return;
+                        
+                        window.cmEditor.refresh(); // Force CM to recalculate height bounds
+                        const safeLine = Math.min(lineNum, window.cmEditor.lineCount() - 1);
+                        
+                        window.cmEditor.focus();
+                        window.cmEditor.setCursor({line: safeLine, ch: 0});
+                        
+                        try {
+                            const t = window.cmEditor.charCoords({line: safeLine, ch: 0}, "local").top; 
+                            const h = window.cmEditor.getScrollerElement().offsetHeight / 2; 
+                            window.cmEditor.scrollTo(null, t - h - 5);
+                        } catch(e) {}
+                        
+                        window.cmEditor.addLineClass(safeLine, 'background', 'error-line-highlight');
+                        setTimeout(() => window.cmEditor.removeLineClass(safeLine, 'background', 'error-line-highlight'), 4000);
+                    }, 250); 
                 }
             };
             consoleEl.appendChild(div);

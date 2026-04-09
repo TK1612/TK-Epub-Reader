@@ -29,6 +29,7 @@ Transform the reader into a professional EPUB IDE with a single click. The edito
 * **TOC & Metadata Management:** Auto-generate your Table of Contents from heading tags (`<h1>`, `<h2>`) and edit book metadata (Title/Author) via a clean UI.
 * **Asset Management:** Import images, stylesheets, or create new blank chapters directly into the EPUB. The editor automatically updates the `.opf` manifest for you.
 * **EPUB Debugger:** Scan the book's manifest against the actual ZIP contents to instantly detect broken links and missing files.
+* **EPUB Base64 String Cleaner**
 * **Revert Save:** Made a mistake? Instantly revert the book back to its original state from when you opened the editor.
 
 ## 💻 Tech Stack

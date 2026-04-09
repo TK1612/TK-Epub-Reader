@@ -69,9 +69,7 @@
                     <button class="toolbar-btn" onclick="openAddFileModal()"><i class="ph ph-file-plus"></i> Add File</button>
                     <button class="toolbar-btn" onclick="openSpellcheckModal()"><i class="ph ph-text-aa"></i> Spellcheck</button>
                     <button class="toolbar-btn" onclick="runEpubDebugger()"><i class="ph ph-bug"></i> Debugger</button>
-                    
                     <button class="toolbar-btn" onclick="openCleanerModal()"><i class="ph ph-broom"></i> Cleaner</button>
-                    
                     <div style="width: 1px; background: var(--border); margin: 0 5px;"></div>
                     <button class="toolbar-btn" onclick="revertToOriginalSave()"><i class="ph ph-clock-counter-clockwise"></i> Revert Save</button>
                 </div>
@@ -140,6 +138,7 @@
             <label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" id="clean-hidden-p" checked> Remove Hidden Paragraphs (height: 0px)</label>
             <label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" id="clean-inline-img" checked> Remove Inline Base64 Images</label>
             <label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" id="clean-orphans" checked> Remove Orphaned Base64 Strings</label>
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" id="clean-nested-p" checked> Fix Overwrapped/Nested Paragraphs (e.g. &lt;p&gt;&lt;p&gt;)</label>
             <label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" id="clean-detect-tags" checked> Detect Unclosed HTML Tags</label>
         </div>
         <button id="run-cleaner-btn" class="btn-primary" style="width: 100%; margin-bottom: 10px;" onclick="runEpubCleaner()"><i class="ph ph-broom"></i> Run Cleaner</button>

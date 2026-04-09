@@ -12,7 +12,6 @@ window.showView = function(viewId) {
         if(targetView) targetView.classList.add('active');
         
         history.pushState({ view: viewId }, '', '#' + viewId);
-        
         let title = "Library";
         if (viewId === 'bookmarks') title = "Bookmarks";
         if (viewId === 'editor') title = "Edit Book";
@@ -25,17 +24,13 @@ window.showView = function(viewId) {
         document.getElementById('editor-main-toolbar').style.display = 'none';
         loadEditorBookList();
     }
-    
-    if (viewId !== 'editor' && window.activeZipEditor !== null) {
-        closeEditorWorkspace();
-    }
+    if (viewId !== 'editor' && window.activeZipEditor !== null) closeEditorWorkspace();
 };
 
 window.loadEditorBookList = async function() {
     const grid = document.getElementById('editor-book-list');
     if (!grid) return;
     grid.innerHTML = '';
-    
     await localforage.iterate(function(value, key) {
         const coverImg = value.cover ? value.cover : 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTUwIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjMmQyZDJkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmb250LXNpemU9IjE0IiBmaWxsPSIjYWNhY2FjIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+Tm8gQ292ZXI8L3RleHQ+PC9zdmc+';
         const card = document.createElement('div');
@@ -68,15 +63,12 @@ window.openEditorWorkspace = async function(bookId, bookTitle) {
     try {
         const bookData = await localforage.getItem(bookId);
         window.originalEpubBuffer = bookData.buffer; 
-        
         const zip = new JSZip();
         window.activeZipEditor = await zip.loadAsync(bookData.buffer);
-        
         refreshFileTree();
         document.getElementById('editing-file-name').innerText = "Workspace Ready: " + bookTitle;
         setTimeout(() => window.cmEditor.refresh(), 100);
     } catch (error) {
-        console.error(error);
         fileListEl.innerHTML = '<div style="padding:15px; color:red;">Error extracting file.</div>';
     }
 };
@@ -126,7 +118,6 @@ window.refreshFileTree = function() {
             li.onclick = () => loadFileIntoEditor(path, li);
             content.appendChild(li);
         });
-
         group.appendChild(header);
         group.appendChild(content);
         fileListEl.appendChild(group);
@@ -137,7 +128,6 @@ window.loadFileIntoEditor = async function(path, liElement) {
     if (!window.activeZipEditor) return;
     document.querySelectorAll('.file-tree-item').forEach(el => el.classList.remove('active-file'));
     if (liElement) liElement.classList.add('active-file');
-    
     document.getElementById('editing-file-name').innerText = path;
     window.activeEditingPath = path;
 
@@ -147,7 +137,6 @@ window.loadFileIntoEditor = async function(path, liElement) {
 
     try {
         const fileObj = window.activeZipEditor.file(path);
-        
         if (path.match(/\.(png|jpe?g|gif|webp|svg)$/i)) {
             cmWrapper.style.display = 'none';
             imgWrapper.style.display = 'flex';
@@ -161,19 +150,14 @@ window.loadFileIntoEditor = async function(path, liElement) {
         cmWrapper.style.display = 'flex';
         window.cmEditor.setValue("Extracting file content...");
 
-        if (path.match(/\.(ttf|otf|woff2?)$/i)) {
-            window.cmEditor.setValue("Binary font file selected. Viewing/Editing not supported.");
-            return;
-        }
+        if (path.match(/\.(ttf|otf|woff2?)$/i)) return window.cmEditor.setValue("Binary font file selected. Viewing/Editing not supported.");
 
         const textContent = await fileObj.async("string");
         window.cmEditor.setValue(textContent);
         if(path.endsWith('.css')) window.cmEditor.setOption("mode", "css");
         else if(path.endsWith('.opf') || path.endsWith('.ncx')) window.cmEditor.setOption("mode", "xml");
         else window.cmEditor.setOption("mode", "htmlmixed");
-    } catch (error) {
-        window.cmEditor.setValue("Error reading file content.");
-    }
+    } catch (error) { window.cmEditor.setValue("Error reading file content."); }
 };
 
 window.editorReplaceSingle = function() {
@@ -215,13 +199,218 @@ window.editorReplaceAll = function() {
     window.cmEditor.setValue(content);
 };
 
+// --- MULTIPLE FILE UPLOAD ---
+window.openAddFileModal = function() {
+    if (!window.activeZipEditor) return;
+    document.getElementById('add-outside-file-input').value = "";
+    document.getElementById('selected-files-list').innerHTML = ""; 
+    window.closeAllModals();
+    document.getElementById('editor-add-file-modal').classList.add('active');
+};
+
+window.updateSelectedFilesList = function() {
+    const fileInput = document.getElementById('add-outside-file-input');
+    const listEl = document.getElementById('selected-files-list');
+    listEl.innerHTML = '';
+    if (fileInput.files.length === 0) return;
+    
+    Array.from(fileInput.files).forEach(file => {
+        const item = document.createElement('div');
+        item.className = 'selected-file-item';
+        let icon = 'ph-file';
+        if (file.type.includes('image')) icon = 'ph-image';
+        else if (file.type.includes('css')) icon = 'ph-file-css';
+        else if (file.type.includes('html')) icon = 'ph-file-html';
+        item.innerHTML = `<i class="ph ${icon}"></i> <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${file.name}</span>`;
+        listEl.appendChild(item);
+    });
+};
+
+window.confirmAddOutsideFile = async function() {
+    const fileInput = document.getElementById('add-outside-file-input');
+    if (fileInput.files.length === 0) return alert("Please select at least one file.");
+    
+    const btn = document.getElementById('confirm-add-file-btn');
+    const originalBtnText = btn.innerText;
+    btn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Importing...';
+    btn.disabled = true;
+
+    const opfPath = Object.keys(window.activeZipEditor.files).find(p => p.endsWith('.opf'));
+    const baseFolder = opfPath ? opfPath.substring(0, opfPath.lastIndexOf('/') + 1) : '';
+    
+    let xmlDoc = null;
+    let manifest = null;
+    if (opfPath) {
+        const opfContent = await window.activeZipEditor.file(opfPath).async("string");
+        xmlDoc = new DOMParser().parseFromString(opfContent, "application/xml");
+        manifest = xmlDoc.getElementsByTagName("manifest")[0];
+    }
+    
+    for (let i = 0; i < fileInput.files.length; i++) {
+        const file = fileInput.files[i];
+        let targetFolder = baseFolder;
+        let mediaType = "application/octet-stream";
+        
+        if (file.type.includes('image')) { targetFolder += 'Images/'; mediaType = file.type; }
+        else if (file.type.includes('css')) { targetFolder += 'Styles/'; mediaType = "text/css"; }
+        else if (file.type.includes('html')) { targetFolder += 'Text/'; mediaType = "application/xhtml+xml"; }
+        else if (file.type.includes('font') || file.name.match(/\.(ttf|otf|woff2?)$/i)) { targetFolder += 'Fonts/'; mediaType = "font/" + file.name.split('.').pop(); }
+        
+        const targetPath = targetFolder + file.name;
+        const arrayBuffer = await file.arrayBuffer();
+        window.activeZipEditor.file(targetPath, arrayBuffer);
+        
+        if (manifest) {
+            const id = "file_" + Date.now() + "_" + i; 
+            const item = xmlDoc.createElement("item");
+            item.setAttribute("id", id);
+            item.setAttribute("href", targetPath.replace(baseFolder, '')); 
+            item.setAttribute("media-type", mediaType);
+            manifest.appendChild(item);
+        }
+    }
+    
+    if (opfPath && xmlDoc) window.activeZipEditor.file(opfPath, new XMLSerializer().serializeToString(xmlDoc));
+    await window.saveEditedFile();
+    refreshFileTree();
+    btn.innerHTML = originalBtnText;
+    btn.disabled = false;
+    window.closeAllModals();
+    alert(`Successfully imported and registered ${fileInput.files.length} file(s)!`);
+};
+
+// --- NEW: THE PYTHON EPUB CLEANER PORT ---
+window.openCleanerModal = function() {
+    if (!window.activeZipEditor) return;
+    window.closeAllModals();
+    document.getElementById('cleaner-console').innerHTML = 'Ready to scan. Select options above and click Run.';
+    document.getElementById('editor-cleaner-modal').classList.add('active');
+};
+
+window.runEpubCleaner = async function() {
+    const btn = document.getElementById('run-cleaner-btn');
+    const consoleEl = document.getElementById('cleaner-console');
+    const originalText = btn.innerHTML;
+    
+    btn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Processing...';
+    btn.disabled = true;
+    consoleEl.innerHTML = '';
+
+    const doHiddenP = document.getElementById('clean-hidden-p').checked;
+    const doInlineImg = document.getElementById('clean-inline-img').checked;
+    const doOrphans = document.getElementById('clean-orphans').checked;
+    const doTags = document.getElementById('clean-detect-tags').checked;
+
+    const htmlPaths = Object.keys(window.activeZipEditor.files).filter(p => p.match(/\.(html|xhtml|htm|xml)$/i));
+    let scanned = 0;
+    let modifiedFiles = 0;
+    let removedTotal = 0;
+    let unclosedTotal = 0;
+
+    for (let path of htmlPaths) {
+        let originalText = await window.activeZipEditor.file(path).async("string");
+        let cleanedText = originalText;
+        let removedItems = [];
+        let unclosedTags = [];
+        scanned++;
+
+        // 1. Regex Cleanup logic
+        if (doHiddenP) {
+            const re = /<p\s+style=['"](?:[^'"]*)height:\s*0px;[^>]*>[\s\S]*?<\/p>/gi;
+            const matches = cleanedText.match(re);
+            if (matches) removedItems.push(...matches);
+            cleanedText = cleanedText.replace(re, "");
+        }
+        
+        if (doInlineImg) {
+            const re = /data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=\s]+/gi;
+            const matches = cleanedText.match(re);
+            if (matches) removedItems.push(...matches);
+            cleanedText = cleanedText.replace(re, "");
+        }
+
+        if (doOrphans) {
+            const re = /[A-Za-z0-9+/=]{40,}/g; // Python script's logic
+            const matches = cleanedText.match(re);
+            if (matches) removedItems.push(...matches);
+            cleanedText = cleanedText.replace(re, "");
+        }
+
+        // 2. Custom Stack Parser for Unclosed Tags
+        if (doTags) {
+            const voidElements = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
+            const tagRegex = /<\/?([a-z0-9:]+)[^>]*>/gi;
+            let match;
+            const stack = [];
+            
+            const getLineCol = (index) => {
+                const upTo = cleanedText.substring(0, index);
+                const lines = upTo.split('\n');
+                return { line: lines.length, col: lines[lines.length - 1].length + 1 };
+            };
+
+            while ((match = tagRegex.exec(cleanedText)) !== null) {
+                const isClosing = match[0].startsWith('</');
+                const tagName = match[1].toLowerCase();
+                const isSelfClosing = match[0].endsWith('/>') || voidElements.has(tagName);
+
+                if (isClosing) {
+                    if (stack.length > 0 && stack[stack.length - 1].tag === tagName) stack.pop();
+                } else if (!isSelfClosing) {
+                    stack.push({ tag: tagName, pos: getLineCol(match.index) });
+                }
+            }
+
+            for (const item of stack) {
+                if(item.tag === 'html' || item.tag === 'body' || item.tag === '?xml') continue; // Ignore root wrappers just in case
+                unclosedTags.push(`&lt;${item.tag}&gt; opened at Line ${item.pos.line}, Col ${item.pos.col} but never closed.`);
+            }
+        }
+
+        // Update zip if changed
+        if (cleanedText !== originalText) {
+            window.activeZipEditor.file(path, cleanedText);
+            modifiedFiles++;
+            removedTotal += removedItems.length;
+        }
+
+        if (unclosedTags.length > 0) unclosedTotal += unclosedTags.length;
+
+        // Print Report
+        if (removedItems.length > 0 || unclosedTags.length > 0) {
+            consoleEl.innerHTML += `<div class="debug-log-item"><strong style="color:var(--accent);">== ${path} ==</strong></div>`;
+            if (removedItems.length > 0) {
+                consoleEl.innerHTML += `<div class="debug-log-item" style="color:var(--success);">Removed ${removedItems.length} bloat items.</div>`;
+            }
+            if (unclosedTags.length > 0) {
+                consoleEl.innerHTML += `<div class="debug-log-item error">Found ${unclosedTags.length} unclosed tags:<br>${unclosedTags.join('<br>')}</div>`;
+            }
+        }
+    }
+
+    if (removedTotal === 0 && unclosedTotal === 0) {
+        consoleEl.innerHTML = `<div class="debug-log-item success">Scan complete. No hidden paragraphs, blobs, or unclosed tags found in ${scanned} files.</div>`;
+    } else {
+        consoleEl.innerHTML += `<div class="debug-log-item" style="border-top:2px solid var(--border); margin-top:10px;"><strong style="color:var(--accent);">SUMMARY:</strong> Scanned ${scanned} files. Removed ${removedTotal} blobs. Found ${unclosedTotal} unclosed tags. <br><br><strong>Please click 'Save File' in the editor to permanently write these changes!</strong></div>`;
+        
+        // If the current file in the editor was modified by the cleaner, refresh CodeMirror
+        if (window.activeEditingPath && window.activeZipEditor.file(window.activeEditingPath)) {
+            const newText = await window.activeZipEditor.file(window.activeEditingPath).async("string");
+            window.cmEditor.setValue(newText);
+        }
+    }
+
+    btn.innerHTML = originalText;
+    btn.disabled = false;
+};
+
+// ... Rest of the utilities (Global Search, Metadata, etc.) ...
 window.openGlobalEditSearch = function() {
     if (!window.activeZipEditor) return;
     window.closeAllModals();
     document.getElementById('editor-global-search-results').innerHTML = '';
     document.getElementById('editor-global-search-modal').classList.add('active');
 };
-
 window.runGlobalEditSearch = async function() {
     const query = document.getElementById('editor-global-search-input').value;
     const useRegex = document.getElementById('editor-global-use-regex').checked;
@@ -276,7 +465,6 @@ window.openMetadataEditor = async function() {
     window.closeAllModals();
     document.getElementById('editor-metadata-modal').classList.add('active');
 };
-
 window.saveMetadata = async function() {
     const btn = document.getElementById('save-meta-btn'); btn.innerText = "Saving...";
     try {
@@ -326,7 +514,6 @@ window.generateTocFromHeadings = async function() {
     listEl.innerHTML = '<div style="padding:10px;">Scanning files...</div>';
     
     let generatedList = [];
-    
     for (let path of htmlPaths) {
         const content = await window.activeZipEditor.file(path).async("string");
         const match = content.match(/<h[12][^>]*>(.*?)<\/h[12]>/i);
@@ -364,92 +551,6 @@ window.saveTocEdits = async function() {
         btn.innerText = "Saved!";
         setTimeout(() => { btn.innerText = "Save TOC XML"; window.closeAllModals(); }, 1000);
     } catch(e) { btn.innerText = "Error"; }
-};
-
-window.openAddFileModal = function() {
-    if (!window.activeZipEditor) return;
-    document.getElementById('add-outside-file-input').value = "";
-    document.getElementById('selected-files-list').innerHTML = ""; 
-    window.closeAllModals();
-    document.getElementById('editor-add-file-modal').classList.add('active');
-};
-
-window.updateSelectedFilesList = function() {
-    const fileInput = document.getElementById('add-outside-file-input');
-    const listEl = document.getElementById('selected-files-list');
-    listEl.innerHTML = '';
-    
-    if (fileInput.files.length === 0) return;
-    
-    Array.from(fileInput.files).forEach(file => {
-        const item = document.createElement('div');
-        item.className = 'selected-file-item';
-        let icon = 'ph-file';
-        if (file.type.includes('image')) icon = 'ph-image';
-        else if (file.type.includes('css')) icon = 'ph-file-css';
-        else if (file.type.includes('html')) icon = 'ph-file-html';
-        item.innerHTML = `<i class="ph ${icon}"></i> <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${file.name}</span>`;
-        listEl.appendChild(item);
-    });
-};
-
-window.confirmAddOutsideFile = async function() {
-    const fileInput = document.getElementById('add-outside-file-input');
-    if (fileInput.files.length === 0) return alert("Please select at least one file.");
-    
-    const btn = document.getElementById('confirm-add-file-btn');
-    const originalBtnText = btn.innerText;
-    btn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Importing...';
-    btn.disabled = true;
-
-    const opfPath = Object.keys(window.activeZipEditor.files).find(p => p.endsWith('.opf'));
-    const baseFolder = opfPath ? opfPath.substring(0, opfPath.lastIndexOf('/') + 1) : '';
-    
-    let xmlDoc = null;
-    let manifest = null;
-    
-    if (opfPath) {
-        const opfContent = await window.activeZipEditor.file(opfPath).async("string");
-        xmlDoc = new DOMParser().parseFromString(opfContent, "application/xml");
-        manifest = xmlDoc.getElementsByTagName("manifest")[0];
-    }
-    
-    for (let i = 0; i < fileInput.files.length; i++) {
-        const file = fileInput.files[i];
-        let targetFolder = baseFolder;
-        let mediaType = "application/octet-stream";
-        
-        if (file.type.includes('image')) { targetFolder += 'Images/'; mediaType = file.type; }
-        else if (file.type.includes('css')) { targetFolder += 'Styles/'; mediaType = "text/css"; }
-        else if (file.type.includes('html')) { targetFolder += 'Text/'; mediaType = "application/xhtml+xml"; }
-        else if (file.type.includes('font') || file.name.match(/\.(ttf|otf|woff2?)$/i)) { targetFolder += 'Fonts/'; mediaType = "font/" + file.name.split('.').pop(); }
-        
-        const targetPath = targetFolder + file.name;
-        const arrayBuffer = await file.arrayBuffer();
-        
-        window.activeZipEditor.file(targetPath, arrayBuffer);
-        
-        if (manifest) {
-            const id = "file_" + Date.now() + "_" + i; 
-            const item = xmlDoc.createElement("item");
-            item.setAttribute("id", id);
-            item.setAttribute("href", targetPath.replace(baseFolder, '')); 
-            item.setAttribute("media-type", mediaType);
-            manifest.appendChild(item);
-        }
-    }
-    
-    if (opfPath && xmlDoc) {
-        window.activeZipEditor.file(opfPath, new XMLSerializer().serializeToString(xmlDoc));
-    }
-    
-    await window.saveEditedFile();
-    refreshFileTree();
-    
-    btn.innerHTML = originalBtnText;
-    btn.disabled = false;
-    window.closeAllModals();
-    alert(`Successfully imported and registered ${fileInput.files.length} file(s)!`);
 };
 
 window.openSpellcheckModal = async function() {
@@ -498,7 +599,6 @@ window.openSpellcheckModal = async function() {
         const div = document.createElement('div');
         div.className = 'spellcheck-item';
         div.innerHTML = `<span class="spellcheck-word">${word}</span> <span class="spellcheck-count">${wordMap[word]} <i class="ph ph-magnifying-glass"></i></span>`;
-        
         div.onclick = () => {
             document.getElementById('editor-global-search-input').value = word;
             document.getElementById('editor-global-use-regex').checked = false;

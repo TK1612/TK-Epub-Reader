@@ -175,6 +175,12 @@ textarea { flex: 1; font-family: monospace; resize: none; }
 [data-theme="dark"] .CodeMirror { color: #e4e4e7; }
 [data-theme="light"] .CodeMirror { color: #18181b; }
 
+/* FIXED: Override CodeMirror's default red syntax block for mismatched tags to be Blue! */
+.CodeMirror .cm-error { background-color: rgba(59, 130, 246, 0.5) !important; color: #ffffff !important; border-radius: 2px; }
+
+/* Highlights the exact line in CodeMirror causing the XML error (Now Blue!) */
+.error-line-highlight { background: rgba(59, 130, 246, 0.35) !important; }
+
 .search-result-item { padding: 10px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; background: var(--surface); cursor: pointer; font-size: 13px; transition: background 0.2s; }
 .search-result-item:hover { background: var(--border); }
 .search-result-file { font-weight: 600; color: var(--accent); margin-bottom: 4px; }
@@ -188,82 +194,17 @@ textarea { flex: 1; font-family: monospace; resize: none; }
 .toc-edit-row input { margin-bottom: 0; border: none; background: var(--bg-color); flex: 1; }
 
 /* --- ENHANCED TYPO & WORD INSPECTOR STYLES --- */
-.spellcheck-header {
-    display: flex;
-    justify-content: space-between;
-    padding: 10px 15px;
-    background: var(--surface);
-    font-weight: 600;
-    font-size: 12px;
-    color: var(--text-muted);
-    border-bottom: 2px solid var(--border);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    border-radius: 8px 8px 0 0;
-}
-
-.spellcheck-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 15px;
-    border-bottom: 1px solid var(--border);
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.spellcheck-item:hover { 
-    background: rgba(59, 130, 246, 0.1); 
-    padding-left: 20px; 
-}
-
-/* FIXED: White text with generic background */
-.spellcheck-word { 
-    font-weight: 600; 
-    color: var(--text-color); 
-    font-size: 14px; 
-    font-family: 'Courier New', Courier, monospace;
-    background: var(--surface);
-    padding: 3px 8px;
-    border-radius: 6px;
-    border: 1px solid var(--border);
-}
-
-.spellcheck-count { 
-    font-size: 12px; 
-    color: var(--text-color); 
-    background: var(--surface); 
-    padding: 4px 10px; 
-    border-radius: 12px;
-    border: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-weight: 500;
-}
-
+.spellcheck-header { display: flex; justify-content: space-between; padding: 10px 15px; background: var(--surface); font-weight: 600; font-size: 12px; color: var(--text-muted); border-bottom: 2px solid var(--border); text-transform: uppercase; letter-spacing: 0.5px; border-radius: 8px 8px 0 0; }
+.spellcheck-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; border-bottom: 1px solid var(--border); cursor: pointer; transition: all 0.2s ease; }
+.spellcheck-item:hover { background: rgba(59, 130, 246, 0.1); padding-left: 20px; }
+.spellcheck-word { font-weight: 600; color: var(--text-color); font-size: 14px; font-family: 'Courier New', Courier, monospace; background: var(--surface); padding: 3px 8px; border-radius: 6px; border: 1px solid var(--border); }
+.spellcheck-count { font-size: 12px; color: var(--text-color); background: var(--surface); padding: 4px 10px; border-radius: 12px; border: 1px solid var(--border); display: flex; align-items: center; gap: 6px; font-weight: 500; }
 .spellcheck-count i { color: var(--accent); font-size: 14px; }
 
 /* --- CUSTOM FILE UPLOAD DROPZONE --- */
-.file-upload-dropzone {
-    border: 2px dashed var(--border);
-    border-radius: 8px;
-    padding: 25px;
-    text-align: center;
-    cursor: pointer;
-    margin-top: 10px;
-    transition: all 0.2s ease;
-    background: rgba(0, 0, 0, 0.02);
-    color: var(--text-muted);
-}
+.file-upload-dropzone { border: 2px dashed var(--border); border-radius: 8px; padding: 25px; text-align: center; cursor: pointer; margin-top: 10px; transition: all 0.2s ease; background: rgba(0, 0, 0, 0.02); color: var(--text-muted); }
 [data-theme="dark"] .file-upload-dropzone { background: rgba(255, 255, 255, 0.02); }
-
-.file-upload-dropzone:hover {
-    border-color: var(--accent);
-    color: var(--accent);
-    background: rgba(59, 130, 246, 0.05);
-}
-
+.file-upload-dropzone:hover { border-color: var(--accent); color: var(--accent); background: rgba(59, 130, 246, 0.05); }
 .file-upload-dropzone i { font-size: 32px; display: block; margin-bottom: 8px; }
 .selected-files-list { margin-top: 10px; max-height: 120px; overflow-y: auto; font-size: 12px; color: var(--text-color); }
 .selected-file-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--surface); border-radius: 6px; margin-bottom: 5px; border: 1px solid var(--border); }
@@ -286,5 +227,3 @@ textarea { flex: 1; font-family: monospace; resize: none; }
     .file-tree { width: 100%; height: 35%; flex: none; }
     .code-area { flex: 1; }
 }
-/* Highlights the exact line in CodeMirror causing the XML error (Now Blue!) */
-.error-line-highlight { background: rgba(59, 130, 246, 0.35) !important; }

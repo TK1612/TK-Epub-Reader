@@ -286,5 +286,5 @@ textarea { flex: 1; font-family: monospace; resize: none; }
     .file-tree { width: 100%; height: 35%; flex: none; }
     .code-area { flex: 1; }
 }
-/* Highlights the exact line in CodeMirror causing the XML error */
-.error-line-highlight { background: rgba(239, 68, 68, 0.25) !important; }
+/* Highlights the exact line in CodeMirror causing the XML error (Now Blue!) */
+.error-line-highlight { background: rgba(59, 130, 246, 0.35) !important; }

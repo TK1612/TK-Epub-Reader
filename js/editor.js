@@ -822,7 +822,7 @@ window.revertToOriginalSave = async function() {
     }
 };
 
-// --- NEW: DOWNLOAD EDITED EPUB ---
+// --- NEW: DOWNLOAD EDITED EPUB (With Original Title Name) ---
 window.downloadEditedEpub = async function() {
     if (!window.activeZipEditor || !window.activeBookIdForEditor) return alert("Open a book first.");
 
@@ -832,6 +832,7 @@ window.downloadEditedEpub = async function() {
     btn.disabled = true;
 
     try {
+        // Ensure the currently open text file is saved to the ZIP in memory before downloading
         if (window.cmEditor && window.activeEditingPath) {
             if (!window.activeEditingPath.match(/\.(png|jpe?g|gif|webp|svg|ttf|otf|woff2?)$/i)) {
                 window.activeZipEditor.file(window.activeEditingPath, window.cmEditor.getValue());
@@ -848,7 +849,9 @@ window.downloadEditedEpub = async function() {
         try {
             const bookData = await localforage.getItem(window.activeBookIdForEditor);
             if (bookData && bookData.title) {
-                filename = bookData.title.replace(/[^a-z0-9]/gi, '_').toLowerCase() + ".epub";
+                // FIXED: Keeps exact capitalization, spaces, and Korean/Chinese characters.
+                // Only removes characters that are strictly illegal in Windows/Mac filenames.
+                filename = bookData.title.replace(/[<>:"/\\|?*]+/g, '').trim() + ".epub";
             }
         } catch (e) {}
 

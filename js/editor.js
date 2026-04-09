@@ -148,6 +148,7 @@ window.loadFileIntoEditor = async function(path, liElement) {
 
         imgWrapper.style.display = 'none';
         cmWrapper.style.display = 'flex';
+        setTimeout(() => window.cmEditor.refresh(), 10);
         window.cmEditor.setValue("Extracting file content...");
 
         if (path.match(/\.(ttf|otf|woff2?)$/i)) return window.cmEditor.setValue("Binary font file selected. Viewing/Editing not supported.");
@@ -199,218 +200,13 @@ window.editorReplaceAll = function() {
     window.cmEditor.setValue(content);
 };
 
-// --- MULTIPLE FILE UPLOAD ---
-window.openAddFileModal = function() {
-    if (!window.activeZipEditor) return;
-    document.getElementById('add-outside-file-input').value = "";
-    document.getElementById('selected-files-list').innerHTML = ""; 
-    window.closeAllModals();
-    document.getElementById('editor-add-file-modal').classList.add('active');
-};
-
-window.updateSelectedFilesList = function() {
-    const fileInput = document.getElementById('add-outside-file-input');
-    const listEl = document.getElementById('selected-files-list');
-    listEl.innerHTML = '';
-    if (fileInput.files.length === 0) return;
-    
-    Array.from(fileInput.files).forEach(file => {
-        const item = document.createElement('div');
-        item.className = 'selected-file-item';
-        let icon = 'ph-file';
-        if (file.type.includes('image')) icon = 'ph-image';
-        else if (file.type.includes('css')) icon = 'ph-file-css';
-        else if (file.type.includes('html')) icon = 'ph-file-html';
-        item.innerHTML = `<i class="ph ${icon}"></i> <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${file.name}</span>`;
-        listEl.appendChild(item);
-    });
-};
-
-window.confirmAddOutsideFile = async function() {
-    const fileInput = document.getElementById('add-outside-file-input');
-    if (fileInput.files.length === 0) return alert("Please select at least one file.");
-    
-    const btn = document.getElementById('confirm-add-file-btn');
-    const originalBtnText = btn.innerText;
-    btn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Importing...';
-    btn.disabled = true;
-
-    const opfPath = Object.keys(window.activeZipEditor.files).find(p => p.endsWith('.opf'));
-    const baseFolder = opfPath ? opfPath.substring(0, opfPath.lastIndexOf('/') + 1) : '';
-    
-    let xmlDoc = null;
-    let manifest = null;
-    if (opfPath) {
-        const opfContent = await window.activeZipEditor.file(opfPath).async("string");
-        xmlDoc = new DOMParser().parseFromString(opfContent, "application/xml");
-        manifest = xmlDoc.getElementsByTagName("manifest")[0];
-    }
-    
-    for (let i = 0; i < fileInput.files.length; i++) {
-        const file = fileInput.files[i];
-        let targetFolder = baseFolder;
-        let mediaType = "application/octet-stream";
-        
-        if (file.type.includes('image')) { targetFolder += 'Images/'; mediaType = file.type; }
-        else if (file.type.includes('css')) { targetFolder += 'Styles/'; mediaType = "text/css"; }
-        else if (file.type.includes('html')) { targetFolder += 'Text/'; mediaType = "application/xhtml+xml"; }
-        else if (file.type.includes('font') || file.name.match(/\.(ttf|otf|woff2?)$/i)) { targetFolder += 'Fonts/'; mediaType = "font/" + file.name.split('.').pop(); }
-        
-        const targetPath = targetFolder + file.name;
-        const arrayBuffer = await file.arrayBuffer();
-        window.activeZipEditor.file(targetPath, arrayBuffer);
-        
-        if (manifest) {
-            const id = "file_" + Date.now() + "_" + i; 
-            const item = xmlDoc.createElement("item");
-            item.setAttribute("id", id);
-            item.setAttribute("href", targetPath.replace(baseFolder, '')); 
-            item.setAttribute("media-type", mediaType);
-            manifest.appendChild(item);
-        }
-    }
-    
-    if (opfPath && xmlDoc) window.activeZipEditor.file(opfPath, new XMLSerializer().serializeToString(xmlDoc));
-    await window.saveEditedFile();
-    refreshFileTree();
-    btn.innerHTML = originalBtnText;
-    btn.disabled = false;
-    window.closeAllModals();
-    alert(`Successfully imported and registered ${fileInput.files.length} file(s)!`);
-};
-
-// --- NEW: THE PYTHON EPUB CLEANER PORT ---
-window.openCleanerModal = function() {
-    if (!window.activeZipEditor) return;
-    window.closeAllModals();
-    document.getElementById('cleaner-console').innerHTML = 'Ready to scan. Select options above and click Run.';
-    document.getElementById('editor-cleaner-modal').classList.add('active');
-};
-
-window.runEpubCleaner = async function() {
-    const btn = document.getElementById('run-cleaner-btn');
-    const consoleEl = document.getElementById('cleaner-console');
-    const originalText = btn.innerHTML;
-    
-    btn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Processing...';
-    btn.disabled = true;
-    consoleEl.innerHTML = '';
-
-    const doHiddenP = document.getElementById('clean-hidden-p').checked;
-    const doInlineImg = document.getElementById('clean-inline-img').checked;
-    const doOrphans = document.getElementById('clean-orphans').checked;
-    const doTags = document.getElementById('clean-detect-tags').checked;
-
-    const htmlPaths = Object.keys(window.activeZipEditor.files).filter(p => p.match(/\.(html|xhtml|htm|xml)$/i));
-    let scanned = 0;
-    let modifiedFiles = 0;
-    let removedTotal = 0;
-    let unclosedTotal = 0;
-
-    for (let path of htmlPaths) {
-        let originalText = await window.activeZipEditor.file(path).async("string");
-        let cleanedText = originalText;
-        let removedItems = [];
-        let unclosedTags = [];
-        scanned++;
-
-        // 1. Regex Cleanup logic
-        if (doHiddenP) {
-            const re = /<p\s+style=['"](?:[^'"]*)height:\s*0px;[^>]*>[\s\S]*?<\/p>/gi;
-            const matches = cleanedText.match(re);
-            if (matches) removedItems.push(...matches);
-            cleanedText = cleanedText.replace(re, "");
-        }
-        
-        if (doInlineImg) {
-            const re = /data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=\s]+/gi;
-            const matches = cleanedText.match(re);
-            if (matches) removedItems.push(...matches);
-            cleanedText = cleanedText.replace(re, "");
-        }
-
-        if (doOrphans) {
-            const re = /[A-Za-z0-9+/=]{40,}/g; // Python script's logic
-            const matches = cleanedText.match(re);
-            if (matches) removedItems.push(...matches);
-            cleanedText = cleanedText.replace(re, "");
-        }
-
-        // 2. Custom Stack Parser for Unclosed Tags
-        if (doTags) {
-            const voidElements = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
-            const tagRegex = /<\/?([a-z0-9:]+)[^>]*>/gi;
-            let match;
-            const stack = [];
-            
-            const getLineCol = (index) => {
-                const upTo = cleanedText.substring(0, index);
-                const lines = upTo.split('\n');
-                return { line: lines.length, col: lines[lines.length - 1].length + 1 };
-            };
-
-            while ((match = tagRegex.exec(cleanedText)) !== null) {
-                const isClosing = match[0].startsWith('</');
-                const tagName = match[1].toLowerCase();
-                const isSelfClosing = match[0].endsWith('/>') || voidElements.has(tagName);
-
-                if (isClosing) {
-                    if (stack.length > 0 && stack[stack.length - 1].tag === tagName) stack.pop();
-                } else if (!isSelfClosing) {
-                    stack.push({ tag: tagName, pos: getLineCol(match.index) });
-                }
-            }
-
-            for (const item of stack) {
-                if(item.tag === 'html' || item.tag === 'body' || item.tag === '?xml') continue; // Ignore root wrappers just in case
-                unclosedTags.push(`&lt;${item.tag}&gt; opened at Line ${item.pos.line}, Col ${item.pos.col} but never closed.`);
-            }
-        }
-
-        // Update zip if changed
-        if (cleanedText !== originalText) {
-            window.activeZipEditor.file(path, cleanedText);
-            modifiedFiles++;
-            removedTotal += removedItems.length;
-        }
-
-        if (unclosedTags.length > 0) unclosedTotal += unclosedTags.length;
-
-        // Print Report
-        if (removedItems.length > 0 || unclosedTags.length > 0) {
-            consoleEl.innerHTML += `<div class="debug-log-item"><strong style="color:var(--accent);">== ${path} ==</strong></div>`;
-            if (removedItems.length > 0) {
-                consoleEl.innerHTML += `<div class="debug-log-item" style="color:var(--success);">Removed ${removedItems.length} bloat items.</div>`;
-            }
-            if (unclosedTags.length > 0) {
-                consoleEl.innerHTML += `<div class="debug-log-item error">Found ${unclosedTags.length} unclosed tags:<br>${unclosedTags.join('<br>')}</div>`;
-            }
-        }
-    }
-
-    if (removedTotal === 0 && unclosedTotal === 0) {
-        consoleEl.innerHTML = `<div class="debug-log-item success">Scan complete. No hidden paragraphs, blobs, or unclosed tags found in ${scanned} files.</div>`;
-    } else {
-        consoleEl.innerHTML += `<div class="debug-log-item" style="border-top:2px solid var(--border); margin-top:10px;"><strong style="color:var(--accent);">SUMMARY:</strong> Scanned ${scanned} files. Removed ${removedTotal} blobs. Found ${unclosedTotal} unclosed tags. <br><br><strong>Please click 'Save File' in the editor to permanently write these changes!</strong></div>`;
-        
-        // If the current file in the editor was modified by the cleaner, refresh CodeMirror
-        if (window.activeEditingPath && window.activeZipEditor.file(window.activeEditingPath)) {
-            const newText = await window.activeZipEditor.file(window.activeEditingPath).async("string");
-            window.cmEditor.setValue(newText);
-        }
-    }
-
-    btn.innerHTML = originalText;
-    btn.disabled = false;
-};
-
-// ... Rest of the utilities (Global Search, Metadata, etc.) ...
 window.openGlobalEditSearch = function() {
     if (!window.activeZipEditor) return;
     window.closeAllModals();
     document.getElementById('editor-global-search-results').innerHTML = '';
     document.getElementById('editor-global-search-modal').classList.add('active');
 };
+
 window.runGlobalEditSearch = async function() {
     const query = document.getElementById('editor-global-search-input').value;
     const useRegex = document.getElementById('editor-global-use-regex').checked;
@@ -465,6 +261,7 @@ window.openMetadataEditor = async function() {
     window.closeAllModals();
     document.getElementById('editor-metadata-modal').classList.add('active');
 };
+
 window.saveMetadata = async function() {
     const btn = document.getElementById('save-meta-btn'); btn.innerText = "Saving...";
     try {
@@ -553,6 +350,85 @@ window.saveTocEdits = async function() {
     } catch(e) { btn.innerText = "Error"; }
 };
 
+window.openAddFileModal = function() {
+    if (!window.activeZipEditor) return;
+    document.getElementById('add-outside-file-input').value = "";
+    document.getElementById('selected-files-list').innerHTML = ""; 
+    window.closeAllModals();
+    document.getElementById('editor-add-file-modal').classList.add('active');
+};
+
+window.updateSelectedFilesList = function() {
+    const fileInput = document.getElementById('add-outside-file-input');
+    const listEl = document.getElementById('selected-files-list');
+    listEl.innerHTML = '';
+    if (fileInput.files.length === 0) return;
+    
+    Array.from(fileInput.files).forEach(file => {
+        const item = document.createElement('div');
+        item.className = 'selected-file-item';
+        let icon = 'ph-file';
+        if (file.type.includes('image')) icon = 'ph-image';
+        else if (file.type.includes('css')) icon = 'ph-file-css';
+        else if (file.type.includes('html')) icon = 'ph-file-html';
+        item.innerHTML = `<i class="ph ${icon}"></i> <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${file.name}</span>`;
+        listEl.appendChild(item);
+    });
+};
+
+window.confirmAddOutsideFile = async function() {
+    const fileInput = document.getElementById('add-outside-file-input');
+    if (fileInput.files.length === 0) return alert("Please select at least one file.");
+    
+    const btn = document.getElementById('confirm-add-file-btn');
+    const originalBtnText = btn.innerText;
+    btn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Importing...';
+    btn.disabled = true;
+
+    const opfPath = Object.keys(window.activeZipEditor.files).find(p => p.endsWith('.opf'));
+    const baseFolder = opfPath ? opfPath.substring(0, opfPath.lastIndexOf('/') + 1) : '';
+    
+    let xmlDoc = null;
+    let manifest = null;
+    if (opfPath) {
+        const opfContent = await window.activeZipEditor.file(opfPath).async("string");
+        xmlDoc = new DOMParser().parseFromString(opfContent, "application/xml");
+        manifest = xmlDoc.getElementsByTagName("manifest")[0];
+    }
+    
+    for (let i = 0; i < fileInput.files.length; i++) {
+        const file = fileInput.files[i];
+        let targetFolder = baseFolder;
+        let mediaType = "application/octet-stream";
+        
+        if (file.type.includes('image')) { targetFolder += 'Images/'; mediaType = file.type; }
+        else if (file.type.includes('css')) { targetFolder += 'Styles/'; mediaType = "text/css"; }
+        else if (file.type.includes('html')) { targetFolder += 'Text/'; mediaType = "application/xhtml+xml"; }
+        else if (file.type.includes('font') || file.name.match(/\.(ttf|otf|woff2?)$/i)) { targetFolder += 'Fonts/'; mediaType = "font/" + file.name.split('.').pop(); }
+        
+        const targetPath = targetFolder + file.name;
+        const arrayBuffer = await file.arrayBuffer();
+        window.activeZipEditor.file(targetPath, arrayBuffer);
+        
+        if (manifest) {
+            const id = "file_" + Date.now() + "_" + i; 
+            const item = xmlDoc.createElement("item");
+            item.setAttribute("id", id);
+            item.setAttribute("href", targetPath.replace(baseFolder, '')); 
+            item.setAttribute("media-type", mediaType);
+            manifest.appendChild(item);
+        }
+    }
+    
+    if (opfPath && xmlDoc) window.activeZipEditor.file(opfPath, new XMLSerializer().serializeToString(xmlDoc));
+    await window.saveEditedFile();
+    refreshFileTree();
+    btn.innerHTML = originalBtnText;
+    btn.disabled = false;
+    window.closeAllModals();
+    alert(`Successfully imported and registered ${fileInput.files.length} file(s)!`);
+};
+
 window.openSpellcheckModal = async function() {
     if (!window.activeZipEditor) return;
     
@@ -609,33 +485,252 @@ window.openSpellcheckModal = async function() {
     });
 };
 
+window.openCleanerModal = function() {
+    if (!window.activeZipEditor) return;
+    window.closeAllModals();
+    document.getElementById('cleaner-console').innerHTML = 'Ready to scan. Select options above and click Run.';
+    document.getElementById('editor-cleaner-modal').classList.add('active');
+};
+
+window.runEpubCleaner = async function() {
+    const btn = document.getElementById('run-cleaner-btn');
+    const consoleEl = document.getElementById('cleaner-console');
+    const originalText = btn.innerHTML;
+    
+    btn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Processing...';
+    btn.disabled = true;
+    consoleEl.innerHTML = '';
+
+    const doHiddenP = document.getElementById('clean-hidden-p').checked;
+    const doInlineImg = document.getElementById('clean-inline-img').checked;
+    const doOrphans = document.getElementById('clean-orphans').checked;
+    const doTags = document.getElementById('clean-detect-tags').checked;
+    const doNestedP = document.getElementById('clean-nested-p').checked; // NEW NESTED PARAGRAPH CHECKBOX
+
+    const htmlPaths = Object.keys(window.activeZipEditor.files).filter(p => p.match(/\.(html|xhtml|htm|xml)$/i));
+    let scanned = 0;
+    let modifiedFiles = 0;
+    let removedTotal = 0;
+    let unclosedTotal = 0;
+
+    for (let path of htmlPaths) {
+        let originalText = await window.activeZipEditor.file(path).async("string");
+        let cleanedText = originalText;
+        let removedItems = [];
+        let unclosedTags = [];
+        scanned++;
+
+        if (doHiddenP) {
+            const re = /<p\s+style=['"](?:[^'"]*)height:\s*0px;[^>]*>[\s\S]*?<\/p>/gi;
+            const matches = cleanedText.match(re);
+            if (matches) removedItems.push(...matches);
+            cleanedText = cleanedText.replace(re, "");
+        }
+        
+        if (doInlineImg) {
+            const re = /data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=\s]+/gi;
+            const matches = cleanedText.match(re);
+            if (matches) removedItems.push(...matches);
+            cleanedText = cleanedText.replace(re, "");
+        }
+
+        if (doOrphans) {
+            const re = /[A-Za-z0-9+/=]{40,}/g; 
+            const matches = cleanedText.match(re);
+            if (matches) removedItems.push(...matches);
+            cleanedText = cleanedText.replace(re, "");
+        }
+
+        // NEW: FLATTEN NESTED PARAGRAPHS
+        if (doNestedP) {
+            let passes = 0;
+            let previous = "";
+            while (cleanedText !== previous && passes < 5) {
+                previous = cleanedText;
+                
+                const openRe = /(<p\b[^>]*>)\s*<p\b[^>]*>/gi;
+                const openMatches = cleanedText.match(openRe);
+                if (openMatches) removedItems.push(...openMatches.map(() => "Overwrapped <p> tag"));
+                cleanedText = cleanedText.replace(openRe, "$1");
+                
+                const closeRe = /<\/p>\s*<\/p>/gi;
+                const closeMatches = cleanedText.match(closeRe);
+                if (closeMatches) removedItems.push(...closeMatches.map(() => "Overwrapped </p> tag"));
+                cleanedText = cleanedText.replace(closeRe, "</p>");
+
+                passes++;
+            }
+        }
+
+        if (doTags) {
+            const voidElements = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
+            const tagRegex = /<\/?([a-z0-9:]+)[^>]*>/gi;
+            let match;
+            const stack = [];
+            
+            const getLineCol = (index) => {
+                const upTo = cleanedText.substring(0, index);
+                const lines = upTo.split('\n');
+                return { line: lines.length, col: lines[lines.length - 1].length + 1 };
+            };
+
+            while ((match = tagRegex.exec(cleanedText)) !== null) {
+                const isClosing = match[0].startsWith('</');
+                const tagName = match[1].toLowerCase();
+                const isSelfClosing = match[0].endsWith('/>') || voidElements.has(tagName);
+
+                if (isClosing) {
+                    if (stack.length > 0 && stack[stack.length - 1].tag === tagName) stack.pop();
+                } else if (!isSelfClosing) {
+                    stack.push({ tag: tagName, pos: getLineCol(match.index) });
+                }
+            }
+
+            for (const item of stack) {
+                if(item.tag === 'html' || item.tag === 'body' || item.tag === '?xml') continue; 
+                unclosedTags.push(`&lt;${item.tag}&gt; opened at Line ${item.pos.line}, Col ${item.pos.col} but never closed.`);
+            }
+        }
+
+        if (cleanedText !== originalText) {
+            window.activeZipEditor.file(path, cleanedText);
+            modifiedFiles++;
+            removedTotal += removedItems.length;
+        }
+
+        if (unclosedTags.length > 0) unclosedTotal += unclosedTags.length;
+
+        if (removedItems.length > 0 || unclosedTags.length > 0) {
+            consoleEl.innerHTML += `<div class="debug-log-item"><strong style="color:var(--accent);">== ${path} ==</strong></div>`;
+            if (removedItems.length > 0) consoleEl.innerHTML += `<div class="debug-log-item" style="color:var(--success);">Removed ${removedItems.length} bloat items.</div>`;
+            if (unclosedTags.length > 0) consoleEl.innerHTML += `<div class="debug-log-item error">Found ${unclosedTags.length} unclosed tags:<br>${unclosedTags.join('<br>')}</div>`;
+        }
+    }
+
+    if (removedTotal === 0 && unclosedTotal === 0) {
+        consoleEl.innerHTML = `<div class="debug-log-item success">Scan complete. No hidden paragraphs, blobs, or unclosed tags found in ${scanned} files.</div>`;
+    } else {
+        consoleEl.innerHTML += `<div class="debug-log-item" style="border-top:2px solid var(--border); margin-top:10px;"><strong style="color:var(--accent);">SUMMARY:</strong> Scanned ${scanned} files. Removed ${removedTotal} blobs. Found ${unclosedTotal} unclosed tags. <br><br><strong>Please click 'Save File' in the editor to permanently write these changes!</strong></div>`;
+        if (window.activeEditingPath && window.activeZipEditor.file(window.activeEditingPath)) {
+            const newText = await window.activeZipEditor.file(window.activeEditingPath).async("string");
+            window.cmEditor.setValue(newText);
+        }
+    }
+
+    btn.innerHTML = originalText;
+    btn.disabled = false;
+};
+
+// --- UPGRADED: CALIBRE-STYLE DEBUGGER & VALIDATOR ---
 window.runEpubDebugger = async function() {
     if (!window.activeZipEditor) return;
     const consoleEl = document.getElementById('debug-console');
-    consoleEl.innerHTML = '<div class="debug-log-item">Starting OPF Manifest Scan...</div>';
+    consoleEl.innerHTML = '<div class="debug-log-item">Starting Comprehensive Diagnostics...</div>';
     window.closeAllModals();
     document.getElementById('editor-debug-modal').classList.add('active');
 
+    let errorsFound = 0;
+    let warningsFound = 0;
+
     const opfPath = Object.keys(window.activeZipEditor.files).find(p => p.endsWith('.opf'));
-    if (!opfPath) return consoleEl.innerHTML += '<div class="debug-log-item error">[FAIL] No .opf manifest found.</div>';
-    
+    if (!opfPath) {
+        consoleEl.innerHTML += '<div class="debug-log-item error">[FAIL] No .opf manifest found.</div>';
+        return;
+    }
+
     const opfFolder = opfPath.includes('/') ? opfPath.substring(0, opfPath.lastIndexOf('/') + 1) : '';
     const xmlDoc = new DOMParser().parseFromString(await window.activeZipEditor.file(opfPath).async("string"), "application/xml");
     const items = xmlDoc.getElementsByTagName("item");
-    
-    let errors = 0;
+    const manifestPaths = new Set();
+
+    consoleEl.innerHTML += '<div class="debug-log-item" style="color:var(--accent);">[1/4] Scanning OPF Manifest Links...</div>';
     Array.from(items).forEach(item => {
         const href = item.getAttribute("href");
         if (!href) return;
         const fullPath = decodeURIComponent(opfFolder + href);
+        manifestPaths.add(fullPath);
         if (!window.activeZipEditor.file(fullPath) && !window.activeZipEditor.folder(fullPath)) {
-            consoleEl.innerHTML += `<div class="debug-log-item error">[BROKEN LINK] Manifest expects: ${fullPath}</div>`;
-            errors++;
+            consoleEl.innerHTML += `<div class="debug-log-item error" style="border-left: 3px solid var(--danger);"><i class="ph ph-link-break"></i> [MISSING FILE] Manifest expects: ${fullPath}</div>`;
+            errorsFound++;
         }
     });
-    
-    if (errors === 0) consoleEl.innerHTML += '<div class="debug-log-item success">[PASS] All manifest links are valid!</div>';
-    else consoleEl.innerHTML += `<div class="debug-log-item">[WARNING] Found ${errors} missing files.</div>`;
+
+    consoleEl.innerHTML += '<div class="debug-log-item" style="color:var(--accent); margin-top:10px;">[2/4] Checking for Unreferenced Files...</div>';
+    const allZipFiles = Object.keys(window.activeZipEditor.files).filter(p => !window.activeZipEditor.files[p].dir);
+    allZipFiles.forEach(path => {
+        if (path === 'mimetype' || path.startsWith('META-INF/') || path.endsWith('.opf') || path.endsWith('.ncx')) return;
+        if (!manifestPaths.has(path)) {
+            consoleEl.innerHTML += `<div class="debug-log-item" style="border-left: 3px solid orange; color: orange;"><i class="ph ph-warning"></i> [UNREFERENCED FILE] ${path} is not in the OPF manifest. It may not display in readers.</div>`;
+            warningsFound++;
+        }
+    });
+
+    consoleEl.innerHTML += '<div class="debug-log-item" style="color:var(--accent); margin-top:10px;">[3/4] Validating XHTML Tag Strictness...</div>';
+    const htmlPaths = allZipFiles.filter(p => p.match(/\.(html|xhtml|htm)$/i));
+    for (let path of htmlPaths) {
+        const content = await window.activeZipEditor.file(path).async("string");
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(content, "application/xml");
+        const parseErrors = xmlDoc.getElementsByTagName("parsererror");
+        
+        if (parseErrors.length > 0) {
+            let errorText = parseErrors[0].textContent.replace(/This page contains the following errors:/gi, '').replace(/Below is a rendering of the page up to the first error./gi, '').trim();
+            let lineNum = 0;
+            const lineMatch = errorText.match(/line\s+(\d+)/i);
+            if (lineMatch) lineNum = parseInt(lineMatch[1]) - 1;
+
+            const div = document.createElement('div');
+            div.className = 'debug-log-item error';
+            div.style.cursor = 'pointer';
+            div.style.borderLeft = '3px solid var(--danger)';
+            div.style.transition = 'background 0.2s';
+            div.onmouseover = () => div.style.background = 'var(--surface)';
+            div.onmouseout = () => div.style.background = 'transparent';
+            
+            div.innerHTML = `<div style="font-weight:bold; color:var(--danger);"><i class="ph ph-warning-octagon"></i> [PARSE ERROR] ${path}</div>
+                             <div style="color:var(--text-muted); font-family:monospace; margin:4px 0;">${errorText}</div>
+                             <div style="font-size:10px; color:var(--accent);"><i class="ph ph-mouse-pointer-click"></i> Click to fix in editor</div>`;
+            
+            div.onclick = () => {
+                window.closeAllModals();
+                document.querySelectorAll('.file-tree-item').forEach(item => { if (item.title === path) item.click(); });
+                if (lineNum >= 0) {
+                    setTimeout(() => {
+                        window.cmEditor.setCursor(lineNum, 0);
+                        window.cmEditor.focus();
+                        const t = window.cmEditor.charCoords({line: lineNum, ch: 0}, "local").top; 
+                        const middleHeight = window.cmEditor.getScrollerElement().offsetHeight / 2; 
+                        window.cmEditor.scrollTo(null, t - middleHeight - 5);
+                        window.cmEditor.addLineClass(lineNum, 'background', 'error-line-highlight');
+                        setTimeout(() => window.cmEditor.removeLineClass(lineNum, 'background', 'error-line-highlight'), 4000);
+                    }, 300); 
+                }
+            };
+            consoleEl.appendChild(div);
+            errorsFound++;
+        }
+    }
+
+    consoleEl.innerHTML += '<div class="debug-log-item" style="color:var(--accent); margin-top:10px;">[4/4] Checking CSS Stylesheets...</div>';
+    const cssPaths = allZipFiles.filter(p => p.endsWith('.css'));
+    for (let path of cssPaths) {
+        const content = await window.activeZipEditor.file(path).async("string");
+        const fontMatches = content.match(/font-family\s*:\s*[^;{}]+;/gi);
+        if (fontMatches) {
+            fontMatches.forEach(match => {
+                if (!match.match(/(serif|sans-serif|monospace|cursive|fantasy)\s*;/i)) {
+                    consoleEl.innerHTML += `<div class="debug-log-item" style="border-left: 3px solid orange; color: orange;"><i class="ph ph-warning"></i> [CSS WARNING] ${path}: "${match.trim()}" lacks a generic fallback (like serif or sans-serif).</div>`;
+                    warningsFound++;
+                }
+            });
+        }
+    }
+
+    if (errorsFound === 0 && warningsFound === 0) {
+        consoleEl.innerHTML += '<div class="debug-log-item success" style="margin-top:10px; font-weight:bold;"><i class="ph ph-check-circle"></i> [PASS] 0 errors or warnings found! EPUB is perfectly formed.</div>';
+    } else {
+        consoleEl.innerHTML += `<div class="debug-log-item" style="margin-top:10px; border-top: 1px solid var(--border); padding-top: 10px;"><strong>[SUMMARY] Found ${errorsFound} errors and ${warningsFound} warnings.</strong> Click any red error above to jump directly to the code.</div>`;
+    }
 };
 
 window.revertToOriginalSave = async function() {

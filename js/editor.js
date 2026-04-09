@@ -202,7 +202,8 @@ window.editorReplaceAll = function() {
 
 window.openGlobalEditSearch = function() {
     if (!window.activeZipEditor) return;
-    window.closeAllModals();
+    if(window.closeAllModals) window.closeAllModals();
+    else document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
     document.getElementById('editor-global-search-results').innerHTML = '';
     document.getElementById('editor-global-search-modal').classList.add('active');
 };
@@ -238,7 +239,9 @@ window.runGlobalEditSearch = async function() {
         div.className = 'search-result-item';
         div.innerHTML = `<div class="search-result-file">${res.path}</div><div class="search-result-text">...${res.snippet}...</div>`;
         div.onclick = () => {
-            window.closeAllModals();
+            if(window.closeAllModals) window.closeAllModals();
+            else document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+            
             document.querySelectorAll('.file-tree-item').forEach(item => { if (item.title === res.path) item.click(); });
             document.getElementById('editor-find').value = query;
             document.getElementById('editor-use-regex').checked = useRegex;
@@ -258,7 +261,9 @@ window.openMetadataEditor = async function() {
 
     document.getElementById('meta-title-input').value = titleNode ? titleNode.textContent : "";
     document.getElementById('meta-author-input').value = authorNode ? authorNode.textContent : "";
-    window.closeAllModals();
+    
+    if(window.closeAllModals) window.closeAllModals();
+    else document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
     document.getElementById('editor-metadata-modal').classList.add('active');
 };
 
@@ -274,7 +279,11 @@ window.saveMetadata = async function() {
         window.activeZipEditor.file(window.currentOpfPath, new XMLSerializer().serializeToString(xmlDoc));
         await window.saveEditedFile();
         btn.innerText = "Saved!";
-        setTimeout(() => { btn.innerText = "Save Metadata"; window.closeAllModals(); }, 1000);
+        setTimeout(() => { 
+            btn.innerText = "Save Metadata"; 
+            if(window.closeAllModals) window.closeAllModals();
+            else document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+        }, 1000);
     } catch(e) { btn.innerText = "Error"; setTimeout(() => btn.innerText = "Save", 1500); }
 };
 
@@ -299,7 +308,8 @@ window.openTocEditor = async function() {
         listEl.appendChild(div);
     });
 
-    window.closeAllModals();
+    if(window.closeAllModals) window.closeAllModals();
+    else document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
     document.getElementById('editor-toc-modal').classList.add('active');
 };
 
@@ -346,7 +356,11 @@ window.saveTocEdits = async function() {
         window.activeZipEditor.file(window.currentNcxPath, new XMLSerializer().serializeToString(xmlDoc));
         await window.saveEditedFile();
         btn.innerText = "Saved!";
-        setTimeout(() => { btn.innerText = "Save TOC XML"; window.closeAllModals(); }, 1000);
+        setTimeout(() => { 
+            btn.innerText = "Save TOC XML"; 
+            if(window.closeAllModals) window.closeAllModals();
+            else document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+        }, 1000);
     } catch(e) { btn.innerText = "Error"; }
 };
 
@@ -354,7 +368,8 @@ window.openAddFileModal = function() {
     if (!window.activeZipEditor) return;
     document.getElementById('add-outside-file-input').value = "";
     document.getElementById('selected-files-list').innerHTML = ""; 
-    window.closeAllModals();
+    if(window.closeAllModals) window.closeAllModals();
+    else document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
     document.getElementById('editor-add-file-modal').classList.add('active');
 };
 
@@ -425,7 +440,8 @@ window.confirmAddOutsideFile = async function() {
     refreshFileTree();
     btn.innerHTML = originalBtnText;
     btn.disabled = false;
-    window.closeAllModals();
+    if(window.closeAllModals) window.closeAllModals();
+    else document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
     alert(`Successfully imported and registered ${fileInput.files.length} file(s)!`);
 };
 
@@ -435,7 +451,8 @@ window.openSpellcheckModal = async function() {
     const listEl = document.getElementById('spellcheck-list');
     listEl.innerHTML = '<div style="padding:30px; text-align:center;"><i class="ph ph-spinner ph-spin" style="font-size:32px; color:var(--accent);"></i><p style="margin-top:10px; color:var(--text-muted);">Scanning entire book for uncommon words...</p></div>';
     
-    window.closeAllModals();
+    if(window.closeAllModals) window.closeAllModals();
+    else document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
     document.getElementById('editor-spellcheck-modal').classList.add('active');
 
     const htmlPaths = Object.keys(window.activeZipEditor.files).filter(p => p.match(/\.(html|xhtml|htm)$/i));
@@ -487,11 +504,13 @@ window.openSpellcheckModal = async function() {
 
 window.openCleanerModal = function() {
     if (!window.activeZipEditor) return;
-    window.closeAllModals();
+    if(window.closeAllModals) window.closeAllModals();
+    else document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
     document.getElementById('cleaner-console').innerHTML = 'Ready to scan. Select options above and click Run.';
     document.getElementById('editor-cleaner-modal').classList.add('active');
 };
 
+// FIXED: Uses insertAdjacentHTML to prevent destroying click events
 window.runEpubCleaner = async function() {
     const btn = document.getElementById('run-cleaner-btn');
     const consoleEl = document.getElementById('cleaner-console');
@@ -499,7 +518,9 @@ window.runEpubCleaner = async function() {
     
     btn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Processing...';
     btn.disabled = true;
-    consoleEl.innerHTML = '';
+    consoleEl.innerHTML = ''; // Initial clear is fine
+
+    const logMsg = (html) => consoleEl.insertAdjacentHTML('beforeend', html);
 
     const doHiddenP = document.getElementById('clean-hidden-p').checked;
     const doInlineImg = document.getElementById('clean-inline-img').checked;
@@ -601,16 +622,16 @@ window.runEpubCleaner = async function() {
         if (unclosedTags.length > 0) unclosedTotal += unclosedTags.length;
 
         if (removedItems.length > 0 || unclosedTags.length > 0) {
-            consoleEl.innerHTML += `<div class="debug-log-item"><strong style="color:var(--accent);">== ${path} ==</strong></div>`;
-            if (removedItems.length > 0) consoleEl.innerHTML += `<div class="debug-log-item" style="color:var(--success);">Removed ${removedItems.length} bloat items.</div>`;
-            if (unclosedTags.length > 0) consoleEl.innerHTML += `<div class="debug-log-item error">Found ${unclosedTags.length} unclosed tags:<br>${unclosedTags.join('<br>')}</div>`;
+            logMsg(`<div class="debug-log-item"><strong style="color:var(--accent);">== ${path} ==</strong></div>`);
+            if (removedItems.length > 0) logMsg(`<div class="debug-log-item" style="color:var(--success);">Removed ${removedItems.length} bloat items.</div>`);
+            if (unclosedTags.length > 0) logMsg(`<div class="debug-log-item error">Found ${unclosedTags.length} unclosed tags:<br>${unclosedTags.join('<br>')}</div>`);
         }
     }
 
     if (removedTotal === 0 && unclosedTotal === 0) {
-        consoleEl.innerHTML = `<div class="debug-log-item success">Scan complete. No hidden paragraphs, blobs, or unclosed tags found in ${scanned} files.</div>`;
+        logMsg(`<div class="debug-log-item success">Scan complete. No hidden paragraphs, blobs, or unclosed tags found in ${scanned} files.</div>`);
     } else {
-        consoleEl.innerHTML += `<div class="debug-log-item" style="border-top:2px solid var(--border); margin-top:10px;"><strong style="color:var(--accent);">SUMMARY:</strong> Scanned ${scanned} files. Removed ${removedTotal} blobs. Found ${unclosedTotal} unclosed tags. <br><br><strong>Please click 'Save File' in the editor to permanently write these changes!</strong></div>`;
+        logMsg(`<div class="debug-log-item" style="border-top:2px solid var(--border); margin-top:10px;"><strong style="color:var(--accent);">SUMMARY:</strong> Scanned ${scanned} files. Removed ${removedTotal} blobs. Found ${unclosedTotal} unclosed tags. <br><br><strong>Please click 'Save File' in the editor to permanently write these changes!</strong></div>`);
         if (window.activeEditingPath && window.activeZipEditor.file(window.activeEditingPath)) {
             const newText = await window.activeZipEditor.file(window.activeEditingPath).async("string");
             window.cmEditor.setValue(newText);
@@ -621,20 +642,89 @@ window.runEpubCleaner = async function() {
     btn.disabled = false;
 };
 
-// FIXED: Flawless Click-to-Jump logic avoiding race conditions
+// FIXED: Bulletproof Click-to-Jump logic safely using insertAdjacentHTML
 window.runEpubDebugger = async function() {
     if (!window.activeZipEditor) return;
     const consoleEl = document.getElementById('debug-console');
+    
+    // Initial clear is fine here
     consoleEl.innerHTML = '<div class="debug-log-item">Starting Comprehensive Diagnostics...</div>';
-    window.closeAllModals();
+    
+    // Use this helper instead of innerHTML += to prevent destroying click events
+    const logMsg = (html) => consoleEl.insertAdjacentHTML('beforeend', html);
+
+    if(window.closeAllModals) window.closeAllModals();
+    else document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
     document.getElementById('editor-debug-modal').classList.add('active');
 
     let errorsFound = 0;
     let warningsFound = 0;
 
+    const appendJumpableError = (path, errorText, lineNum, isWarning = false) => {
+        const div = document.createElement('div');
+        div.className = 'debug-log-item error';
+        div.style.cursor = 'pointer';
+        div.style.borderLeft = `3px solid ${isWarning ? 'orange' : 'var(--danger)'}`;
+        div.style.transition = 'background 0.2s';
+        div.onmouseover = () => div.style.background = 'var(--surface)';
+        div.onmouseout = () => div.style.background = 'transparent';
+        
+        const icon = isWarning ? '<i class="ph ph-warning" style="color:orange;"></i>' : '<i class="ph ph-warning-octagon" style="color:var(--danger);"></i>';
+        const titleColor = isWarning ? 'orange' : 'var(--danger)';
+        const titleText = isWarning ? '[WARNING]' : '[PARSE ERROR]';
+
+        div.innerHTML = `<div style="font-weight:bold; color:${titleColor};">${icon} ${titleText} ${path}</div>
+                         <div style="color:var(--text-muted); font-family:monospace; margin:4px 0;">${errorText}</div>
+                         <div style="font-size:10px; color:var(--accent);"><i class="ph ph-mouse-pointer-click"></i> Click to fix in editor</div>`;
+        
+        div.onclick = async () => {
+            if(window.closeAllModals) window.closeAllModals();
+            else document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+            
+            let targetLi = null;
+            document.querySelectorAll('.file-tree-item').forEach(item => {
+                if (item.title === path) targetLi = item;
+            });
+            
+            if (targetLi) {
+                let folderContent = targetLi.closest('.folder-content');
+                if (folderContent && !folderContent.classList.contains('open')) {
+                    folderContent.classList.add('open');
+                    let header = folderContent.previousElementSibling;
+                    if (header) header.classList.add('open');
+                }
+            }
+            
+            await window.loadFileIntoEditor(path, targetLi);
+            
+            if (lineNum >= 0) {
+                setTimeout(() => {
+                    if (!window.cmEditor) return;
+                    
+                    window.cmEditor.refresh(); 
+                    const safeLine = Math.max(0, Math.min(lineNum, window.cmEditor.lineCount() - 1));
+                    
+                    window.cmEditor.focus();
+                    window.cmEditor.setCursor({line: safeLine, ch: 0});
+                    
+                    try {
+                        const t = window.cmEditor.charCoords({line: safeLine, ch: 0}, "local").top; 
+                        const h = window.cmEditor.getScrollerElement().offsetHeight / 2; 
+                        window.cmEditor.scrollTo(null, t - h - 5);
+                    } catch(e) {}
+                    
+                    window.cmEditor.addLineClass(safeLine, 'background', 'error-line-highlight');
+                    setTimeout(() => window.cmEditor.removeLineClass(safeLine, 'background', 'error-line-highlight'), 4000);
+                }, 300); 
+            }
+        };
+        consoleEl.appendChild(div);
+        if (isWarning) warningsFound++; else errorsFound++;
+    };
+
     const opfPath = Object.keys(window.activeZipEditor.files).find(p => p.endsWith('.opf'));
     if (!opfPath) {
-        consoleEl.innerHTML += '<div class="debug-log-item error">[FAIL] No .opf manifest found.</div>';
+        logMsg('<div class="debug-log-item error">[FAIL] No .opf manifest found.</div>');
         return;
     }
 
@@ -643,122 +733,86 @@ window.runEpubDebugger = async function() {
     const items = xmlDoc.getElementsByTagName("item");
     const manifestPaths = new Set();
 
-    consoleEl.innerHTML += '<div class="debug-log-item" style="color:var(--accent);">[1/4] Scanning OPF Manifest Links...</div>';
+    logMsg('<div class="debug-log-item" style="color:var(--accent);">[1/4] Scanning OPF Manifest & Broken Links...</div>');
     Array.from(items).forEach(item => {
         const href = item.getAttribute("href");
         if (!href) return;
         const fullPath = decodeURIComponent(opfFolder + href);
         manifestPaths.add(fullPath);
         if (!window.activeZipEditor.file(fullPath) && !window.activeZipEditor.folder(fullPath)) {
-            consoleEl.innerHTML += `<div class="debug-log-item error" style="border-left: 3px solid var(--danger);"><i class="ph ph-link-break"></i> [MISSING FILE] Manifest expects: ${fullPath}</div>`;
+            logMsg(`<div class="debug-log-item error" style="border-left: 3px solid var(--danger);"><i class="ph ph-link-break"></i> [MISSING FILE] Manifest expects: ${fullPath}</div>`);
             errorsFound++;
         }
     });
 
-    consoleEl.innerHTML += '<div class="debug-log-item" style="color:var(--accent); margin-top:10px;">[2/4] Checking for Unreferenced Files...</div>';
+    logMsg('<div class="debug-log-item" style="color:var(--accent); margin-top:10px;">[2/4] Checking for Unreferenced Files...</div>');
     const allZipFiles = Object.keys(window.activeZipEditor.files).filter(p => !window.activeZipEditor.files[p].dir);
     allZipFiles.forEach(path => {
         if (path === 'mimetype' || path.startsWith('META-INF/') || path.endsWith('.opf') || path.endsWith('.ncx')) return;
         if (!manifestPaths.has(path)) {
-            consoleEl.innerHTML += `<div class="debug-log-item" style="border-left: 3px solid orange; color: orange;"><i class="ph ph-warning"></i> [UNREFERENCED FILE] ${path} is not in the OPF manifest. It may not display in readers.</div>`;
+            logMsg(`<div class="debug-log-item" style="border-left: 3px solid orange; color: orange;"><i class="ph ph-warning"></i> [UNREFERENCED FILE] ${path} is not in the OPF manifest. It may not display in readers.</div>`);
             warningsFound++;
         }
     });
 
-    consoleEl.innerHTML += '<div class="debug-log-item" style="color:var(--accent); margin-top:10px;">[3/4] Validating XHTML Tag Strictness...</div>';
+    logMsg('<div class="debug-log-item" style="color:var(--accent); margin-top:10px;">[3/4] Validating HTML Integrity & Links...</div>');
     const htmlPaths = allZipFiles.filter(p => p.match(/\.(html|xhtml|htm)$/i));
+    
+    const resolvePath = (basePath, relativePath) => {
+        const stack = basePath.split('/').slice(0, -1);
+        for (const p of relativePath.split('/')) {
+            if (p === '..') stack.pop(); else if (p !== '.') stack.push(p);
+        }
+        return stack.join('/');
+    };
+
     for (let path of htmlPaths) {
         const content = await window.activeZipEditor.file(path).async("string");
+        
         const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(content, "application/xml");
-        const parseErrors = xmlDoc.getElementsByTagName("parsererror");
+        const parseErrors = parser.parseFromString(content, "application/xml").getElementsByTagName("parsererror");
         
         if (parseErrors.length > 0) {
             let errorText = parseErrors[0].textContent.replace(/This page contains the following errors:/gi, '').replace(/Below is a rendering of the page up to the first error./gi, '').trim();
             let lineNum = 0;
             const lineMatch = errorText.match(/line\s+(\d+)/i);
             if (lineMatch) lineNum = parseInt(lineMatch[1]) - 1;
+            appendJumpableError(path, errorText, lineNum, false);
+        }
 
-            const div = document.createElement('div');
-            div.className = 'debug-log-item error';
-            div.style.cursor = 'pointer';
-            div.style.borderLeft = '3px solid var(--danger)';
-            div.style.transition = 'background 0.2s';
-            div.onmouseover = () => div.style.background = 'var(--surface)';
-            div.onmouseout = () => div.style.background = 'transparent';
-            
-            div.innerHTML = `<div style="font-weight:bold; color:var(--danger);"><i class="ph ph-warning-octagon"></i> [PARSE ERROR] ${path}</div>
-                             <div style="color:var(--text-muted); font-family:monospace; margin:4px 0;">${errorText}</div>
-                             <div style="font-size:10px; color:var(--accent);"><i class="ph ph-mouse-pointer-click"></i> Click to fix in editor</div>`;
-            
-            // FIXED: Prevent race condition by extracting logic out of .click()
-            div.onclick = async () => {
-                window.closeAllModals();
+        const lines = content.split('\n');
+        for (let i = 0; i < lines.length; i++) {
+            let match;
+            const linkRe = /(?:href|src)=['"]([^'"]+)['"]/gi;
+            while ((match = linkRe.exec(lines[i])) !== null) {
+                let link = match[1].split('#')[0]; 
+                if (!link || link.startsWith('http') || link.startsWith('mailto:') || link.startsWith('data:')) continue;
                 
-                let targetLi = null;
-                document.querySelectorAll('.file-tree-item').forEach(item => {
-                    if (item.title === path) targetLi = item;
-                });
-                
-                // Expand folder visually without triggering a secondary load
-                if (targetLi) {
-                    let folderContent = targetLi.closest('.folder-content');
-                    if (folderContent && !folderContent.classList.contains('open')) {
-                        folderContent.classList.add('open');
-                        let header = folderContent.previousElementSibling;
-                        if (header) header.classList.add('open');
-                    }
+                const fullLink = resolvePath(path, link);
+                if (!window.activeZipEditor.file(fullLink)) {
+                    appendJumpableError(path, `Broken internal link to: ${link}`, i, true);
                 }
-                
-                // AWAIT the load precisely once
-                await window.loadFileIntoEditor(path, targetLi);
-                
-                // Wait safely for the browser to inject the text into CodeMirror DOM
-                if (lineNum >= 0) {
-                    setTimeout(() => {
-                        if (!window.cmEditor) return;
-                        
-                        window.cmEditor.refresh(); // Force CM to recalculate height bounds
-                        const safeLine = Math.min(lineNum, window.cmEditor.lineCount() - 1);
-                        
-                        window.cmEditor.focus();
-                        window.cmEditor.setCursor({line: safeLine, ch: 0});
-                        
-                        try {
-                            const t = window.cmEditor.charCoords({line: safeLine, ch: 0}, "local").top; 
-                            const h = window.cmEditor.getScrollerElement().offsetHeight / 2; 
-                            window.cmEditor.scrollTo(null, t - h - 5);
-                        } catch(e) {}
-                        
-                        window.cmEditor.addLineClass(safeLine, 'background', 'error-line-highlight');
-                        setTimeout(() => window.cmEditor.removeLineClass(safeLine, 'background', 'error-line-highlight'), 4000);
-                    }, 250); 
-                }
-            };
-            consoleEl.appendChild(div);
-            errorsFound++;
+            }
         }
     }
 
-    consoleEl.innerHTML += '<div class="debug-log-item" style="color:var(--accent); margin-top:10px;">[4/4] Checking CSS Stylesheets...</div>';
+    logMsg('<div class="debug-log-item" style="color:var(--accent); margin-top:10px;">[4/4] Checking CSS Stylesheets...</div>');
     const cssPaths = allZipFiles.filter(p => p.endsWith('.css'));
     for (let path of cssPaths) {
         const content = await window.activeZipEditor.file(path).async("string");
-        const fontMatches = content.match(/font-family\s*:\s*[^;{}]+;/gi);
-        if (fontMatches) {
-            fontMatches.forEach(match => {
-                if (!match.match(/(serif|sans-serif|monospace|cursive|fantasy)\s*;/i)) {
-                    consoleEl.innerHTML += `<div class="debug-log-item" style="border-left: 3px solid orange; color: orange;"><i class="ph ph-warning"></i> [CSS WARNING] ${path}: "${match.trim()}" lacks a generic fallback (like serif or sans-serif).</div>`;
-                    warningsFound++;
-                }
-            });
+        const lines = content.split('\n');
+        for (let i = 0; i < lines.length; i++) {
+            const match = lines[i].match(/font-family\s*:\s*([^;{}]+)\s*;/i);
+            if (match && !match[1].match(/(serif|sans-serif|monospace|cursive|fantasy)/i)) {
+                appendJumpableError(path, `CSS Warning: "${match[1].trim()}" lacks a generic fallback (e.g. serif).`, i, true);
+            }
         }
     }
 
     if (errorsFound === 0 && warningsFound === 0) {
-        consoleEl.innerHTML += '<div class="debug-log-item success" style="margin-top:10px; font-weight:bold;"><i class="ph ph-check-circle"></i> [PASS] 0 errors or warnings found! EPUB is perfectly formed.</div>';
+        logMsg('<div class="debug-log-item success" style="margin-top:10px; font-weight:bold;"><i class="ph ph-check-circle"></i> [PASS] 0 errors or warnings found! EPUB is perfectly formed.</div>');
     } else {
-        consoleEl.innerHTML += `<div class="debug-log-item" style="margin-top:10px; border-top: 1px solid var(--border); padding-top: 10px;"><strong>[SUMMARY] Found ${errorsFound} errors and ${warningsFound} warnings.</strong> Click any red error above to jump directly to the code.</div>`;
+        logMsg(`<div class="debug-log-item" style="margin-top:10px; border-top: 1px solid var(--border); padding-top: 10px;"><strong>[SUMMARY] Found ${errorsFound} errors and ${warningsFound} warnings.</strong> Click any error above to jump directly to the code.</div>`);
     }
 };
 

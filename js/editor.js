@@ -510,7 +510,6 @@ window.openCleanerModal = function() {
     document.getElementById('editor-cleaner-modal').classList.add('active');
 };
 
-// FIXED: Uses insertAdjacentHTML to prevent destroying click events
 window.runEpubCleaner = async function() {
     const btn = document.getElementById('run-cleaner-btn');
     const consoleEl = document.getElementById('cleaner-console');
@@ -518,7 +517,7 @@ window.runEpubCleaner = async function() {
     
     btn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Processing...';
     btn.disabled = true;
-    consoleEl.innerHTML = ''; // Initial clear is fine
+    consoleEl.innerHTML = ''; 
 
     const logMsg = (html) => consoleEl.insertAdjacentHTML('beforeend', html);
 
@@ -642,15 +641,11 @@ window.runEpubCleaner = async function() {
     btn.disabled = false;
 };
 
-// FIXED: Bulletproof Click-to-Jump logic safely using insertAdjacentHTML
 window.runEpubDebugger = async function() {
     if (!window.activeZipEditor) return;
     const consoleEl = document.getElementById('debug-console');
     
-    // Initial clear is fine here
     consoleEl.innerHTML = '<div class="debug-log-item">Starting Comprehensive Diagnostics...</div>';
-    
-    // Use this helper instead of innerHTML += to prevent destroying click events
     const logMsg = (html) => consoleEl.insertAdjacentHTML('beforeend', html);
 
     if(window.closeAllModals) window.closeAllModals();
@@ -824,6 +819,59 @@ window.revertToOriginalSave = async function() {
         await localforage.setItem(window.activeBookIdForEditor, oldData);
         alert("Reverted! The page will now reload.");
         location.reload();
+    }
+};
+
+// --- NEW: DOWNLOAD EDITED EPUB ---
+window.downloadEditedEpub = async function() {
+    if (!window.activeZipEditor || !window.activeBookIdForEditor) return alert("Open a book first.");
+
+    const btn = document.getElementById('download-epub-btn');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Exporting...';
+    btn.disabled = true;
+
+    try {
+        if (window.cmEditor && window.activeEditingPath) {
+            if (!window.activeEditingPath.match(/\.(png|jpe?g|gif|webp|svg|ttf|otf|woff2?)$/i)) {
+                window.activeZipEditor.file(window.activeEditingPath, window.cmEditor.getValue());
+            }
+        }
+
+        const blob = await window.activeZipEditor.generateAsync({
+            type: "blob",
+            compression: "DEFLATE",
+            compressionOptions: { level: 6 }
+        });
+
+        let filename = "Edited_Book.epub";
+        try {
+            const bookData = await localforage.getItem(window.activeBookIdForEditor);
+            if (bookData && bookData.title) {
+                filename = bookData.title.replace(/[^a-z0-9]/gi, '_').toLowerCase() + ".epub";
+            }
+        } catch (e) {}
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        btn.innerHTML = '<i class="ph ph-check-circle"></i> Exported!';
+        setTimeout(() => {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }, 2000);
+
+    } catch (err) {
+        console.error(err);
+        alert("Error exporting EPUB.");
+        btn.innerHTML = originalText;
+        btn.disabled = false;
     }
 };
 

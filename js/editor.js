@@ -12,6 +12,7 @@ window.showView = function(viewId) {
         if(targetView) targetView.classList.add('active');
         
         history.pushState({ view: viewId }, '', '#' + viewId);
+        
         let title = "Library";
         if (viewId === 'bookmarks') title = "Bookmarks";
         if (viewId === 'editor') title = "Edit Book";
@@ -24,13 +25,17 @@ window.showView = function(viewId) {
         document.getElementById('editor-main-toolbar').style.display = 'none';
         loadEditorBookList();
     }
-    if (viewId !== 'editor' && window.activeZipEditor !== null) closeEditorWorkspace();
+    
+    if (viewId !== 'editor' && window.activeZipEditor !== null) {
+        closeEditorWorkspace();
+    }
 };
 
 window.loadEditorBookList = async function() {
     const grid = document.getElementById('editor-book-list');
     if (!grid) return;
     grid.innerHTML = '';
+    
     await localforage.iterate(function(value, key) {
         const coverImg = value.cover ? value.cover : 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTUwIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjMmQyZDJkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmb250LXNpemU9IjE0IiBmaWxsPSIjYWNhY2FjIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+Tm8gQ292ZXI8L3RleHQ+PC9zdmc+';
         const card = document.createElement('div');
@@ -63,12 +68,15 @@ window.openEditorWorkspace = async function(bookId, bookTitle) {
     try {
         const bookData = await localforage.getItem(bookId);
         window.originalEpubBuffer = bookData.buffer; 
+        
         const zip = new JSZip();
         window.activeZipEditor = await zip.loadAsync(bookData.buffer);
+        
         refreshFileTree();
         document.getElementById('editing-file-name').innerText = "Workspace Ready: " + bookTitle;
         setTimeout(() => window.cmEditor.refresh(), 100);
     } catch (error) {
+        console.error(error);
         fileListEl.innerHTML = '<div style="padding:15px; color:red;">Error extracting file.</div>';
     }
 };
@@ -118,6 +126,7 @@ window.refreshFileTree = function() {
             li.onclick = () => loadFileIntoEditor(path, li);
             content.appendChild(li);
         });
+
         group.appendChild(header);
         group.appendChild(content);
         fileListEl.appendChild(group);
@@ -128,6 +137,7 @@ window.loadFileIntoEditor = async function(path, liElement) {
     if (!window.activeZipEditor) return;
     document.querySelectorAll('.file-tree-item').forEach(el => el.classList.remove('active-file'));
     if (liElement) liElement.classList.add('active-file');
+    
     document.getElementById('editing-file-name').innerText = path;
     window.activeEditingPath = path;
 
@@ -137,6 +147,7 @@ window.loadFileIntoEditor = async function(path, liElement) {
 
     try {
         const fileObj = window.activeZipEditor.file(path);
+        
         if (path.match(/\.(png|jpe?g|gif|webp|svg)$/i)) {
             cmWrapper.style.display = 'none';
             imgWrapper.style.display = 'flex';
@@ -148,17 +159,23 @@ window.loadFileIntoEditor = async function(path, liElement) {
 
         imgWrapper.style.display = 'none';
         cmWrapper.style.display = 'flex';
-        setTimeout(() => window.cmEditor.refresh(), 10);
+        setTimeout(() => window.cmEditor.refresh(), 10); 
+        
         window.cmEditor.setValue("Extracting file content...");
 
-        if (path.match(/\.(ttf|otf|woff2?)$/i)) return window.cmEditor.setValue("Binary font file selected. Viewing/Editing not supported.");
+        if (path.match(/\.(ttf|otf|woff2?)$/i)) {
+            window.cmEditor.setValue("Binary font file selected. Viewing/Editing not supported.");
+            return;
+        }
 
         const textContent = await fileObj.async("string");
         window.cmEditor.setValue(textContent);
         if(path.endsWith('.css')) window.cmEditor.setOption("mode", "css");
         else if(path.endsWith('.opf') || path.endsWith('.ncx')) window.cmEditor.setOption("mode", "xml");
         else window.cmEditor.setOption("mode", "htmlmixed");
-    } catch (error) { window.cmEditor.setValue("Error reading file content."); }
+    } catch (error) {
+        window.cmEditor.setValue("Error reading file content.");
+    }
 };
 
 window.editorReplaceSingle = function() {
@@ -492,6 +509,7 @@ window.openCleanerModal = function() {
     document.getElementById('editor-cleaner-modal').classList.add('active');
 };
 
+// FIXED: Stronger Aggressive Regex for nested HTML tags
 window.runEpubCleaner = async function() {
     const btn = document.getElementById('run-cleaner-btn');
     const consoleEl = document.getElementById('cleaner-console');
@@ -504,8 +522,8 @@ window.runEpubCleaner = async function() {
     const doHiddenP = document.getElementById('clean-hidden-p').checked;
     const doInlineImg = document.getElementById('clean-inline-img').checked;
     const doOrphans = document.getElementById('clean-orphans').checked;
-    const doTags = document.getElementById('clean-detect-tags').checked;
     const doNestedP = document.getElementById('clean-nested-p').checked; 
+    const doTags = document.getElementById('clean-detect-tags').checked;
 
     const htmlPaths = Object.keys(window.activeZipEditor.files).filter(p => p.match(/\.(html|xhtml|htm|xml)$/i));
     let scanned = 0;
@@ -546,15 +564,22 @@ window.runEpubCleaner = async function() {
             let previous = "";
             while (cleanedText !== previous && passes < 5) {
                 previous = cleanedText;
-                const openRe = /(<p\b[^>]*>)\s*<p\b[^>]*>/gi;
-                const openMatches = cleanedText.match(openRe);
-                if (openMatches) removedItems.push(...openMatches.map(() => "Overwrapped <p> tag"));
-                cleanedText = cleanedText.replace(openRe, "$1");
                 
-                const closeRe = /<\/p>\s*<\/p>/gi;
+                // Aggressive fix for <p> <p> -> <p>
+                const openRe = /(<p\b[^>]*>)\s*(?:<p\b[^>]*>\s*)+/gi;
+                const openMatches = cleanedText.match(openRe);
+                if (openMatches) {
+                    removedItems.push(...openMatches.map(() => "Overwrapped <p> start tag"));
+                    cleanedText = cleanedText.replace(openRe, "$1");
+                }
+                
+                // Aggressive fix for </p> </p> -> </p>
+                const closeRe = /(<\/p>)\s*(?:<\/p>\s*)+/gi;
                 const closeMatches = cleanedText.match(closeRe);
-                if (closeMatches) removedItems.push(...closeMatches.map(() => "Overwrapped </p> tag"));
-                cleanedText = cleanedText.replace(closeRe, "</p>");
+                if (closeMatches) {
+                    removedItems.push(...closeMatches.map(() => "Overwrapped </p> end tag"));
+                    cleanedText = cleanedText.replace(closeRe, "$1");
+                }
                 passes++;
             }
         }
@@ -618,7 +643,7 @@ window.runEpubCleaner = async function() {
     btn.disabled = false;
 };
 
-// FIXED: Async click handler to ensure file loads before scrolling
+// FIXED: Proper async await to ensure file is loaded before scrolling
 window.runEpubDebugger = async function() {
     if (!window.activeZipEditor) return;
     const consoleEl = document.getElementById('debug-console');
@@ -694,24 +719,37 @@ window.runEpubDebugger = async function() {
                 let targetLi = null;
                 document.querySelectorAll('.file-tree-item').forEach(item => { if (item.title === path) targetLi = item; });
                 
-                // FIXED: Wait for CodeMirror to actually load the text before we scroll!
+                // Auto-expand folder so the active state is visible
+                if (targetLi) {
+                    let folderContent = targetLi.closest('.folder-content');
+                    if (folderContent && !folderContent.classList.contains('open')) {
+                        folderContent.classList.add('open');
+                        let header = folderContent.previousElementSibling;
+                        if (header) header.classList.add('open');
+                    }
+                }
+                
+                // Wait for the text to actually load into the engine before trying to scroll!
                 await window.loadFileIntoEditor(path, targetLi);
                 
                 if (lineNum >= 0) {
                     setTimeout(() => {
+                        if (!window.cmEditor) return;
                         window.cmEditor.refresh();
-                        window.cmEditor.setCursor(lineNum, 0);
+                        
+                        const safeLine = Math.min(lineNum, window.cmEditor.lineCount() - 1);
+                        window.cmEditor.setCursor({line: safeLine, ch: 0});
                         window.cmEditor.focus();
                         
                         try {
-                            const t = window.cmEditor.charCoords({line: lineNum, ch: 0}, "local").top; 
-                            const middleHeight = window.cmEditor.getScrollerElement().offsetHeight / 2; 
-                            window.cmEditor.scrollTo(null, t - middleHeight - 5);
+                            const t = window.cmEditor.charCoords({line: safeLine, ch: 0}, "local").top; 
+                            const h = window.cmEditor.getScrollerElement().offsetHeight / 2; 
+                            window.cmEditor.scrollTo(null, t - h - 5);
                         } catch(e) {}
                         
-                        window.cmEditor.addLineClass(lineNum, 'background', 'error-line-highlight');
-                        setTimeout(() => window.cmEditor.removeLineClass(lineNum, 'background', 'error-line-highlight'), 4000);
-                    }, 150); 
+                        window.cmEditor.addLineClass(safeLine, 'background', 'error-line-highlight');
+                        setTimeout(() => window.cmEditor.removeLineClass(safeLine, 'background', 'error-line-highlight'), 4000);
+                    }, 50); 
                 }
             };
             consoleEl.appendChild(div);

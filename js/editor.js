@@ -505,7 +505,7 @@ window.runEpubCleaner = async function() {
     const doInlineImg = document.getElementById('clean-inline-img').checked;
     const doOrphans = document.getElementById('clean-orphans').checked;
     const doTags = document.getElementById('clean-detect-tags').checked;
-    const doNestedP = document.getElementById('clean-nested-p').checked; // NEW NESTED PARAGRAPH CHECKBOX
+    const doNestedP = document.getElementById('clean-nested-p').checked; 
 
     const htmlPaths = Object.keys(window.activeZipEditor.files).filter(p => p.match(/\.(html|xhtml|htm|xml)$/i));
     let scanned = 0;
@@ -541,13 +541,11 @@ window.runEpubCleaner = async function() {
             cleanedText = cleanedText.replace(re, "");
         }
 
-        // NEW: FLATTEN NESTED PARAGRAPHS
         if (doNestedP) {
             let passes = 0;
             let previous = "";
             while (cleanedText !== previous && passes < 5) {
                 previous = cleanedText;
-                
                 const openRe = /(<p\b[^>]*>)\s*<p\b[^>]*>/gi;
                 const openMatches = cleanedText.match(openRe);
                 if (openMatches) removedItems.push(...openMatches.map(() => "Overwrapped <p> tag"));
@@ -557,7 +555,6 @@ window.runEpubCleaner = async function() {
                 const closeMatches = cleanedText.match(closeRe);
                 if (closeMatches) removedItems.push(...closeMatches.map(() => "Overwrapped </p> tag"));
                 cleanedText = cleanedText.replace(closeRe, "</p>");
-
                 passes++;
             }
         }
@@ -621,7 +618,7 @@ window.runEpubCleaner = async function() {
     btn.disabled = false;
 };
 
-// --- UPGRADED: CALIBRE-STYLE DEBUGGER & VALIDATOR ---
+// FIXED: Async click handler to ensure file loads before scrolling
 window.runEpubDebugger = async function() {
     if (!window.activeZipEditor) return;
     const consoleEl = document.getElementById('debug-console');
@@ -691,19 +688,30 @@ window.runEpubDebugger = async function() {
                              <div style="color:var(--text-muted); font-family:monospace; margin:4px 0;">${errorText}</div>
                              <div style="font-size:10px; color:var(--accent);"><i class="ph ph-mouse-pointer-click"></i> Click to fix in editor</div>`;
             
-            div.onclick = () => {
+            div.onclick = async () => {
                 window.closeAllModals();
-                document.querySelectorAll('.file-tree-item').forEach(item => { if (item.title === path) item.click(); });
+                
+                let targetLi = null;
+                document.querySelectorAll('.file-tree-item').forEach(item => { if (item.title === path) targetLi = item; });
+                
+                // FIXED: Wait for CodeMirror to actually load the text before we scroll!
+                await window.loadFileIntoEditor(path, targetLi);
+                
                 if (lineNum >= 0) {
                     setTimeout(() => {
+                        window.cmEditor.refresh();
                         window.cmEditor.setCursor(lineNum, 0);
                         window.cmEditor.focus();
-                        const t = window.cmEditor.charCoords({line: lineNum, ch: 0}, "local").top; 
-                        const middleHeight = window.cmEditor.getScrollerElement().offsetHeight / 2; 
-                        window.cmEditor.scrollTo(null, t - middleHeight - 5);
+                        
+                        try {
+                            const t = window.cmEditor.charCoords({line: lineNum, ch: 0}, "local").top; 
+                            const middleHeight = window.cmEditor.getScrollerElement().offsetHeight / 2; 
+                            window.cmEditor.scrollTo(null, t - middleHeight - 5);
+                        } catch(e) {}
+                        
                         window.cmEditor.addLineClass(lineNum, 'background', 'error-line-highlight');
                         setTimeout(() => window.cmEditor.removeLineClass(lineNum, 'background', 'error-line-highlight'), 4000);
-                    }, 300); 
+                    }, 150); 
                 }
             };
             consoleEl.appendChild(div);

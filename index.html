@@ -65,6 +65,17 @@
                 </div>
                 
                 <div class="library-grid" id="library-grid"></div>
+
+                <div id="batch-delete-bar" class="bottom-bar hidden" style="background: rgba(239, 68, 68, 0.95); border: 1px solid var(--danger); z-index: 500; color: white;">
+                    <div class="bar-group" style="flex: 1;">
+                        <span id="batch-delete-count" style="font-weight: 600; font-size: 15px; margin-left: 10px;">0 Selected</span>
+                    </div>
+                    <div class="bar-group">
+                        <button class="btn-secondary" style="color: white; border-color: rgba(255,255,255,0.4);" onclick="toggleDeleteMode()">Cancel</button>
+                        <button id="batch-delete-btn" class="btn-primary" style="background: white; color: var(--danger); font-weight: bold;" onclick="executeBatchDelete()">Delete</button>
+                    </div>
+                </div>
+
                 <div id="library-pagination" class="pagination-container"></div>
             </div>
 

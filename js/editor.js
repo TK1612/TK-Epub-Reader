@@ -6,25 +6,39 @@ window.originalEpubBuffer = null;
 
 const originalShowView = window.showView;
 window.showView = function(viewId) {
-    if (typeof originalShowView === 'function') {
-        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-        const targetView = document.getElementById(viewId + '-view');
-        if(targetView) targetView.classList.add('active');
-        
-        history.pushState({ view: viewId }, '', '#' + viewId);
-        let title = "Library";
-        if (viewId === 'bookmarks') title = "Bookmarks";
-        if (viewId === 'editor') title = "Edit Book";
-        document.getElementById('page-title').innerText = title;
-    }
+    // 1. Update the UI and active screens
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    const targetView = document.getElementById(viewId + '-view');
+    if(targetView) targetView.classList.add('active');
+    
+    history.pushState({ view: viewId }, '', '#' + viewId);
+    let title = "Library";
+    if (viewId === 'bookmarks') title = "Bookmarks";
+    if (viewId === 'editor') title = "Edit Book";
+    document.getElementById('page-title').innerText = title;
 
-    if (viewId === 'editor') {
+    // 2. FIXED: Actually tell the app to load the data when you switch tabs!
+    if (viewId === 'bookmarks') {
+        if (typeof window.loadBookmarksList === 'function') window.loadBookmarksList();
+    } else if (viewId === 'library') {
+        if (typeof window.loadLibrary === 'function') window.loadLibrary(1);
+    } else if (viewId === 'editor') {
         document.getElementById('editor-setup').style.display = 'block';
         document.getElementById('editor-workspace').style.display = 'none';
         document.getElementById('editor-main-toolbar').style.display = 'none';
-        loadEditorBookList();
+        if (typeof window.loadEditorBookList === 'function') window.loadEditorBookList(1);
     }
-    if (viewId !== 'editor' && window.activeZipEditor !== null) closeEditorWorkspace();
+    
+    // 3. Close editor safety check
+    if (viewId !== 'editor' && window.activeZipEditor !== null) {
+        window.closeEditorWorkspace();
+    }
+
+    // 4. Auto-close sidebar on mobile devices for better UI
+    if (window.innerWidth <= 768) {
+        const sidebar = document.getElementById('sidebar');
+        if (sidebar) sidebar.classList.add('collapsed');
+    }
 };
 
 let currentEditorPage = 1;

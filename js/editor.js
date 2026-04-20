@@ -29,6 +29,7 @@ window.showView = function(viewId) {
 
 let currentEditorPage = 1;
 
+// --- RAM-SAFE PAGINATED EDITOR LOADING ---
 window.loadEditorBookList = async function(page = 1) {
     const grid = document.getElementById('editor-book-list');
     const paginationContainer = document.getElementById('editor-pagination');
@@ -37,28 +38,41 @@ window.loadEditorBookList = async function(page = 1) {
     currentEditorPage = page;
     grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 40px;"><i class="ph ph-spinner ph-spin" style="font-size: 32px; color: var(--accent);"></i><p style="color: var(--text-muted); margin-top: 10px;">Loading editor library...</p></div>';
     
-    const allKeys = await localforage.keys();
-    const bookKeys = allKeys.filter(k => !k.startsWith('bookmark-') && !k.startsWith('progress-') && !k.startsWith('locations-'));
-    bookKeys.reverse(); // Newest uploads first
+    let catalog = [];
+    
+    await localforage.iterate(function(value, key) {
+        if (!key.startsWith('bookmark-') && !key.startsWith('progress-') && !key.startsWith('locations-')) {
+            catalog.push({ key: key, title: value.title || "Unknown" });
+        }
+    });
+    
+    catalog.reverse();
+
+    if (window.librarySearchQuery) {
+        catalog = catalog.filter(item => item.title.toLowerCase().includes(window.librarySearchQuery));
+    }
+
+    if (window.librarySortOrder === 'az') catalog.sort((a, b) => a.title.localeCompare(b.title));
+    else if (window.librarySortOrder === 'za') catalog.sort((a, b) => b.title.localeCompare(a.title));
 
     const BOOKS_PER_PAGE = 100;
-    const totalPages = Math.ceil(bookKeys.length / BOOKS_PER_PAGE) || 1;
+    const totalPages = Math.ceil(catalog.length / BOOKS_PER_PAGE) || 1;
     if (currentEditorPage > totalPages) currentEditorPage = totalPages;
 
     const startIndex = (currentEditorPage - 1) * BOOKS_PER_PAGE;
-    const pageKeys = bookKeys.slice(startIndex, startIndex + BOOKS_PER_PAGE);
+    const pageItems = catalog.slice(startIndex, startIndex + BOOKS_PER_PAGE);
 
     const cards = [];
     
-    for (let key of pageKeys) {
-        const value = await localforage.getItem(key);
+    for (let item of pageItems) {
+        const value = await localforage.getItem(item.key);
         if (!value) continue;
 
         const coverImg = value.cover ? value.cover : 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTUwIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjMmQyZDJkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmb250LXNpemU9IjE0IiBmaWxsPSIjYWNhY2FjIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+Tm8gQ292ZXI8L3RleHQ+PC9zdmc+';
         const card = document.createElement('div');
         card.className = 'book-card';
         card.innerHTML = `<img src="${coverImg}" class="book-cover"><div class="book-info"><div class="book-title" title="${value.title}">${value.title}</div><div style="font-size: 12px; color: var(--accent); margin-top: 4px;">Click to extract & edit</div></div>`;
-        card.onclick = () => openEditorWorkspace(key, value.title);
+        card.onclick = () => openEditorWorkspace(item.key, value.title);
         cards.push(card);
     }
     
@@ -860,7 +874,6 @@ window.revertToOriginalSave = async function() {
     }
 };
 
-// --- NEW: DOWNLOAD EDITED EPUB (With Original Title Name) ---
 window.downloadEditedEpub = async function() {
     if (!window.activeZipEditor || !window.activeBookIdForEditor) return alert("Open a book first.");
 
@@ -870,7 +883,6 @@ window.downloadEditedEpub = async function() {
     btn.disabled = true;
 
     try {
-        // Ensure the currently open text file is saved to the ZIP in memory before downloading
         if (window.cmEditor && window.activeEditingPath) {
             if (!window.activeEditingPath.match(/\.(png|jpe?g|gif|webp|svg|ttf|otf|woff2?)$/i)) {
                 window.activeZipEditor.file(window.activeEditingPath, window.cmEditor.getValue());
@@ -887,8 +899,6 @@ window.downloadEditedEpub = async function() {
         try {
             const bookData = await localforage.getItem(window.activeBookIdForEditor);
             if (bookData && bookData.title) {
-                // FIXED: Keeps exact capitalization, spaces, and Korean/Chinese characters.
-                // Only removes characters that are strictly illegal in Windows/Mac filenames.
                 filename = bookData.title.replace(/[<>:"/\\|?*]+/g, '').trim() + ".epub";
             }
         } catch (e) {}

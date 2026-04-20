@@ -51,22 +51,47 @@ window.handleUpload = async function(event) {
 
 // FIXED: Added a loading lock to prevent Race Conditions (drawing duplicates)
 let isLibraryLoading = false;
+let currentLibraryPage = 1;
+const BOOKS_PER_PAGE = 100;
 
-window.loadLibrary = async function() {
-    if (isLibraryLoading) return; // If already loading, stop the duplicate process
+window.loadLibrary = async function(page = 1) {
+    if (isLibraryLoading) return; 
     isLibraryLoading = true;
+    currentLibraryPage = page;
     
     try {
         const grid = document.getElementById('library-grid');
+        const paginationContainer = document.getElementById('library-pagination');
         if (!grid) return;
         
-        const cards = []; // Store cards in an array first
+        grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 40px;"><i class="ph ph-spinner ph-spin" style="font-size: 32px; color: var(--accent);"></i><p style="color: var(--text-muted); margin-top: 10px;">Loading library...</p></div>';
         
-        await localforage.iterate(function(value, key) {
+        // 1. Get ALL keys instantly (takes almost zero RAM)
+        const allKeys = await localforage.keys();
+        
+        // 2. Filter out system caches (bookmarks, progress, etc.)
+        const bookKeys = allKeys.filter(k => !k.startsWith('bookmark-') && !k.startsWith('progress-') && !k.startsWith('locations-'));
+        
+        // 3. Reverse so newest uploads show first!
+        bookKeys.reverse();
+
+        // 4. Calculate Math for Pagination
+        const totalPages = Math.ceil(bookKeys.length / BOOKS_PER_PAGE) || 1;
+        if (currentLibraryPage > totalPages) currentLibraryPage = totalPages;
+
+        const startIndex = (currentLibraryPage - 1) * BOOKS_PER_PAGE;
+        const pageKeys = bookKeys.slice(startIndex, startIndex + BOOKS_PER_PAGE);
+
+        const cards = []; 
+        
+        // 5. ONLY download the 100 books for THIS page into RAM
+        for (let key of pageKeys) {
+            const value = await localforage.getItem(key);
+            if (!value) continue;
+
             const coverImg = value.cover ? value.cover : 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTUwIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjMmQyZDJkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmb250LXNpemU9IjE0IiBmaWxsPSIjYWNhY2FjIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+Tm8gQ292ZXI8L3RleHQ+PC9zdmc+';
             
             let progressText = "Not Started";
-            
             const progressData = localStorage.getItem('progress-' + key);
             if (progressData) {
                 try {
@@ -97,14 +122,27 @@ window.loadLibrary = async function() {
                 else window.openReader(key);
             };
             cards.push(card);
-        });
+        }
         
-        // Clear grid completely before rendering to ensure no overlapping
         grid.innerHTML = '';
         cards.forEach(card => grid.appendChild(card));
         
+        // 6. Draw the Glassmorphism Pagination Buttons
+        if (paginationContainer) {
+            paginationContainer.innerHTML = '';
+            if (totalPages > 1) {
+                for (let i = 1; i <= totalPages; i++) {
+                    const btn = document.createElement('button');
+                    btn.className = `page-btn ${i === currentLibraryPage ? 'active' : ''}`;
+                    btn.innerText = i;
+                    btn.onclick = () => window.loadLibrary(i);
+                    paginationContainer.appendChild(btn);
+                }
+            }
+        }
+        
     } finally {
-        isLibraryLoading = false; // Unlock when finished
+        isLibraryLoading = false; 
     }
 };
 

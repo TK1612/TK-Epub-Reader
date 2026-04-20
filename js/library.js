@@ -102,7 +102,7 @@ window.handleUpload = async function(event) {
         });
     }
 
-    await window.loadLibrary(1); // Reset to page 1 after new upload
+    await window.loadLibrary(1); 
     uploadBtn.innerHTML = originalText;
     uploadBtn.disabled = false;
     event.target.value = ''; 
@@ -127,28 +127,24 @@ window.loadLibrary = async function(page = 1) {
         
         let catalog = [];
         
-        // RAM-SAFE CATALOG EXTRACTION
         await localforage.iterate(function(value, key) {
             if (!key.startsWith('bookmark-') && !key.startsWith('progress-') && !key.startsWith('locations-')) {
                 catalog.push({ key: key, title: value.title || "Unknown" });
             }
         });
         
-        catalog.reverse(); // Default to Newest First
+        catalog.reverse(); 
 
-        // FILTER: Search Logic
         if (window.librarySearchQuery) {
             catalog = catalog.filter(item => item.title.toLowerCase().includes(window.librarySearchQuery));
         }
 
-        // SORT: Apply Sorting
         if (window.librarySortOrder === 'az') {
             catalog.sort((a, b) => a.title.localeCompare(b.title));
         } else if (window.librarySortOrder === 'za') {
             catalog.sort((a, b) => b.title.localeCompare(a.title));
         }
 
-        // PAGINATION MATH
         const totalPages = Math.ceil(catalog.length / BOOKS_PER_PAGE) || 1;
         if (currentLibraryPage > totalPages) currentLibraryPage = totalPages;
 
@@ -157,7 +153,6 @@ window.loadLibrary = async function(page = 1) {
 
         const cards = []; 
         
-        // ONLY FETCH HEAVY BUFFER DATA FOR THE 100 ITEMS ON THIS EXACT PAGE!
         for (let item of pageItems) {
             const value = await localforage.getItem(item.key);
             if (!value) continue;
@@ -176,6 +171,13 @@ window.loadLibrary = async function(page = 1) {
 
             const card = document.createElement('div');
             card.className = 'book-card';
+            card.setAttribute('data-id', item.key); // Attached Key for Batch Selecting
+
+            // Re-apply selection state if moving between pages while deleting
+            if (window.isDeleteMode && window.selectedForDeletion && window.selectedForDeletion.has(item.key)) {
+                card.classList.add('selected-for-delete');
+            }
+
             card.innerHTML = `
                 <div class="delete-overlay">
                     <i class="ph ph-trash"></i>
@@ -191,11 +193,8 @@ window.loadLibrary = async function(page = 1) {
             `;
 
             card.onclick = () => {
-                if (window.isDeleteMode) {
-                    window.toggleBookSelection(item.key, card);
-                } else {
-                    window.openReader(item.key);
-                }
+                if (window.isDeleteMode) window.toggleBookSelection(item.key, card);
+                else window.openReader(item.key);
             };
             cards.push(card);
         }
@@ -203,7 +202,10 @@ window.loadLibrary = async function(page = 1) {
         grid.innerHTML = '';
         cards.forEach(card => grid.appendChild(card));
         
-        // DRAW GLASS PAGINATION UI
+        // Re-apply visual delete mode state to grid if moving pages
+        if (window.isDeleteMode) grid.classList.add('delete-mode');
+        else grid.classList.remove('delete-mode');
+
         if (paginationContainer) {
             paginationContainer.innerHTML = '';
             if (totalPages > 1) {
@@ -280,10 +282,11 @@ window.loadBookmarksList = async function() {
         isBookmarksLoading = false;
     }
 };
-// --- NEW BATCH DELETE LOGIC ---
+
+
+// --- BATCH DELETE LOGIC ---
 window.selectedForDeletion = new Set();
 
-// Overrides the basic toggle mode in ui.js to show our Batch Bar
 window.toggleDeleteMode = function() {
     window.isDeleteMode = !window.isDeleteMode;
     const grid = document.getElementById('library-grid');
@@ -293,9 +296,9 @@ window.toggleDeleteMode = function() {
     if (window.isDeleteMode) {
         grid.classList.add('delete-mode');
         btn.classList.add('delete-btn-active');
-        window.selectedForDeletion.clear();
+        window.selectedForDeletion = new Set(); // Reset on start
         if (batchBar) batchBar.classList.remove('hidden');
-        updateBatchDeleteCount();
+        window.updateBatchDeleteCount();
     } else {
         grid.classList.remove('delete-mode');
         btn.classList.remove('delete-btn-active');
@@ -317,6 +320,31 @@ window.toggleBookSelection = function(bookId, cardElement) {
     } else {
         window.selectedForDeletion.add(bookId);
         cardElement.classList.add('selected-for-delete');
+    }
+    window.updateBatchDeleteCount();
+};
+
+window.selectAllForDeletion = function() {
+    const allCards = document.querySelectorAll('#library-grid .book-card');
+    if (allCards.length === 0) return;
+
+    // Check if ALL currently visible books are selected
+    const allSelected = Array.from(allCards).every(card => card.classList.contains('selected-for-delete'));
+
+    if (allSelected) {
+        // Deselect all on this page
+        allCards.forEach(card => {
+            const bookId = card.getAttribute('data-id');
+            window.selectedForDeletion.delete(bookId);
+            card.classList.remove('selected-for-delete');
+        });
+    } else {
+        // Select all on this page
+        allCards.forEach(card => {
+            const bookId = card.getAttribute('data-id');
+            window.selectedForDeletion.add(bookId);
+            card.classList.add('selected-for-delete');
+        });
     }
     window.updateBatchDeleteCount();
 };

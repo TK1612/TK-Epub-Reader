@@ -191,8 +191,11 @@ window.loadLibrary = async function(page = 1) {
             `;
 
             card.onclick = () => {
-                if (window.isDeleteMode) window.deleteBook(item.key, value.title);
-                else window.openReader(item.key);
+                if (window.isDeleteMode) {
+                    window.toggleBookSelection(item.key, card);
+                } else {
+                    window.openReader(item.key);
+                }
             };
             cards.push(card);
         }
@@ -275,5 +278,66 @@ window.loadBookmarksList = async function() {
         }
     } finally {
         isBookmarksLoading = false;
+    }
+};
+// --- NEW BATCH DELETE LOGIC ---
+window.selectedForDeletion = new Set();
+
+// Overrides the basic toggle mode in ui.js to show our Batch Bar
+window.toggleDeleteMode = function() {
+    window.isDeleteMode = !window.isDeleteMode;
+    const grid = document.getElementById('library-grid');
+    const btn = document.getElementById('delete-mode-btn');
+    const batchBar = document.getElementById('batch-delete-bar');
+    
+    if (window.isDeleteMode) {
+        grid.classList.add('delete-mode');
+        btn.classList.add('delete-btn-active');
+        window.selectedForDeletion.clear();
+        if (batchBar) batchBar.classList.remove('hidden');
+        updateBatchDeleteCount();
+    } else {
+        grid.classList.remove('delete-mode');
+        btn.classList.remove('delete-btn-active');
+        window.selectedForDeletion.clear();
+        if (batchBar) batchBar.classList.add('hidden');
+        document.querySelectorAll('.book-card.selected-for-delete').forEach(c => c.classList.remove('selected-for-delete'));
+    }
+};
+
+window.updateBatchDeleteCount = function() {
+    const countSpan = document.getElementById('batch-delete-count');
+    if (countSpan) countSpan.innerText = `${window.selectedForDeletion.size} Selected`;
+};
+
+window.toggleBookSelection = function(bookId, cardElement) {
+    if (window.selectedForDeletion.has(bookId)) {
+        window.selectedForDeletion.delete(bookId);
+        cardElement.classList.remove('selected-for-delete');
+    } else {
+        window.selectedForDeletion.add(bookId);
+        cardElement.classList.add('selected-for-delete');
+    }
+    window.updateBatchDeleteCount();
+};
+
+window.executeBatchDelete = async function() {
+    if (window.selectedForDeletion.size === 0) return alert("Select at least one book to delete.");
+    
+    if (confirm(`Are you sure you want to permanently delete ${window.selectedForDeletion.size} book(s)?`)) {
+        const btn = document.getElementById('batch-delete-btn');
+        if (btn) btn.innerHTML = '<i class="ph ph-spinner ph-spin"></i>';
+        
+        for (let bookId of window.selectedForDeletion) {
+            await localforage.removeItem(bookId);
+            localStorage.removeItem('bookmark-' + bookId);
+            localStorage.removeItem('progress-' + bookId);
+            localStorage.removeItem('locations-' + bookId);
+        }
+        
+        window.selectedForDeletion.clear();
+        window.toggleDeleteMode(); 
+        window.loadLibrary(currentLibraryPage);
+        if (btn) btn.innerHTML = 'Delete';
     }
 };

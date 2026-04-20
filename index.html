@@ -52,13 +52,17 @@
                 </div>
             </header>
 
-            <div id="library-view" class="view active"><div class="library-grid" id="library-grid"></div></div>
+            <div id="library-view" class="view active">
+                <div class="library-grid" id="library-grid"></div>
+                <div id="library-pagination" class="pagination-container"></div>
+            </div>
             <div id="bookmarks-view" class="view"><ul id="bookmarks-list" class="scroll-list"></ul></div>
 
             <div id="editor-view" class="view">
                 <div id="editor-setup">
                     <p style="color: var(--text-muted); margin-bottom: 20px;">Select a book from your library to extract and edit its raw files.</p>
                     <div id="editor-book-list" class="library-grid"></div>
+                    <div id="editor-pagination" class="pagination-container"></div>
                 </div>
 
                 <div id="editor-main-toolbar" class="editor-main-toolbar" style="display: none;">

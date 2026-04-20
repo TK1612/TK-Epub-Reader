@@ -47,20 +47,41 @@
             <header class="top-bar">
                 <div style="display: flex; align-items: center; gap: 10px;"><button class="icon-btn" onclick="toggleSidebar()"><i class="ph ph-list"></i></button><h2 id="page-title">Library</h2></div>
                 <div style="display: flex; align-items: center; gap: 5px;">
+                    <button class="icon-btn" onclick="toggleUniversalSearch()" title="Search Novels"><i class="ph ph-magnifying-glass"></i></button>
+                    <button class="icon-btn" onclick="openLibrarySettings()" title="Display Settings"><i class="ph ph-sliders-horizontal"></i></button>
+                    
                     <button class="icon-btn" id="delete-mode-btn" onclick="toggleDeleteMode()" style="color: var(--danger);" title="Toggle Delete Mode"><i class="ph ph-x-circle"></i></button>
                     <button class="icon-btn" onclick="toggleDarkMode()" title="Toggle Dark Mode"><i class="ph ph-moon"></i></button>
                 </div>
             </header>
 
             <div id="library-view" class="view active">
+                <div id="library-search-container" style="display: none; margin-bottom: 20px;">
+                    <div class="search-bar-glass">
+                        <i class="ph ph-magnifying-glass"></i>
+                        <input type="text" id="library-search-input" placeholder="Search by title..." onkeyup="applyUniversalSearch()">
+                        <i class="ph ph-x" style="cursor:pointer;" onclick="toggleUniversalSearch()"></i>
+                    </div>
+                </div>
+                
                 <div class="library-grid" id="library-grid"></div>
                 <div id="library-pagination" class="pagination-container"></div>
             </div>
+
             <div id="bookmarks-view" class="view"><ul id="bookmarks-list" class="scroll-list"></ul></div>
 
             <div id="editor-view" class="view">
                 <div id="editor-setup">
                     <p style="color: var(--text-muted); margin-bottom: 20px;">Select a book from your library to extract and edit its raw files.</p>
+                    
+                    <div id="editor-search-container" style="display: none; margin-bottom: 20px;">
+                        <div class="search-bar-glass">
+                            <i class="ph ph-magnifying-glass"></i>
+                            <input type="text" id="editor-search-input" placeholder="Search by title..." onkeyup="applyUniversalSearch()">
+                            <i class="ph ph-x" style="cursor:pointer;" onclick="toggleUniversalSearch()"></i>
+                        </div>
+                    </div>
+
                     <div id="editor-book-list" class="library-grid"></div>
                     <div id="editor-pagination" class="pagination-container"></div>
                 </div>
@@ -75,7 +96,6 @@
                     <button class="toolbar-btn" onclick="runEpubDebugger()"><i class="ph ph-bug"></i> Debugger</button>
                     <button class="toolbar-btn" onclick="openCleanerModal()"><i class="ph ph-broom"></i> Cleaner</button>
                     <div style="width: 1px; background: var(--border); margin: 0 5px;"></div>
-                    
                     <button id="download-epub-btn" class="toolbar-btn" onclick="downloadEditedEpub()"><i class="ph ph-download-simple"></i> Download</button>
                     <button class="toolbar-btn" onclick="revertToOriginalSave()"><i class="ph ph-clock-counter-clockwise"></i> Revert Save</button>
                 </div>
@@ -134,7 +154,6 @@
 
     <div id="editor-spellcheck-modal" class="modal center-modal large-modal"><div class="modal-header"><div><h3>Typo & Word Inspector</h3><span style="font-size:12px; color:var(--text-muted);">Extracts rare/uncommon words that may be typos. Click a word to search for it.</span></div><button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button></div><div id="spellcheck-list" class="scroll-list" style="background:var(--bg-color); border:1px solid var(--border); border-radius:8px; padding:0;"></div></div>
     <div id="editor-debug-modal" class="modal center-modal large-modal"><div class="modal-header"><h3>EPUB Debugger & Validator</h3><button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button></div><div id="debug-console" class="scroll-list" style="background:var(--bg-color); border:1px solid var(--border); border-radius:8px; padding:10px;"></div></div>
-
     <div id="editor-cleaner-modal" class="modal center-modal large-modal">
         <div class="modal-header">
             <div><h3>EPUB Base64 Cleaner & Inspector</h3><span style="font-size:12px; color:var(--text-muted);">Batch processes all HTML files to remove junk data and detect unclosed tags.</span></div>
@@ -149,6 +168,19 @@
         </div>
         <button id="run-cleaner-btn" class="btn-primary" style="width: 100%; margin-bottom: 10px;" onclick="runEpubCleaner()"><i class="ph ph-broom"></i> Run Cleaner</button>
         <div id="cleaner-console" class="scroll-list" style="background:var(--bg-color); border:1px solid var(--border); border-radius:8px; padding:10px; font-family: monospace; font-size: 12px; color: var(--text-muted);">Ready to scan...</div>
+    </div>
+
+    <div id="library-settings-modal" class="modal center-modal">
+        <div class="modal-header"><h3>Display Settings</h3><button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button></div>
+        <div class="setting-group">
+            <label>Sort Novels By</label>
+            <select id="library-sort-select" onchange="applyLibrarySort()">
+                <option value="newest">Time Uploaded (Newest First)</option>
+                <option value="az">Title (A - Z)</option>
+                <option value="za">Title (Z - A)</option>
+            </select>
+        </div>
+        <button class="btn-primary" style="width: 100%; margin-top: 10px;" onclick="closeAllModals()">Apply</button>
     </div>
 
     <div id="settings-modal" class="modal right-modal"><div class="modal-header"><h3>Reader Settings</h3><button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button></div><div class="setting-group"><label>Reading Mode</label><select id="set-read-mode" onchange="changeReadMode()"><option value="continuous">Continuous Scroll (All Chapters)</option><option value="scrolled">Single Chapter Scroll (Click Next)</option><option value="paginated">Paginated (Swipe / Click Next)</option></select></div><div class="setting-group"><label>Background Theme</label><select id="set-reader-theme" onchange="setReaderTheme(this.value)"><option value="dark">Black</option><option value="light">White</option><option value="paper">Paper</option><option value="blue">Light Blue</option></select></div><div class="setting-group"><label>Font Size <span id="val-font">18px</span></label><input type="range" id="set-font" min="12" max="36" value="18" oninput="updateSettings()"></div><div class="setting-group"><label>Line Height <span id="val-line">1.5</span></label><input type="range" id="set-line" min="1" max="3" step="0.1" value="1.5" oninput="updateSettings()"></div><div class="setting-group"><label>Paragraph Spacing <span id="val-para-spacing">0em</span></label><input type="range" id="set-para-spacing" min="0" max="5" step="0.5" value="0" oninput="updateSettings()"></div><div class="setting-group"><label>Text Indent <span id="val-indent">0em</span></label><input type="range" id="set-indent" min="0" max="5" step="0.5" value="0" oninput="updateSettings()"></div><div class="setting-group"><label>Text Align</label><div class="segment-control"><button class="segment-btn active" id="align-left" onclick="setTextAlign('left')">Left</button><button class="segment-btn" id="align-center" onclick="setTextAlign('center')">Center</button></div></div><div class="setting-group"><label>Font Family</label><select id="set-font-family" onchange="updateSettings()"><option value="system-ui">System Default</option><option value="serif">Standard Serif</option><option value="sans-serif">Standard Sans-Serif</option><option value="'KoPub Batang', serif">KoPub Batang (Korean)</option><option value="Georgia, serif">Georgia</option><option value="'Times New Roman', Times, serif">Times New Roman</option><option value="Arial, Helvetica, sans-serif">Arial</option></select></div><div class="setting-group"><label>Text Color<input type="color" id="set-text-color" value="#e4e4e7" onchange="updateSettings()" style="width: 30px; height: 30px;"></label></div><div class="setting-group" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);"><label style="cursor: pointer;">Pin Taskbar (Don't Hide)<input type="checkbox" id="set-pin-taskbar" onchange="updateSettings()" style="width: auto;"></label></div></div>

@@ -362,3 +362,7 @@ textarea { flex: 1; font-family: monospace; resize: none; }
     background-repeat: no-repeat;
     transform: scale(1.1);
 }
+/* Fixes the floating bottom bar blocking the pagination buttons */
+.pagination-container {
+    padding-bottom: 90px;
+}

@@ -1,3 +1,49 @@
+// --- GLOBAL DISPLAY SETTINGS ---
+window.librarySortOrder = 'newest';
+window.librarySearchQuery = '';
+
+window.toggleUniversalSearch = function() {
+    const isEditor = document.getElementById('editor-view').classList.contains('active');
+    const containerId = isEditor ? 'editor-search-container' : 'library-search-container';
+    const inputId = isEditor ? 'editor-search-input' : 'library-search-input';
+    
+    const container = document.getElementById(containerId);
+    if (container.style.display === 'none') {
+        container.style.display = 'block';
+        document.getElementById(inputId).focus();
+    } else {
+        container.style.display = 'none';
+        document.getElementById(inputId).value = '';
+        window.librarySearchQuery = '';
+        if(isEditor) window.loadEditorBookList(1);
+        else window.loadLibrary(1);
+    }
+};
+
+window.applyUniversalSearch = function() {
+    const isEditor = document.getElementById('editor-view').classList.contains('active');
+    const inputId = isEditor ? 'editor-search-input' : 'library-search-input';
+    window.librarySearchQuery = document.getElementById(inputId).value.toLowerCase();
+    
+    if(isEditor) window.loadEditorBookList(1);
+    else window.loadLibrary(1);
+};
+
+window.openLibrarySettings = function() {
+    if(window.closeAllModals) window.closeAllModals();
+    else document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+    document.getElementById('library-sort-select').value = window.librarySortOrder;
+    document.getElementById('library-settings-modal').classList.add('active');
+};
+
+window.applyLibrarySort = function() {
+    window.librarySortOrder = document.getElementById('library-sort-select').value;
+    const isEditor = document.getElementById('editor-view').classList.contains('active');
+    
+    if(isEditor) window.loadEditorBookList(1);
+    else window.loadLibrary(1);
+};
+
 window.handleUpload = async function(event) {
     const files = event.target.files;
     if (!files || files.length === 0) return;
@@ -23,7 +69,6 @@ window.handleUpload = async function(event) {
                 const bookId = "novel_" + Date.now() + "_" + Math.random().toString(36).substring(2, 11); 
                 
                 let coverBase64 = "";
-                // FIXED: Wrapped cover extraction in try/catch to prevent silent crashes
                 try {
                     const coverUrl = await tempBook.coverUrl();
                     if (coverUrl) {
@@ -45,8 +90,6 @@ window.handleUpload = async function(event) {
                 tempBook.destroy();
                 resolve(); 
             }).catch(async (err) => {
-                // FIXED: "Force Save Fallback"
-                // If epub.js completely crashes reading a broken book, save it anyway so the user can open it in the Editor to fix it!
                 console.warn("EPUB.js failed to parse. Force saving as raw file...", err);
                 const bookId = "novel_" + Date.now() + "_" + Math.random().toString(36).substring(2, 11);
                 let fallbackTitle = file.name.replace(/\.epub$/i, '');
@@ -59,11 +102,12 @@ window.handleUpload = async function(event) {
         });
     }
 
-    await window.loadLibrary();
+    await window.loadLibrary(1); // Reset to page 1 after new upload
     uploadBtn.innerHTML = originalText;
     uploadBtn.disabled = false;
     event.target.value = ''; 
 };
+
 
 let isLibraryLoading = false;
 let currentLibraryPage = 1;
@@ -81,26 +125,47 @@ window.loadLibrary = async function(page = 1) {
         
         grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 40px;"><i class="ph ph-spinner ph-spin" style="font-size: 32px; color: var(--accent);"></i><p style="color: var(--text-muted); margin-top: 10px;">Loading library...</p></div>';
         
-        const allKeys = await localforage.keys();
-        const bookKeys = allKeys.filter(k => !k.startsWith('bookmark-') && !k.startsWith('progress-') && !k.startsWith('locations-'));
-        bookKeys.reverse();
+        let catalog = [];
+        
+        // RAM-SAFE CATALOG EXTRACTION
+        await localforage.iterate(function(value, key) {
+            if (!key.startsWith('bookmark-') && !key.startsWith('progress-') && !key.startsWith('locations-')) {
+                catalog.push({ key: key, title: value.title || "Unknown" });
+            }
+        });
+        
+        catalog.reverse(); // Default to Newest First
 
-        const totalPages = Math.ceil(bookKeys.length / BOOKS_PER_PAGE) || 1;
+        // FILTER: Search Logic
+        if (window.librarySearchQuery) {
+            catalog = catalog.filter(item => item.title.toLowerCase().includes(window.librarySearchQuery));
+        }
+
+        // SORT: Apply Sorting
+        if (window.librarySortOrder === 'az') {
+            catalog.sort((a, b) => a.title.localeCompare(b.title));
+        } else if (window.librarySortOrder === 'za') {
+            catalog.sort((a, b) => b.title.localeCompare(a.title));
+        }
+
+        // PAGINATION MATH
+        const totalPages = Math.ceil(catalog.length / BOOKS_PER_PAGE) || 1;
         if (currentLibraryPage > totalPages) currentLibraryPage = totalPages;
 
         const startIndex = (currentLibraryPage - 1) * BOOKS_PER_PAGE;
-        const pageKeys = bookKeys.slice(startIndex, startIndex + BOOKS_PER_PAGE);
+        const pageItems = catalog.slice(startIndex, startIndex + BOOKS_PER_PAGE);
 
         const cards = []; 
         
-        for (let key of pageKeys) {
-            const value = await localforage.getItem(key);
+        // ONLY FETCH HEAVY BUFFER DATA FOR THE 100 ITEMS ON THIS EXACT PAGE!
+        for (let item of pageItems) {
+            const value = await localforage.getItem(item.key);
             if (!value) continue;
 
             const coverImg = value.cover ? value.cover : 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTUwIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjMmQyZDJkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmb250LXNpemU9IjE0IiBmaWxsPSIjYWNhY2FjIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+Tm8gQ292ZXI8L3RleHQ+PC9zdmc+';
             
             let progressText = "Not Started";
-            const progressData = localStorage.getItem('progress-' + key);
+            const progressData = localStorage.getItem('progress-' + item.key);
             if (progressData) {
                 try {
                     const parsed = JSON.parse(progressData);
@@ -126,8 +191,8 @@ window.loadLibrary = async function(page = 1) {
             `;
 
             card.onclick = () => {
-                if (window.isDeleteMode) window.deleteBook(key, value.title);
-                else window.openReader(key);
+                if (window.isDeleteMode) window.deleteBook(item.key, value.title);
+                else window.openReader(item.key);
             };
             cards.push(card);
         }
@@ -135,6 +200,7 @@ window.loadLibrary = async function(page = 1) {
         grid.innerHTML = '';
         cards.forEach(card => grid.appendChild(card));
         
+        // DRAW GLASS PAGINATION UI
         if (paginationContainer) {
             paginationContainer.innerHTML = '';
             if (totalPages > 1) {

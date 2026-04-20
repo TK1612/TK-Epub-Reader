@@ -330,3 +330,35 @@ textarea { flex: 1; font-family: monospace; resize: none; }
 }
 .search-bar-glass i { color: var(--text-muted); font-size: 20px; }
 .search-bar-glass i.ph-x:hover { color: var(--danger); transition: color 0.2s; }
+/* --- BATCH DELETE SELECTION UI --- */
+#library-grid.delete-mode .book-card .delete-overlay { 
+    opacity: 1; 
+    background: rgba(0, 0, 0, 0.6); /* Dim unselected books */
+}
+#library-grid.delete-mode .book-card .delete-overlay i,
+#library-grid.delete-mode .book-card .delete-overlay span {
+    display: none; /* Hide old trash icon/text */
+}
+#library-grid.delete-mode .book-card .delete-overlay::after {
+    content: '';
+    width: 32px; height: 32px;
+    border: 3px solid rgba(255,255,255,0.5);
+    border-radius: 50%;
+    transition: all 0.2s ease;
+}
+#library-grid.delete-mode .book-card.selected-for-delete {
+    border-color: var(--danger) !important;
+    transform: scale(0.95);
+}
+#library-grid.delete-mode .book-card.selected-for-delete .delete-overlay { 
+    background: rgba(239, 68, 68, 0.85); /* Bright red when selected */
+}
+#library-grid.delete-mode .book-card.selected-for-delete .delete-overlay::after {
+    border-color: white;
+    background-color: white;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath fill='none' stroke='%23ef4444' stroke-linecap='round' stroke-linejoin='round' stroke-width='24' d='M216 72 104 184 40 120'/%3E%3C/svg%3E");
+    background-size: 70%;
+    background-position: center;
+    background-repeat: no-repeat;
+    transform: scale(1.1);
+}

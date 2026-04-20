@@ -4,7 +4,7 @@ window.handleUpload = async function(event) {
 
     const uploadBtn = document.querySelector('.upload-btn');
     const originalText = uploadBtn.innerHTML;
-    uploadBtn.innerHTML = '<i class="ph ph-spinner"></i> Uploading...';
+    uploadBtn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Uploading...';
     uploadBtn.disabled = true;
 
     for (let i = 0; i < files.length; i++) {
@@ -14,16 +14,19 @@ window.handleUpload = async function(event) {
         
         await new Promise((resolve) => {
             tempBook.ready.then(async () => {
-                const meta = tempBook.packaging.metadata;
-                const title = meta.title || "Unknown Title";
+                let title = file.name.replace(/\.epub$/i, '');
+                try {
+                    const meta = tempBook.packaging.metadata;
+                    if (meta && meta.title) title = meta.title;
+                } catch(e) {}
                 
-                // FIXED: Smarter ID generation prevents database duplicates if you upload the same file twice
-                const bookId = meta.identifier || (title.replace(/\s+/g, '') + "_" + file.size); 
+                const bookId = "novel_" + Date.now() + "_" + Math.random().toString(36).substring(2, 11); 
                 
                 let coverBase64 = "";
-                const coverUrl = await tempBook.coverUrl();
-                if (coverUrl) {
-                    try {
+                // FIXED: Wrapped cover extraction in try/catch to prevent silent crashes
+                try {
+                    const coverUrl = await tempBook.coverUrl();
+                    if (coverUrl) {
                         const response = await fetch(coverUrl);
                         const blob = await response.blob();
                         coverBase64 = await new Promise((res) => {
@@ -31,7 +34,9 @@ window.handleUpload = async function(event) {
                             reader.onloadend = () => res(reader.result);
                             reader.readAsDataURL(blob);
                         });
-                    } catch(e) { console.warn("Could not extract cover."); }
+                    }
+                } catch(e) {
+                    console.warn("No cover found or EPUB manifest is malformed. Skipping cover.");
                 }
 
                 const bookData = { id: bookId, title: title, buffer: buffer, cover: coverBase64 };
@@ -39,7 +44,18 @@ window.handleUpload = async function(event) {
                 
                 tempBook.destroy();
                 resolve(); 
-            }).catch(() => { tempBook.destroy(); resolve(); });
+            }).catch(async (err) => {
+                // FIXED: "Force Save Fallback"
+                // If epub.js completely crashes reading a broken book, save it anyway so the user can open it in the Editor to fix it!
+                console.warn("EPUB.js failed to parse. Force saving as raw file...", err);
+                const bookId = "novel_" + Date.now() + "_" + Math.random().toString(36).substring(2, 11);
+                let fallbackTitle = file.name.replace(/\.epub$/i, '');
+                const bookData = { id: bookId, title: fallbackTitle, buffer: buffer, cover: "" };
+                
+                await localforage.setItem(bookId, bookData);
+                tempBook.destroy();
+                resolve();
+            });
         });
     }
 
@@ -49,7 +65,6 @@ window.handleUpload = async function(event) {
     event.target.value = ''; 
 };
 
-// FIXED: Added a loading lock to prevent Race Conditions (drawing duplicates)
 let isLibraryLoading = false;
 let currentLibraryPage = 1;
 const BOOKS_PER_PAGE = 100;
@@ -66,16 +81,10 @@ window.loadLibrary = async function(page = 1) {
         
         grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 40px;"><i class="ph ph-spinner ph-spin" style="font-size: 32px; color: var(--accent);"></i><p style="color: var(--text-muted); margin-top: 10px;">Loading library...</p></div>';
         
-        // 1. Get ALL keys instantly (takes almost zero RAM)
         const allKeys = await localforage.keys();
-        
-        // 2. Filter out system caches (bookmarks, progress, etc.)
         const bookKeys = allKeys.filter(k => !k.startsWith('bookmark-') && !k.startsWith('progress-') && !k.startsWith('locations-'));
-        
-        // 3. Reverse so newest uploads show first!
         bookKeys.reverse();
 
-        // 4. Calculate Math for Pagination
         const totalPages = Math.ceil(bookKeys.length / BOOKS_PER_PAGE) || 1;
         if (currentLibraryPage > totalPages) currentLibraryPage = totalPages;
 
@@ -84,7 +93,6 @@ window.loadLibrary = async function(page = 1) {
 
         const cards = []; 
         
-        // 5. ONLY download the 100 books for THIS page into RAM
         for (let key of pageKeys) {
             const value = await localforage.getItem(key);
             if (!value) continue;
@@ -127,7 +135,6 @@ window.loadLibrary = async function(page = 1) {
         grid.innerHTML = '';
         cards.forEach(card => grid.appendChild(card));
         
-        // 6. Draw the Glassmorphism Pagination Buttons
         if (paginationContainer) {
             paginationContainer.innerHTML = '';
             if (totalPages > 1) {
@@ -151,8 +158,8 @@ window.deleteBook = async function(bookId, bookTitle) {
         await localforage.removeItem(bookId);
         localStorage.removeItem('bookmark-' + bookId);
         localStorage.removeItem('progress-' + bookId);
-        localStorage.removeItem('locations-' + bookId); // Clean up cached locations to free memory
-        window.loadLibrary(); 
+        localStorage.removeItem('locations-' + bookId); 
+        window.loadLibrary(currentLibraryPage); 
     }
 };
 

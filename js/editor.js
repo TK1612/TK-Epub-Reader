@@ -27,18 +27,56 @@ window.showView = function(viewId) {
     if (viewId !== 'editor' && window.activeZipEditor !== null) closeEditorWorkspace();
 };
 
-window.loadEditorBookList = async function() {
+let currentEditorPage = 1;
+
+window.loadEditorBookList = async function(page = 1) {
     const grid = document.getElementById('editor-book-list');
+    const paginationContainer = document.getElementById('editor-pagination');
     if (!grid) return;
-    grid.innerHTML = '';
-    await localforage.iterate(function(value, key) {
+    
+    currentEditorPage = page;
+    grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 40px;"><i class="ph ph-spinner ph-spin" style="font-size: 32px; color: var(--accent);"></i><p style="color: var(--text-muted); margin-top: 10px;">Loading editor library...</p></div>';
+    
+    const allKeys = await localforage.keys();
+    const bookKeys = allKeys.filter(k => !k.startsWith('bookmark-') && !k.startsWith('progress-') && !k.startsWith('locations-'));
+    bookKeys.reverse(); // Newest uploads first
+
+    const BOOKS_PER_PAGE = 100;
+    const totalPages = Math.ceil(bookKeys.length / BOOKS_PER_PAGE) || 1;
+    if (currentEditorPage > totalPages) currentEditorPage = totalPages;
+
+    const startIndex = (currentEditorPage - 1) * BOOKS_PER_PAGE;
+    const pageKeys = bookKeys.slice(startIndex, startIndex + BOOKS_PER_PAGE);
+
+    const cards = [];
+    
+    for (let key of pageKeys) {
+        const value = await localforage.getItem(key);
+        if (!value) continue;
+
         const coverImg = value.cover ? value.cover : 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTUwIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjMmQyZDJkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmb250LXNpemU9IjE0IiBmaWxsPSIjYWNhY2FjIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+Tm8gQ292ZXI8L3RleHQ+PC9zdmc+';
         const card = document.createElement('div');
         card.className = 'book-card';
         card.innerHTML = `<img src="${coverImg}" class="book-cover"><div class="book-info"><div class="book-title" title="${value.title}">${value.title}</div><div style="font-size: 12px; color: var(--accent); margin-top: 4px;">Click to extract & edit</div></div>`;
         card.onclick = () => openEditorWorkspace(key, value.title);
-        grid.appendChild(card);
-    });
+        cards.push(card);
+    }
+    
+    grid.innerHTML = '';
+    cards.forEach(card => grid.appendChild(card));
+    
+    if (paginationContainer) {
+        paginationContainer.innerHTML = '';
+        if (totalPages > 1) {
+            for (let i = 1; i <= totalPages; i++) {
+                const btn = document.createElement('button');
+                btn.className = `page-btn ${i === currentEditorPage ? 'active' : ''}`;
+                btn.innerText = i;
+                btn.onclick = () => window.loadEditorBookList(i);
+                paginationContainer.appendChild(btn);
+            }
+        }
+    }
 };
 
 window.openEditorWorkspace = async function(bookId, bookTitle) {

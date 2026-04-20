@@ -268,3 +268,65 @@ textarea { flex: 1; font-family: monospace; resize: none; }
     box-shadow: 0 6px 15px rgba(59, 130, 246, 0.4);
     transform: translateY(-2px);
 }
+/* --- PAGINATION (GLASSMORPHISM) --- */
+.pagination-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    padding: 25px 0 10px 0;
+    margin-top: 10px;
+    flex-wrap: wrap;
+    border-top: 1px solid var(--border);
+}
+
+.page-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-color);
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: var(--shadow);
+}
+
+.page-btn:hover { background: var(--border); transform: translateY(-3px); }
+.page-btn.active {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+    box-shadow: 0 6px 15px rgba(59, 130, 246, 0.4);
+    transform: translateY(-2px);
+}
+
+/* --- LIBRARY SEARCH BAR --- */
+.search-bar-glass {
+    display: flex; 
+    gap: 10px; 
+    align-items: center; 
+    background: var(--glass-surface); 
+    padding: 12px 20px; 
+    border-radius: 12px; 
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+}
+.search-bar-glass input {
+    border: none !important;
+    background: transparent !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    flex: 1;
+    outline: none !important;
+    color: var(--text-color);
+    font-size: 15px;
+}
+.search-bar-glass i { color: var(--text-muted); font-size: 20px; }
+.search-bar-glass i.ph-x:hover { color: var(--danger); transition: color 0.2s; }

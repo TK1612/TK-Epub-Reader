@@ -95,42 +95,51 @@ window.openReader = async function(bookId, pushHistory = true) {
 
         if (savedCfi) window.rendition.display(savedCfi);
         else window.rendition.display();
-        // --- iOS & MOBILE TOUCH EVENT FIX ---
-        // This forces the iframe to register swipes and taps on Apple devices
-        window.touchStartX = 0;
-        window.touchStartY = 0;
+        // --- iOS PWA IFRAME INJECTION FIX ---
+        // Apple blocks touches from bubbling out of iframes in PWA mode.
+        // This hook injects the touch listeners DIRECTLY into the book's internal document every time a chapter loads.
+        
+        rendition.hooks.content.register(function(contents) {
+            let startX = 0;
+            let startY = 0;
+            let startTime = 0;
 
-        rendition.on("touchstart", (event) => {
-            window.touchStartX = event.changedTouches[0].screenX;
-            window.touchStartY = event.changedTouches[0].screenY;
-        });
+            contents.document.addEventListener('touchstart', (event) => {
+                startX = event.changedTouches[0].screenX;
+                startY = event.changedTouches[0].screenY;
+                startTime = new Date().getTime();
+            }, { passive: true });
 
-        rendition.on("touchend", (event) => {
-            const touchEndX = event.changedTouches[0].screenX;
-            const touchEndY = event.changedTouches[0].screenY;
-            
-            const deltaX = touchEndX - window.touchStartX;
-            const deltaY = touchEndY - window.touchStartY;
-            
-            // Check if it was a horizontal swipe (Threshold: 50px movement)
-            if (Math.abs(deltaX) > 50 && Math.abs(deltaY) < 50) {
-                if (deltaX > 0) {
-                    rendition.prev(); // Swipe Right -> Previous Page
-                } else {
-                    rendition.next(); // Swipe Left -> Next Page
-                }
-                event.preventDefault();
-            } 
-            // If it was just a quick tap (Almost 0 movement), toggle the Taskbar
-            else if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
-                const taskbar = document.getElementById('bottom-taskbar');
-                const pinCheckbox = document.getElementById('set-pin-taskbar');
+            contents.document.addEventListener('touchend', (event) => {
+                const endX = event.changedTouches[0].screenX;
+                const endY = event.changedTouches[0].screenY;
+                const timeTaken = new Date().getTime() - startTime;
                 
-                // Only hide/show if the user hasn't explicitly checked the "Pin Taskbar" setting
-                if (taskbar && (!pinCheckbox || !pinCheckbox.checked)) {
-                    taskbar.classList.toggle('hidden');
+                const deltaX = endX - startX;
+                const deltaY = endY - startY;
+                
+                // 1. SWIPE LOGIC (Must be fast < 300ms, and horizontal)
+                if (timeTaken < 300 && Math.abs(deltaX) > 40 && Math.abs(deltaY) < 40) {
+                    if (deltaX > 0) {
+                        rendition.prev(); // Swipe Right
+                    } else {
+                        rendition.next(); // Swipe Left
+                    }
+                    event.preventDefault(); // Stop Apple's native "back" gesture
+                } 
+                // 2. TAP LOGIC (Almost no movement)
+                else if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
+                    // Check if they clicked an internal book link (don't toggle taskbar if they did)
+                    if (event.target.tagName.toLowerCase() !== 'a') {
+                        const taskbar = document.getElementById('bottom-taskbar');
+                        const pinCheckbox = document.getElementById('set-pin-taskbar');
+                        
+                        if (taskbar && (!pinCheckbox || !pinCheckbox.checked)) {
+                            taskbar.classList.toggle('hidden');
+                        }
+                    }
                 }
-            }
+            }, { passive: false });
         });
 
         window.rendition.on('relocated', function(location) {

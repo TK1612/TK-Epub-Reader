@@ -711,7 +711,10 @@ window.runEpubDebugger = async function() {
     if (!window.activeZipEditor) return;
     const consoleEl = document.getElementById('debug-console');
     
+    // Initial clear is safe here
     consoleEl.innerHTML = '<div class="debug-log-item">Starting Comprehensive Diagnostics...</div>';
+    
+    // THE FIX: This safely adds new lines WITHOUT destroying the click buttons above it!
     const logMsg = (html) => consoleEl.insertAdjacentHTML('beforeend', html);
 
     if(window.closeAllModals) window.closeAllModals();
@@ -721,7 +724,7 @@ window.runEpubDebugger = async function() {
     let errorsFound = 0;
     let warningsFound = 0;
 
-const appendJumpableError = (path, errorText, lineNum, isWarning = false) => {
+    const appendJumpableError = (path, errorText, lineNum, isWarning = false) => {
         const div = document.createElement('div');
         div.className = 'debug-log-item error';
         div.style.cursor = 'pointer';
@@ -739,66 +742,47 @@ const appendJumpableError = (path, errorText, lineNum, isWarning = false) => {
                          <div style="font-size:10px; color:var(--accent);"><i class="ph ph-mouse-pointer-click"></i> Click to fix in editor</div>`;
         
         div.onclick = async () => {
-            console.log("👉 1. ERROR CLICKED!");
-            console.log("👉 Target Path:", path);
-            console.log("👉 Target Line:", lineNum);
-
-            try {
-                if(window.closeAllModals) window.closeAllModals();
-                else document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
-                console.log("👉 2. Modal closed.");
-                
-                let targetLi = null;
-                document.querySelectorAll('.file-tree-item').forEach(item => {
-                    if (item.title === path) targetLi = item;
-                });
-                console.log("👉 3. Found sidebar item:", targetLi);
-                
-                if (targetLi) {
-                    let folderContent = targetLi.closest('.folder-content');
-                    if (folderContent && !folderContent.classList.contains('open')) {
-                        folderContent.classList.add('open');
-                        let header = folderContent.previousElementSibling;
-                        if (header) header.classList.add('open');
-                    }
+            if(window.closeAllModals) window.closeAllModals();
+            else document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+            
+            let targetLi = null;
+            document.querySelectorAll('.file-tree-item').forEach(item => {
+                if (item.title === path) targetLi = item;
+            });
+            
+            if (targetLi) {
+                let folderContent = targetLi.closest('.folder-content');
+                if (folderContent && !folderContent.classList.contains('open')) {
+                    folderContent.classList.add('open');
+                    let header = folderContent.previousElementSibling;
+                    if (header) header.classList.add('open');
                 }
-                
-                console.log("👉 4. Loading file into editor...");
-                await window.loadFileIntoEditor(path, targetLi);
-                console.log("👉 5. File loaded successfully.");
-                
-                if (lineNum >= 0) {
-                    setTimeout(() => {
-                        console.log("👉 6. Timeout started (300ms). Checking cmEditor:", !!window.cmEditor);
-                        if (!window.cmEditor) return;
-                        
-                        window.cmEditor.refresh(); 
-                        const safeLine = Math.max(0, Math.min(lineNum, window.cmEditor.lineCount() - 1));
-                        console.log("👉 7. Safe line calculated:", safeLine);
-                        
-                        window.cmEditor.focus();
-                        window.cmEditor.setCursor({line: safeLine, ch: 0});
-                        console.log("👉 8. Cursor set.");
-                        
-                        try {
-                            const t = window.cmEditor.charCoords({line: safeLine, ch: 0}, "local").top; 
-                            const h = window.cmEditor.getScrollerElement().offsetHeight / 2; 
-                            console.log(`👉 9. Scrolling to Top: ${t}, Half-Height: ${h}`);
-                            window.cmEditor.scrollTo(null, t - h - 5);
-                        } catch(e) {
-                            console.error("👉 Scroll Math Error:", e);
-                        }
-                        
-                        window.cmEditor.addLineClass(safeLine, 'background', 'error-line-highlight');
-                        setTimeout(() => window.cmEditor.removeLineClass(safeLine, 'background', 'error-line-highlight'), 4000);
-                        console.log("👉 10. JUMP COMPLETE.");
-                    }, 300); 
-                }
-            } catch (err) {
-                console.error("👉 CRITICAL ERROR IN CLICK HANDLER:", err);
+            }
+            
+            await window.loadFileIntoEditor(path, targetLi);
+            
+            if (lineNum >= 0) {
+                setTimeout(() => {
+                    if (!window.cmEditor) return;
+                    
+                    window.cmEditor.refresh(); 
+                    const safeLine = Math.max(0, Math.min(lineNum, window.cmEditor.lineCount() - 1));
+                    
+                    window.cmEditor.focus();
+                    window.cmEditor.setCursor({line: safeLine, ch: 0});
+                    
+                    try {
+                        const t = window.cmEditor.charCoords({line: safeLine, ch: 0}, "local").top; 
+                        const h = window.cmEditor.getScrollerElement().offsetHeight / 2; 
+                        window.cmEditor.scrollTo(null, t - h - 5);
+                    } catch(e) {}
+                    
+                    window.cmEditor.addLineClass(safeLine, 'background', 'error-line-highlight');
+                    setTimeout(() => window.cmEditor.removeLineClass(safeLine, 'background', 'error-line-highlight'), 4000);
+                }, 300); 
             }
         };
-        consoleEl.appendChild(div);
+        consoleEl.appendChild(div); // Append the clickable element
         if (isWarning) warningsFound++; else errorsFound++;
     };
 

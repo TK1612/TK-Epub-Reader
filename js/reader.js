@@ -98,20 +98,28 @@ window.openReader = async function(bookId, pushHistory = true) {
         // --- iOS PWA "CAPTURE PHASE" TOUCH FIX ---
         // By using { capture: true }, we intercept the touch BEFORE epub.js or Safari can swallow it!
         // --- iOS NATIVE-FEEL TOUCH & TAP SYSTEM ---
+        // --- iOS NATIVE-FEEL TOUCH SYSTEM (WITH PAGINATION LOCKS) ---
+        let isPaginating = false; // Prevents overlapping swipe crashes
+
         rendition.hooks.content.register(function(contents) {
             const body = contents.document.querySelector('body');
             let startX = 0;
             let startY = 0;
             let startTime = 0;
 
-            // Using passive:true guarantees we NEVER break your vertical scrolling again
             body.addEventListener('touchstart', (e) => {
                 startX = e.changedTouches[0].clientX;
                 startY = e.changedTouches[0].clientY;
                 startTime = Date.now();
             }, { passive: true });
 
-            body.addEventListener('touchend', (e) => {
+            body.addEventListener('touchend', async (e) => {
+                // 1. SAFETY LOCK: Ignore touches if the book is currently turning a page
+                if (isPaginating) return;
+                
+                // 2. SAFETY LOCK: Ensure epub.js hasn't lost track of the location (Fixes your console error)
+                if (!rendition || !rendition.location || !rendition.location.start) return;
+
                 const endX = e.changedTouches[0].clientX;
                 const endY = e.changedTouches[0].clientY;
                 const timeTaken = Date.now() - startTime;
@@ -119,43 +127,52 @@ window.openReader = async function(bookId, pushHistory = true) {
                 const deltaX = endX - startX;
                 const deltaY = endY - startY;
 
-                // 1. SAFEGUARD: If you scrolled up or down, DO NOTHING. Let the browser scroll.
+                // Safeguard: Let the browser handle vertical scrolling
                 if (Math.abs(deltaY) > 30) return;
 
-                // 2. SWIPE LOGIC (Fast horizontal flick only)
-                if (timeTaken < 400 && Math.abs(deltaX) > 50) {
-                    if (deltaX > 0) rendition.prev();
-                    else rendition.next();
-                    return; 
-                } 
-                
-                // 3. TAP LOGIC (Edge Taps for pages, Center Tap for menu)
-                if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
-                    // Ignore if you are clicking a hyperlink inside the book
-                    if (e.target.tagName.toLowerCase() === 'a') return;
-
-                    const screenWidth = contents.window.innerWidth;
+                try {
+                    // SWIPE LOGIC (Fast horizontal flick)
+                    if (timeTaken < 400 && Math.abs(deltaX) > 50) {
+                        isPaginating = true;
+                        if (deltaX > 0) await rendition.prev();
+                        else await rendition.next();
+                        
+                        setTimeout(() => { isPaginating = false; }, 150); // Release lock
+                        return; 
+                    } 
                     
-                    // Left 25% of screen = Previous Page
-                    if (endX < screenWidth * 0.25) {
-                        rendition.prev();
-                    } 
-                    // Right 25% of screen = Next Page
-                    else if (endX > screenWidth * 0.75) {
-                        rendition.next();
-                    } 
-                    // Middle 50% of screen = Toggle Taskbar
-                    else {
-                        const taskbar = document.getElementById('bottom-taskbar');
-                        const pinCheckbox = document.getElementById('set-pin-taskbar');
-                        if (taskbar && (!pinCheckbox || !pinCheckbox.checked)) {
-                            taskbar.classList.toggle('hidden');
+                    // TAP LOGIC (Edge Taps for pages, Center Tap for menu)
+                    if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
+                        if (e.target.tagName.toLowerCase() === 'a') return;
+
+                        const screenWidth = contents.window.innerWidth;
+                        
+                        if (endX < screenWidth * 0.25) {
+                            isPaginating = true;
+                            await rendition.prev();
+                            setTimeout(() => { isPaginating = false; }, 150);
+                        } 
+                        else if (endX > screenWidth * 0.75) {
+                            isPaginating = true;
+                            await rendition.next();
+                            setTimeout(() => { isPaginating = false; }, 150);
+                        } 
+                        else {
+                            // Center tap - Toggle Taskbar
+                            const taskbar = document.getElementById('bottom-taskbar');
+                            const pinCheckbox = document.getElementById('set-pin-taskbar');
+                            if (taskbar && (!pinCheckbox || !pinCheckbox.checked)) {
+                                taskbar.classList.toggle('hidden');
+                            }
                         }
                     }
+                } catch (err) {
+                    console.warn("Recovered from epub.js rendering crash:", err);
+                    isPaginating = false; // Emergency unlock
                 }
             }, { passive: true });
         });
-
+        
         window.rendition.on('relocated', function(location) {
             let currentHref = location.start.href;
             let navItem = highlightCurrentChapter(currentHref);

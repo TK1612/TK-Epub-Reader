@@ -366,3 +366,12 @@ textarea { flex: 1; font-family: monospace; resize: none; }
 .pagination-container {
     padding-bottom: 90px;
 }
+/* --- iOS PWA SAFE AREA FIX --- */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+    .bottom-bar {
+        padding-bottom: calc(12px + env(safe-area-inset-bottom)) !important;
+    }
+    .right-modal {
+        bottom: calc(70px + env(safe-area-inset-bottom)) !important;
+    }
+}

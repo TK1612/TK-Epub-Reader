@@ -95,6 +95,43 @@ window.openReader = async function(bookId, pushHistory = true) {
 
         if (savedCfi) window.rendition.display(savedCfi);
         else window.rendition.display();
+        // --- iOS & MOBILE TOUCH EVENT FIX ---
+        // This forces the iframe to register swipes and taps on Apple devices
+        window.touchStartX = 0;
+        window.touchStartY = 0;
+
+        rendition.on("touchstart", (event) => {
+            window.touchStartX = event.changedTouches[0].screenX;
+            window.touchStartY = event.changedTouches[0].screenY;
+        });
+
+        rendition.on("touchend", (event) => {
+            const touchEndX = event.changedTouches[0].screenX;
+            const touchEndY = event.changedTouches[0].screenY;
+            
+            const deltaX = touchEndX - window.touchStartX;
+            const deltaY = touchEndY - window.touchStartY;
+            
+            // Check if it was a horizontal swipe (Threshold: 50px movement)
+            if (Math.abs(deltaX) > 50 && Math.abs(deltaY) < 50) {
+                if (deltaX > 0) {
+                    rendition.prev(); // Swipe Right -> Previous Page
+                } else {
+                    rendition.next(); // Swipe Left -> Next Page
+                }
+                event.preventDefault();
+            } 
+            // If it was just a quick tap (Almost 0 movement), toggle the Taskbar
+            else if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
+                const taskbar = document.getElementById('bottom-taskbar');
+                const pinCheckbox = document.getElementById('set-pin-taskbar');
+                
+                // Only hide/show if the user hasn't explicitly checked the "Pin Taskbar" setting
+                if (taskbar && (!pinCheckbox || !pinCheckbox.checked)) {
+                    taskbar.classList.toggle('hidden');
+                }
+            }
+        });
 
         window.rendition.on('relocated', function(location) {
             let currentHref = location.start.href;

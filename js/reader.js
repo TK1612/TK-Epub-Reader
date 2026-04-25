@@ -97,58 +97,63 @@ window.openReader = async function(bookId, pushHistory = true) {
         else window.rendition.display();
         // --- iOS PWA "CAPTURE PHASE" TOUCH FIX ---
         // By using { capture: true }, we intercept the touch BEFORE epub.js or Safari can swallow it!
+        // --- iOS NATIVE-FEEL TOUCH & TAP SYSTEM ---
         rendition.hooks.content.register(function(contents) {
+            const body = contents.document.querySelector('body');
             let startX = 0;
             let startY = 0;
             let startTime = 0;
 
-            const handleStart = (event) => {
-                // Support both Touch Events and Pointer Events
-                const touch = event.changedTouches ? event.changedTouches[0] : event;
-                startX = touch.screenX || touch.clientX;
-                startY = touch.screenY || touch.clientY;
-                startTime = new Date().getTime();
-            };
+            // Using passive:true guarantees we NEVER break your vertical scrolling again
+            body.addEventListener('touchstart', (e) => {
+                startX = e.changedTouches[0].clientX;
+                startY = e.changedTouches[0].clientY;
+                startTime = Date.now();
+            }, { passive: true });
 
-            const handleEnd = (event) => {
-                const touch = event.changedTouches ? event.changedTouches[0] : event;
-                const endX = touch.screenX || touch.clientX;
-                const endY = touch.screenY || touch.clientY;
-                const timeTaken = new Date().getTime() - startTime;
+            body.addEventListener('touchend', (e) => {
+                const endX = e.changedTouches[0].clientX;
+                const endY = e.changedTouches[0].clientY;
+                const timeTaken = Date.now() - startTime;
                 
                 const deltaX = endX - startX;
                 const deltaY = endY - startY;
-                
-                // 1. SWIPE LOGIC (Fast horizontal flick)
-                if (timeTaken < 300 && Math.abs(deltaX) > 40 && Math.abs(deltaY) < 40) {
-                    if (deltaX > 0) {
-                        rendition.prev(); // Swipe Right
-                    } else {
-                        rendition.next(); // Swipe Left
-                    }
-                    event.preventDefault();
+
+                // 1. SAFEGUARD: If you scrolled up or down, DO NOTHING. Let the browser scroll.
+                if (Math.abs(deltaY) > 30) return;
+
+                // 2. SWIPE LOGIC (Fast horizontal flick only)
+                if (timeTaken < 400 && Math.abs(deltaX) > 50) {
+                    if (deltaX > 0) rendition.prev();
+                    else rendition.next();
+                    return; 
                 } 
-                // 2. TAP LOGIC (Almost no movement)
-                else if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
-                    // Check if they clicked an internal book link (<a> tag)
-                    if (event.target && event.target.tagName && event.target.tagName.toLowerCase() !== 'a') {
+                
+                // 3. TAP LOGIC (Edge Taps for pages, Center Tap for menu)
+                if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
+                    // Ignore if you are clicking a hyperlink inside the book
+                    if (e.target.tagName.toLowerCase() === 'a') return;
+
+                    const screenWidth = contents.window.innerWidth;
+                    
+                    // Left 25% of screen = Previous Page
+                    if (endX < screenWidth * 0.25) {
+                        rendition.prev();
+                    } 
+                    // Right 25% of screen = Next Page
+                    else if (endX > screenWidth * 0.75) {
+                        rendition.next();
+                    } 
+                    // Middle 50% of screen = Toggle Taskbar
+                    else {
                         const taskbar = document.getElementById('bottom-taskbar');
                         const pinCheckbox = document.getElementById('set-pin-taskbar');
-                        
                         if (taskbar && (!pinCheckbox || !pinCheckbox.checked)) {
                             taskbar.classList.toggle('hidden');
                         }
                     }
                 }
-            };
-
-            // INJECT USING THE CAPTURE PHASE
-            contents.document.addEventListener('touchstart', handleStart, { capture: true, passive: false });
-            contents.document.addEventListener('touchend', handleEnd, { capture: true, passive: false });
-            
-            // APPLE FALLBACK: Listen to modern Pointer Events too
-            contents.document.addEventListener('pointerdown', handleStart, { capture: true, passive: false });
-            contents.document.addEventListener('pointerup', handleEnd, { capture: true, passive: false });
+            }, { passive: true });
         });
 
         window.rendition.on('relocated', function(location) {

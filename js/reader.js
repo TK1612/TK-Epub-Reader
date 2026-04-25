@@ -99,48 +99,42 @@ window.openReader = async function(bookId, pushHistory = true) {
         // Apple blocks touches from bubbling out of iframes in PWA mode.
         // This hook injects the touch listeners DIRECTLY into the book's internal document every time a chapter loads.
         
-        rendition.hooks.content.register(function(contents) {
-            let startX = 0;
-            let startY = 0;
-            let startTime = 0;
+        // --- TEMPORARY iPHONE TOUCH DIAGNOSTIC LOGGER ---
+        let iosDebug = document.getElementById('ios-debug');
+        if (!iosDebug) {
+            iosDebug = document.createElement('div');
+            iosDebug.id = 'ios-debug';
+            iosDebug.style.cssText = 'position:fixed; top:50px; left:10px; right:10px; height: 150px; overflow: hidden; background:rgba(0,0,0,0.85); color:#00ff00; z-index:9999; padding:10px; font-family:monospace; font-size:12px; pointer-events:none; border-radius:8px; border: 1px solid #00ff00;';
+            document.body.appendChild(iosDebug);
+        }
+        
+        const logTouch = (msg) => {
+            iosDebug.innerHTML = `<div>${new Date().toLocaleTimeString().split(' ')[0]}: ${msg}</div>` + iosDebug.innerHTML;
+        };
 
+        logTouch("SYSTEM: Reader Loaded. Waiting for touch...");
+
+        // Test 1: Can the main document feel your finger?
+        document.addEventListener('touchstart', (e) => logTouch("MAIN: Touch Start detected!"), {passive: true});
+        
+        // Test 2: Can the epub.js wrapper feel your finger?
+        rendition.on("touchstart", () => logTouch("RENDITION: Touch Start detected!"));
+        
+        // Test 3: Can the deepest level (the iframe) feel your finger?
+        rendition.hooks.content.register(function(contents) {
+            logTouch("SYSTEM: Iframe Hook successfully injected.");
+            
             contents.document.addEventListener('touchstart', (event) => {
-                startX = event.changedTouches[0].screenX;
-                startY = event.changedTouches[0].screenY;
-                startTime = new Date().getTime();
+                const x = event.changedTouches[0].screenX.toFixed(0);
+                const y = event.changedTouches[0].screenY.toFixed(0);
+                logTouch(`IFRAME: Touch Start at X:${x}, Y:${y}`);
             }, { passive: true });
 
             contents.document.addEventListener('touchend', (event) => {
-                const endX = event.changedTouches[0].screenX;
-                const endY = event.changedTouches[0].screenY;
-                const timeTaken = new Date().getTime() - startTime;
-                
-                const deltaX = endX - startX;
-                const deltaY = endY - startY;
-                
-                // 1. SWIPE LOGIC (Must be fast < 300ms, and horizontal)
-                if (timeTaken < 300 && Math.abs(deltaX) > 40 && Math.abs(deltaY) < 40) {
-                    if (deltaX > 0) {
-                        rendition.prev(); // Swipe Right
-                    } else {
-                        rendition.next(); // Swipe Left
-                    }
-                    event.preventDefault(); // Stop Apple's native "back" gesture
-                } 
-                // 2. TAP LOGIC (Almost no movement)
-                else if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
-                    // Check if they clicked an internal book link (don't toggle taskbar if they did)
-                    if (event.target.tagName.toLowerCase() !== 'a') {
-                        const taskbar = document.getElementById('bottom-taskbar');
-                        const pinCheckbox = document.getElementById('set-pin-taskbar');
-                        
-                        if (taskbar && (!pinCheckbox || !pinCheckbox.checked)) {
-                            taskbar.classList.toggle('hidden');
-                        }
-                    }
-                }
-            }, { passive: false });
+                logTouch(`IFRAME: Touch End detected!`);
+            }, { passive: true });
         });
+        // ------------------------------------------------
 
         window.rendition.on('relocated', function(location) {
             let currentHref = location.start.href;

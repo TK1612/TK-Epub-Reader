@@ -51,6 +51,7 @@ window.launchEpubJsEngine = async function(bookId) {
         else if (theme === 'paper') { bgColor = '#f4ecd8'; color = textColor === '#e4e4e7' ? '#333333' : textColor; }
         else if (theme === 'blue' || theme === 'light-blue') { bgColor = '#e8f4f8'; color = textColor === '#e4e4e7' ? '#1a365d' : textColor; }
         else if (theme === 'black') { bgColor = '#000000'; color = textColor; } 
+        else if (theme === 'dark') { bgColor = '#18181b'; color = textColor; } 
         
         document.getElementById('reader-container').style.backgroundColor = bgColor;
         viewer.style.backgroundColor = bgColor;
@@ -106,18 +107,37 @@ window.launchEpubJsEngine = async function(bookId) {
         }
     }
 
-    // Bookmarks and Active TOC Highlighting
     window.rendition.on("relocated", function(location) {
         localStorage.setItem('bookmark-' + bookId, location.start.cfi);
         
         let chapterName = "Chapter";
         let currentHref = location.start.href;
 
+        // OPF/SPINE FILE MATCHING FOR CHAPTER TITLES
         try {
-            const toc = window.book.navigation ? window.book.navigation.get(currentHref) : null;
-            if (toc) {
-                if (toc.label) chapterName = toc.label;
-                if (toc.href) currentHref = toc.href;
+            const spineItem = window.book.spine.get(location.start.cfi);
+            const baseHref = spineItem ? spineItem.href : currentHref;
+            const cleanBaseFileName = baseHref.split('#')[0].split('/').pop();
+            const cleanCurrentFileName = currentHref.split('#')[0].split('/').pop();
+
+            if (window.book.navigation && window.book.navigation.toc) {
+                let matchedItem = null;
+                const findInToc = (items) => {
+                    for (let item of items) {
+                        const cleanItemFileName = item.href.split('#')[0].split('/').pop();
+                        if (cleanItemFileName === cleanBaseFileName || cleanItemFileName === cleanCurrentFileName) {
+                            matchedItem = item;
+                            return;
+                        }
+                        if (item.subitems && item.subitems.length > 0) findInToc(item.subitems);
+                    }
+                };
+                findInToc(window.book.navigation.toc);
+                
+                if (matchedItem) {
+                    chapterName = matchedItem.label.trim();
+                    currentHref = matchedItem.href;
+                }
             }
         } catch(e) {}
 
@@ -128,11 +148,12 @@ window.launchEpubJsEngine = async function(bookId) {
             localStorage.setItem('progress-' + bookId, JSON.stringify({ chapter: chapterName, percentage: percentage }));
         }
 
-        const targetPath = currentHref ? currentHref.split('#')[0].replace(/^\//, '') : null;
+        const targetFileName = currentHref ? currentHref.split('#')[0].split('/').pop() : null;
 
         document.querySelectorAll('#toc-list .list-item').forEach(li => {
-            const itemPath = li.dataset.href ? li.dataset.href.split('#')[0].replace(/^\//, '') : null;
-            if (itemPath && targetPath && itemPath === targetPath) {
+            const itemFileName = li.dataset.href ? li.dataset.href.split('#')[0].split('/').pop() : null;
+            
+            if (itemFileName && targetFileName && itemFileName === targetFileName) {
                 li.style.color = 'var(--accent)'; 
                 li.style.fontWeight = 'bold'; 
                 li.style.borderLeft = '3px solid var(--accent)'; 
@@ -142,44 +163,73 @@ window.launchEpubJsEngine = async function(bookId) {
                 li.style.color = ''; 
                 li.style.fontWeight = 'normal'; 
                 li.style.borderLeft = 'none'; 
-                li.style.paddingLeft = '0px'; 
+                li.style.paddingLeft = li.dataset.originalPadding || '15px'; 
                 if (li.id === "active-toc-item") li.removeAttribute('id');
             }
         });
     });
 
-    // Suppress generation crashes gracefully
     window.book.ready.then(() => {
         return window.book.locations.generate(1600);
-    }).catch(err => {
-        console.warn("Locations generation skipped due to non-standard EPUB HTML.");
-    });
+    }).catch(err => {});
 
-    // Build the TOC safely
-    window.book.loaded.navigation.then(function(toc) {
+    window.book.loaded.navigation.then(function(nav) {
         const tocList = document.getElementById('toc-list');
-        if (!tocList || !toc) return;
+        if (!tocList || !nav) return;
         tocList.innerHTML = '';
         
-        try {
-            toc.forEach(function(chapter) {
+        const tocItems = nav.toc || nav; 
+        
+        const buildToc = (items, depth = 0) => {
+            if (!items || typeof items.forEach !== 'function') return;
+            items.forEach(chapter => {
                 const li = document.createElement('li');
                 li.className = 'list-item';
-                li.innerText = chapter.label;
+                li.innerText = chapter.label ? chapter.label.trim() : "Chapter";
                 li.dataset.href = chapter.href; 
-                li.style.paddingLeft = '15px';
+                
+                const padding = (15 + (depth * 15)) + 'px';
+                li.style.paddingLeft = padding;
+                li.dataset.originalPadding = padding; 
+                
+                // --- FIX: THE 3-TIER SMART ROUTER ---
                 li.onclick = () => { 
-                    window.rendition.display(chapter.href); 
+                    const targetHref = chapter.href;
+                    // Tier 1: Try exact match
+                    window.rendition.display(targetHref).catch(() => {
+                        console.warn("TOC Exact Match Failed. Attempting Fallback Routing...");
+                        // Tier 2: Strip # anchor and try again
+                        const cleanHref = targetHref.split('#')[0];
+                        window.rendition.display(cleanHref).catch(() => {
+                            // Tier 3: Strip folders and force match in the book's spine
+                            const fileName = cleanHref.split('/').pop();
+                            if (window.book && window.book.spine && window.book.spine.spineItems) {
+                                const spineItem = window.book.spine.spineItems.find(item => item.href.split('/').pop() === fileName);
+                                if (spineItem) {
+                                    window.rendition.display(spineItem.href);
+                                }
+                            }
+                        });
+                    });
                     if (window.closeAllModals) window.closeAllModals(); 
                 };
+                // ------------------------------------
+
                 tocList.appendChild(li);
+
+                if (chapter.subitems && chapter.subitems.length > 0) {
+                    buildToc(chapter.subitems, depth + 1);
+                }
             });
+        };
+
+        try {
+            buildToc(tocItems);
         } catch(err) {
             console.warn("Could not build standard TOC list", err);
         }
     }).catch(err => console.warn("TOC loading failed", err));
 
-    // --- UNIVERSAL FLOATING BUTTON SETUP ---
     if (document.getElementById('taskbar-toggle-btn')) document.getElementById('taskbar-toggle-btn').remove();
     
     const btn = document.createElement('button');
@@ -221,7 +271,7 @@ window.launchEpubJsEngine = async function(bookId) {
         }
     });
 
-    // --- RESTORED WORKING MOBILE TOUCH LOGIC ---
+    // Mobile Touch Logic
     window.rendition.hooks.content.register(function(contents) {
         let startX = 0; let startY = 0; let startTime = 0;
         
@@ -248,7 +298,6 @@ window.launchEpubJsEngine = async function(bookId) {
                 if (event.target && event.target.tagName && event.target.tagName.toLowerCase() !== 'a') {
                     try { if (contents.window.getSelection().toString().length > 0) return; } catch(err) {}
                     
-                    // The secret: Trust lexical scope and skip the broken middle-screen math!
                     const taskbarEl = document.getElementById('bottom-taskbar');
                     const pinCheckbox = document.getElementById('set-pin-taskbar');
                     if (taskbarEl && (!pinCheckbox || !pinCheckbox.checked)) {

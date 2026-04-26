@@ -6,6 +6,35 @@ window.foliateCurrentCfi = null;
 window.taskbarToggleBtn = null;
 
 window.launchFoliateEngine = async function(bookId) {
+    // --- NEW: LOAD SETTINGS BEFORE ENGINE BOOTS ---
+    try {
+        const saved = JSON.parse(localStorage.getItem('reader-settings'));
+        if (saved) {
+            if(saved.theme && document.getElementById('set-reader-theme')) document.getElementById('set-reader-theme').value = saved.theme;
+            if(saved.fontSize && document.getElementById('set-font')) document.getElementById('set-font').value = saved.fontSize;
+            if(saved.lineHeight && document.getElementById('set-line')) document.getElementById('set-line').value = saved.lineHeight;
+            if(saved.paraSpacing !== undefined && document.getElementById('set-para-spacing')) document.getElementById('set-para-spacing').value = saved.paraSpacing;
+            if(saved.indent !== undefined && document.getElementById('set-indent')) document.getElementById('set-indent').value = saved.indent;
+            if(saved.fontFamily && document.getElementById('set-font-family')) document.getElementById('set-font-family').value = saved.fontFamily;
+            if(saved.textColor && document.getElementById('set-text-color')) document.getElementById('set-text-color').value = saved.textColor;
+            
+            if(saved.readMode && document.getElementById('set-read-mode')) {
+                let mode = saved.readMode;
+                if (mode === 'continuous') mode = 'scrolled'; // Safety fallback, Foliate ignores continuous
+                document.getElementById('set-read-mode').value = mode;
+            }
+            
+            if(saved.pinTaskbar !== undefined && document.getElementById('set-pin-taskbar')) document.getElementById('set-pin-taskbar').checked = saved.pinTaskbar;
+            if(saved.showFloatBtn !== undefined && document.getElementById('set-show-float-btn')) document.getElementById('set-show-float-btn').checked = saved.showFloatBtn;
+            if(saved.textAlign) {
+                document.querySelectorAll('.segment-btn').forEach(btn => btn.classList.remove('active'));
+                const alignBtn = document.getElementById('align-' + saved.textAlign);
+                if (alignBtn) alignBtn.classList.add('active');
+            }
+        }
+    } catch(e) {}
+    // ----------------------------------------------
+
     try {
         const bookData = await localforage.getItem(bookId);
         if (!bookData) throw new Error("Could not retrieve book from database.");
@@ -37,6 +66,27 @@ window.launchFoliateEngine = async function(bookId) {
 
         window.updateSettings = function() {
             if (!window.foliateView) return;
+
+            // --- NEW: SAVE SETTINGS SILENTLY ON CHANGE ---
+            try {
+                const alignBtn = document.querySelector('.segment-btn.active');
+                const settings = {
+                    theme: document.getElementById('set-reader-theme') ? document.getElementById('set-reader-theme').value : 'black',
+                    fontSize: document.getElementById('set-font') ? document.getElementById('set-font').value : '18',
+                    lineHeight: document.getElementById('set-line') ? document.getElementById('set-line').value : '1.5',
+                    paraSpacing: document.getElementById('set-para-spacing') ? document.getElementById('set-para-spacing').value : '0',
+                    indent: document.getElementById('set-indent') ? document.getElementById('set-indent').value : '0',
+                    fontFamily: document.getElementById('set-font-family') ? document.getElementById('set-font-family').value : 'Inter',
+                    textColor: document.getElementById('set-text-color') ? document.getElementById('set-text-color').value : '#e4e4e7',
+                    readMode: document.getElementById('set-read-mode') ? document.getElementById('set-read-mode').value : 'paginated',
+                    pinTaskbar: document.getElementById('set-pin-taskbar') ? document.getElementById('set-pin-taskbar').checked : false,
+                    showFloatBtn: document.getElementById('set-show-float-btn') ? document.getElementById('set-show-float-btn').checked : true,
+                    textAlign: alignBtn ? (alignBtn.id === 'align-center' ? 'center' : 'left') : 'left'
+                };
+                localStorage.setItem('reader-settings', JSON.stringify(settings));
+            } catch(e) {}
+            // ---------------------------------------------
+
             const theme = document.getElementById('set-reader-theme').value;
             const fontSize = document.getElementById('set-font').value + 'px';
             const lineHeight = document.getElementById('set-line').value;
@@ -45,7 +95,6 @@ window.launchFoliateEngine = async function(bookId) {
             const fontFamily = document.getElementById('set-font-family').value;
             const textColor = document.getElementById('set-text-color').value;
 
-            // --- FIX: Update the numeric UI labels ---
             if(document.getElementById('val-font')) document.getElementById('val-font').innerText = fontSize;
             if(document.getElementById('val-line')) document.getElementById('val-line').innerText = lineHeight;
             if(document.getElementById('val-para-spacing')) document.getElementById('val-para-spacing').innerText = paraSpacing;
@@ -102,7 +151,12 @@ window.launchFoliateEngine = async function(bookId) {
 
         const blob = new Blob([actualBuffer], { type: 'application/epub+zip' });
         const file = new File([blob], "book.epub", { type: 'application/epub+zip' });
-        await window.foliateView.open(file);
+        
+        try {
+            await window.foliateView.open(file);
+        } catch (openErr) {
+            throw new Error("Foliate failed to parse this EPUB file.");
+        }
         
         document.getElementById('chapter-title').innerText = "Reading...";
 
@@ -150,18 +204,12 @@ window.launchFoliateEngine = async function(bookId) {
 
         window.foliateView.addEventListener('click', (e) => {
             const detail = e.detail || {};
-            const clientX = detail.clientX !== undefined ? detail.clientX : e.clientX;
             const target = detail.target || e.target;
-
             if (target && target.tagName && target.tagName.toLowerCase() === 'a') return;
-            if (clientX === undefined) return; 
 
-            const w = window.innerWidth;
-            if (clientX > w * 0.25 && clientX < w * 0.75) {
-                const taskbar = document.getElementById('bottom-taskbar');
-                const pinCheckbox = document.getElementById('set-pin-taskbar');
-                if (taskbar && (!pinCheckbox || !pinCheckbox.checked)) taskbar.classList.toggle('hidden');
-            }
+            const taskbar = document.getElementById('bottom-taskbar');
+            const pinCheckbox = document.getElementById('set-pin-taskbar');
+            if (taskbar && (!pinCheckbox || !pinCheckbox.checked)) taskbar.classList.toggle('hidden');
         });
 
         window.foliateView.addEventListener('load', (e) => {

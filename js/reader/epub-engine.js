@@ -28,9 +28,24 @@ window.launchEpubJsEngine = async function(bookId) {
     } catch(e) {}
     // ----------------------------------------------
 
+    // --- FIX: SAVE READ MODE BEFORE THE RESTART LOOP HAPPENS ---
+    const modeDropdown = document.getElementById('set-read-mode');
+    if (modeDropdown && !modeDropdown.dataset.modeSaved) {
+        modeDropdown.addEventListener('change', function() {
+            try {
+                const settings = JSON.parse(localStorage.getItem('reader-settings')) || {};
+                settings.readMode = this.value;
+                localStorage.setItem('reader-settings', JSON.stringify(settings));
+            } catch(e) {}
+        });
+        modeDropdown.dataset.modeSaved = "true";
+    }
+    // -----------------------------------------------------------
+
     const bookData = await localforage.getItem(bookId);
     if (!bookData) throw new Error("Could not retrieve book from database.");
     
+    // Safely unwrap the ArrayBuffer to prevent crashes
     const actualBuffer = bookData.buffer || bookData; 
     if (!actualBuffer || actualBuffer.byteLength === 0) throw new Error("Book file is empty or corrupted.");
 
@@ -87,6 +102,7 @@ window.launchEpubJsEngine = async function(bookId) {
         if(document.getElementById('val-para-spacing')) document.getElementById('val-para-spacing').innerText = paraSpacing;
         if(document.getElementById('val-indent')) document.getElementById('val-indent').innerText = indent;
 
+        // Dynamic Background Theming
         let bgColor = '#18181b'; let color = textColor;
         if (theme === 'light') { bgColor = '#ffffff'; color = textColor === '#e4e4e7' ? '#000000' : textColor; }
         else if (theme === 'paper') { bgColor = '#f4ecd8'; color = textColor === '#e4e4e7' ? '#333333' : textColor; }
@@ -103,6 +119,7 @@ window.launchEpubJsEngine = async function(bookId) {
         });
         window.rendition.themes.select("custom");
 
+        // Sync Floating Button Settings
         const showFloatCheckbox = document.getElementById('set-show-float-btn');
         const taskbarElement = document.getElementById('bottom-taskbar');
         
@@ -123,6 +140,7 @@ window.launchEpubJsEngine = async function(bookId) {
 
     window.updateSettings(); 
 
+    // Bulletproof Load Sequence
     const savedLocation = localStorage.getItem('bookmark-' + bookId);
     try {
         if (savedLocation) {
@@ -146,6 +164,7 @@ window.launchEpubJsEngine = async function(bookId) {
         }
     }
 
+    // Bookmarks and Active TOC Highlighting
     window.rendition.on("relocated", function(location) {
         localStorage.setItem('bookmark-' + bookId, location.start.cfi);
         
@@ -207,10 +226,14 @@ window.launchEpubJsEngine = async function(bookId) {
         });
     });
 
+    // Suppress generation crashes gracefully
     window.book.ready.then(() => {
         return window.book.locations.generate(1600);
-    }).catch(err => {});
+    }).catch(err => {
+        console.warn("Locations generation skipped due to non-standard EPUB HTML.");
+    });
 
+    // Build the TOC safely
     window.book.loaded.navigation.then(function(nav) {
         const tocList = document.getElementById('toc-list');
         if (!tocList || !nav) return;
@@ -262,6 +285,7 @@ window.launchEpubJsEngine = async function(bookId) {
         }
     }).catch(err => console.warn("TOC loading failed", err));
 
+    // --- UNIVERSAL FLOATING BUTTON SETUP ---
     if (document.getElementById('taskbar-toggle-btn')) document.getElementById('taskbar-toggle-btn').remove();
     
     const btn = document.createElement('button');
@@ -291,6 +315,7 @@ window.launchEpubJsEngine = async function(bookId) {
 
     btn.onclick = (e) => { e.stopPropagation(); if (taskbar) taskbar.classList.toggle('hidden'); };
 
+    // PC Click Handling
     window.rendition.on('click', (e) => {
         if (e.target && e.target.tagName && e.target.tagName.toLowerCase() === 'a') return;
         try { if (window.rendition.getContents()[0].window.getSelection().toString().length > 0) return; } catch(err) {}
@@ -302,6 +327,7 @@ window.launchEpubJsEngine = async function(bookId) {
         }
     });
 
+    // --- RESTORED WORKING MOBILE TOUCH LOGIC ---
     window.rendition.hooks.content.register(function(contents) {
         let startX = 0; let startY = 0; let startTime = 0;
         
@@ -328,6 +354,7 @@ window.launchEpubJsEngine = async function(bookId) {
                 if (event.target && event.target.tagName && event.target.tagName.toLowerCase() !== 'a') {
                     try { if (contents.window.getSelection().toString().length > 0) return; } catch(err) {}
                     
+                    // The secret: Trust lexical scope and skip the broken middle-screen math!
                     const taskbarEl = document.getElementById('bottom-taskbar');
                     const pinCheckbox = document.getElementById('set-pin-taskbar');
                     if (taskbarEl && (!pinCheckbox || !pinCheckbox.checked)) {

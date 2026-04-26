@@ -5,10 +5,32 @@ window.rendition = null;
 window.taskbarToggleBtn = null;
 
 window.launchEpubJsEngine = async function(bookId) {
+    // --- NEW: LOAD SETTINGS BEFORE ENGINE BOOTS ---
+    try {
+        const saved = JSON.parse(localStorage.getItem('reader-settings'));
+        if (saved) {
+            if(saved.theme && document.getElementById('set-reader-theme')) document.getElementById('set-reader-theme').value = saved.theme;
+            if(saved.fontSize && document.getElementById('set-font')) document.getElementById('set-font').value = saved.fontSize;
+            if(saved.lineHeight && document.getElementById('set-line')) document.getElementById('set-line').value = saved.lineHeight;
+            if(saved.paraSpacing !== undefined && document.getElementById('set-para-spacing')) document.getElementById('set-para-spacing').value = saved.paraSpacing;
+            if(saved.indent !== undefined && document.getElementById('set-indent')) document.getElementById('set-indent').value = saved.indent;
+            if(saved.fontFamily && document.getElementById('set-font-family')) document.getElementById('set-font-family').value = saved.fontFamily;
+            if(saved.textColor && document.getElementById('set-text-color')) document.getElementById('set-text-color').value = saved.textColor;
+            if(saved.readMode && document.getElementById('set-read-mode')) document.getElementById('set-read-mode').value = saved.readMode;
+            if(saved.pinTaskbar !== undefined && document.getElementById('set-pin-taskbar')) document.getElementById('set-pin-taskbar').checked = saved.pinTaskbar;
+            if(saved.showFloatBtn !== undefined && document.getElementById('set-show-float-btn')) document.getElementById('set-show-float-btn').checked = saved.showFloatBtn;
+            if(saved.textAlign) {
+                document.querySelectorAll('.segment-btn').forEach(btn => btn.classList.remove('active'));
+                const alignBtn = document.getElementById('align-' + saved.textAlign);
+                if (alignBtn) alignBtn.classList.add('active');
+            }
+        }
+    } catch(e) {}
+    // ----------------------------------------------
+
     const bookData = await localforage.getItem(bookId);
     if (!bookData) throw new Error("Could not retrieve book from database.");
     
-    // Safely unwrap the ArrayBuffer to prevent crashes
     const actualBuffer = bookData.buffer || bookData; 
     if (!actualBuffer || actualBuffer.byteLength === 0) throw new Error("Book file is empty or corrupted.");
 
@@ -30,6 +52,26 @@ window.launchEpubJsEngine = async function(bookId) {
     window.updateSettings = function() {
         if (!window.rendition) return;
 
+        // --- NEW: SAVE SETTINGS SILENTLY ON CHANGE ---
+        try {
+            const alignBtn = document.querySelector('.segment-btn.active');
+            const settings = {
+                theme: document.getElementById('set-reader-theme') ? document.getElementById('set-reader-theme').value : 'black',
+                fontSize: document.getElementById('set-font') ? document.getElementById('set-font').value : '18',
+                lineHeight: document.getElementById('set-line') ? document.getElementById('set-line').value : '1.5',
+                paraSpacing: document.getElementById('set-para-spacing') ? document.getElementById('set-para-spacing').value : '0',
+                indent: document.getElementById('set-indent') ? document.getElementById('set-indent').value : '0',
+                fontFamily: document.getElementById('set-font-family') ? document.getElementById('set-font-family').value : 'Inter',
+                textColor: document.getElementById('set-text-color') ? document.getElementById('set-text-color').value : '#e4e4e7',
+                readMode: document.getElementById('set-read-mode') ? document.getElementById('set-read-mode').value : 'paginated',
+                pinTaskbar: document.getElementById('set-pin-taskbar') ? document.getElementById('set-pin-taskbar').checked : false,
+                showFloatBtn: document.getElementById('set-show-float-btn') ? document.getElementById('set-show-float-btn').checked : true,
+                textAlign: alignBtn ? (alignBtn.id === 'align-center' ? 'center' : 'left') : 'left'
+            };
+            localStorage.setItem('reader-settings', JSON.stringify(settings));
+        } catch(e) {}
+        // ---------------------------------------------
+
         const theme = document.getElementById('set-reader-theme').value;
         const fontSize = document.getElementById('set-font').value + 'px';
         const lineHeight = document.getElementById('set-line').value;
@@ -45,7 +87,6 @@ window.launchEpubJsEngine = async function(bookId) {
         if(document.getElementById('val-para-spacing')) document.getElementById('val-para-spacing').innerText = paraSpacing;
         if(document.getElementById('val-indent')) document.getElementById('val-indent').innerText = indent;
 
-        // Dynamic Background Theming (Supports Light, Paper, Blue, Dark, and Pure Black)
         let bgColor = '#18181b'; let color = textColor;
         if (theme === 'light') { bgColor = '#ffffff'; color = textColor === '#e4e4e7' ? '#000000' : textColor; }
         else if (theme === 'paper') { bgColor = '#f4ecd8'; color = textColor === '#e4e4e7' ? '#333333' : textColor; }
@@ -62,7 +103,6 @@ window.launchEpubJsEngine = async function(bookId) {
         });
         window.rendition.themes.select("custom");
 
-        // Sync Floating Button Settings
         const showFloatCheckbox = document.getElementById('set-show-float-btn');
         const taskbarElement = document.getElementById('bottom-taskbar');
         
@@ -83,7 +123,6 @@ window.launchEpubJsEngine = async function(bookId) {
 
     window.updateSettings(); 
 
-    // Bulletproof Load Sequence
     const savedLocation = localStorage.getItem('bookmark-' + bookId);
     try {
         if (savedLocation) {
@@ -113,7 +152,6 @@ window.launchEpubJsEngine = async function(bookId) {
         let chapterName = "Chapter";
         let currentHref = location.start.href;
 
-        // OPF/SPINE FILE MATCHING FOR CHAPTER TITLES
         try {
             const spineItem = window.book.spine.get(location.start.cfi);
             const baseHref = spineItem ? spineItem.href : currentHref;
@@ -192,16 +230,11 @@ window.launchEpubJsEngine = async function(bookId) {
                 li.style.paddingLeft = padding;
                 li.dataset.originalPadding = padding; 
                 
-                // --- FIX: THE 3-TIER SMART ROUTER ---
                 li.onclick = () => { 
                     const targetHref = chapter.href;
-                    // Tier 1: Try exact match
                     window.rendition.display(targetHref).catch(() => {
-                        console.warn("TOC Exact Match Failed. Attempting Fallback Routing...");
-                        // Tier 2: Strip # anchor and try again
                         const cleanHref = targetHref.split('#')[0];
                         window.rendition.display(cleanHref).catch(() => {
-                            // Tier 3: Strip folders and force match in the book's spine
                             const fileName = cleanHref.split('/').pop();
                             if (window.book && window.book.spine && window.book.spine.spineItems) {
                                 const spineItem = window.book.spine.spineItems.find(item => item.href.split('/').pop() === fileName);
@@ -213,7 +246,6 @@ window.launchEpubJsEngine = async function(bookId) {
                     });
                     if (window.closeAllModals) window.closeAllModals(); 
                 };
-                // ------------------------------------
 
                 tocList.appendChild(li);
 
@@ -259,7 +291,6 @@ window.launchEpubJsEngine = async function(bookId) {
 
     btn.onclick = (e) => { e.stopPropagation(); if (taskbar) taskbar.classList.toggle('hidden'); };
 
-    // PC Click Handling
     window.rendition.on('click', (e) => {
         if (e.target && e.target.tagName && e.target.tagName.toLowerCase() === 'a') return;
         try { if (window.rendition.getContents()[0].window.getSelection().toString().length > 0) return; } catch(err) {}
@@ -271,7 +302,6 @@ window.launchEpubJsEngine = async function(bookId) {
         }
     });
 
-    // Mobile Touch Logic
     window.rendition.hooks.content.register(function(contents) {
         let startX = 0; let startY = 0; let startTime = 0;
         

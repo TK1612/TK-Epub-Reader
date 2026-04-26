@@ -204,23 +204,24 @@
         <div class="setting-group">
             <label>Reader Engine (Requires Reload)</label>
             <select id="set-reader-engine" onchange="changeReaderEngine()">
-                <option value="epubjs">EPUB.js (Classic/Stable)</option>
-                <option value="foliate">Foliate.js (Native DOM/iOS Safe)</option>
+                <option value="epubjs">EPUB.js</option>
+                <option value="foliate">Foliate.js</option>
             </select>
         </div>
 
         <div class="setting-group">
             <label>Reading Mode</label>
             <select id="set-read-mode" onchange="changeReadMode()">
-                <option value="continuous">Continuous Scroll (All Chapters)</option>
-                <option value="scrolled">Single Chapter Scroll (Click Next)</option>
-                <option value="paginated">Paginated (Swipe / Click Next)</option>
+                <option value="continuous">Continuous Scroll</option>
+                <option value="scrolled">Single Chapter Scroll</option>
+                <option value="paginated">Paginated</option>
             </select>
         </div>
         <div class="setting-group">
             <label>Background Theme</label>
-            <select id="set-reader-theme" onchange="setReaderTheme(this.value)">
-                <option value="dark">Black</option>
+            <select id="set-reader-theme" onchange="if(window.updateSettings) window.updateSettings();" style="width: 100%; padding: 8px; border-radius: 5px; background: var(--surface); color: var(--text); border: 1px solid var(--border);">
+                <option value="black" selected>Total Dark</option>
+                <option value="dark">Dark Gray</option>
                 <option value="light">White</option>
                 <option value="paper">Paper</option>
                 <option value="blue">Light Blue</option>
@@ -267,8 +268,16 @@
             </label>
         </div>
         <div class="setting-group" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);">
-            <label style="cursor: pointer;">Pin Taskbar (Don't Hide)
-                <input type="checkbox" id="set-pin-taskbar" onchange="updateSettings()" style="width: auto;">
+            <label style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                <span>Pin Taskbar</span>
+                <input type="checkbox" id="set-pin-taskbar" onchange="if(window.updateSettings) window.updateSettings();" style="width: 20px; height: 20px; margin: 0; accent-color: var(--accent, #3b82f6); cursor: pointer;">
+            </label>
+        </div>
+
+        <div class="setting-group" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);">
+            <label style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                <span>Show Floating Button</span>
+                <input type="checkbox" id="set-show-float-btn" onchange="if(window.updateSettings) window.updateSettings();" checked style="width: 20px; height: 20px; margin: 0; accent-color: var(--accent, #3b82f6); cursor: pointer;">
             </label>
         </div>
     </div>

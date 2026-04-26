@@ -10,8 +10,8 @@ A sleek, web-based EPUB reader and full-fledged IDE featuring a modern Glassmorp
 
 * **Offline Local Library:** Upload `.epub` files directly from your device. Books are stored safely in your browser's IndexedDB using `localforage` so they remain available even after you close the tab.
 * **Modern Glassmorphism UI:** A beautiful, frosted-glass interface with fully supported **Light** and **Dark modes**.
+* **Supporting both Epub.js and Foliate.js.**
 * **Advanced Reading Modes:**
-* **Supporting both Epub.js and Foliate.js**
     * *Continuous Scroll:* Read seamlessly with custom-injected visual gaps between chapters.
     * *Single Chapter Scroll:* Traditional vertical scrolling chapter-by-chapter.
     * *Paginated:* Swipe or click to turn pages like a real physical book.

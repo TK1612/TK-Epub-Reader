@@ -35,6 +35,20 @@ window.launchFoliateEngine = async function(bookId) {
     } catch(e) {}
     // ----------------------------------------------
 
+    // --- FIX: SAVE READ MODE BEFORE THE RESTART LOOP HAPPENS ---
+    const modeDropdown = document.getElementById('set-read-mode');
+    if (modeDropdown && !modeDropdown.dataset.modeSaved) {
+        modeDropdown.addEventListener('change', function() {
+            try {
+                const settings = JSON.parse(localStorage.getItem('reader-settings')) || {};
+                settings.readMode = this.value;
+                localStorage.setItem('reader-settings', JSON.stringify(settings));
+            } catch(e) {}
+        });
+        modeDropdown.dataset.modeSaved = "true";
+    }
+    // -----------------------------------------------------------
+
     try {
         const bookData = await localforage.getItem(bookId);
         if (!bookData) throw new Error("Could not retrieve book from database.");

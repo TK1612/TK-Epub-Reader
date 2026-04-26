@@ -195,13 +195,91 @@
         <button class="btn-primary" style="width: 100%; margin-top: 10px;" onclick="closeAllModals()">Apply</button>
     </div>
 
-    <div id="settings-modal" class="modal right-modal"><div class="modal-header"><h3>Reader Settings</h3><button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button></div><div class="setting-group"><label>Reading Mode</label><select id="set-read-mode" onchange="changeReadMode()"><option value="continuous">Continuous Scroll (All Chapters)</option><option value="scrolled">Single Chapter Scroll (Click Next)</option><option value="paginated">Paginated (Swipe / Click Next)</option></select></div><div class="setting-group"><label>Background Theme</label><select id="set-reader-theme" onchange="setReaderTheme(this.value)"><option value="dark">Black</option><option value="light">White</option><option value="paper">Paper</option><option value="blue">Light Blue</option></select></div><div class="setting-group"><label>Font Size <span id="val-font">18px</span></label><input type="range" id="set-font" min="12" max="36" value="18" oninput="updateSettings()"></div><div class="setting-group"><label>Line Height <span id="val-line">1.5</span></label><input type="range" id="set-line" min="1" max="3" step="0.1" value="1.5" oninput="updateSettings()"></div><div class="setting-group"><label>Paragraph Spacing <span id="val-para-spacing">0em</span></label><input type="range" id="set-para-spacing" min="0" max="5" step="0.5" value="0" oninput="updateSettings()"></div><div class="setting-group"><label>Text Indent <span id="val-indent">0em</span></label><input type="range" id="set-indent" min="0" max="5" step="0.5" value="0" oninput="updateSettings()"></div><div class="setting-group"><label>Text Align</label><div class="segment-control"><button class="segment-btn active" id="align-left" onclick="setTextAlign('left')">Left</button><button class="segment-btn" id="align-center" onclick="setTextAlign('center')">Center</button></div></div><div class="setting-group"><label>Font Family</label><select id="set-font-family" onchange="updateSettings()"><option value="system-ui">System Default</option><option value="serif">Standard Serif</option><option value="sans-serif">Standard Sans-Serif</option><option value="'KoPub Batang', serif">KoPub Batang (Korean)</option><option value="Georgia, serif">Georgia</option><option value="'Times New Roman', Times, serif">Times New Roman</option><option value="Arial, Helvetica, sans-serif">Arial</option></select></div><div class="setting-group"><label>Text Color<input type="color" id="set-text-color" value="#e4e4e7" onchange="updateSettings()" style="width: 30px; height: 30px;"></label></div><div class="setting-group" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);"><label style="cursor: pointer;">Pin Taskbar (Don't Hide)<input type="checkbox" id="set-pin-taskbar" onchange="updateSettings()" style="width: auto;"></label></div></div>
+    <div id="settings-modal" class="modal right-modal">
+        <div class="modal-header">
+            <h3>Reader Settings</h3>
+            <button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button>
+        </div>
+
+        <div class="setting-group">
+            <label>Reader Engine (Requires Reload)</label>
+            <select id="set-reader-engine" onchange="changeReaderEngine()">
+                <option value="epubjs">EPUB.js (Classic/Stable)</option>
+                <option value="foliate">Foliate.js (Native DOM/iOS Safe)</option>
+            </select>
+        </div>
+
+        <div class="setting-group">
+            <label>Reading Mode</label>
+            <select id="set-read-mode" onchange="changeReadMode()">
+                <option value="continuous">Continuous Scroll (All Chapters)</option>
+                <option value="scrolled">Single Chapter Scroll (Click Next)</option>
+                <option value="paginated">Paginated (Swipe / Click Next)</option>
+            </select>
+        </div>
+        <div class="setting-group">
+            <label>Background Theme</label>
+            <select id="set-reader-theme" onchange="setReaderTheme(this.value)">
+                <option value="dark">Black</option>
+                <option value="light">White</option>
+                <option value="paper">Paper</option>
+                <option value="blue">Light Blue</option>
+            </select>
+        </div>
+        <div class="setting-group">
+            <label>Font Size <span id="val-font">18px</span></label>
+            <input type="range" id="set-font" min="12" max="36" value="18" oninput="updateSettings()">
+        </div>
+        <div class="setting-group">
+            <label>Line Height <span id="val-line">1.5</span></label>
+            <input type="range" id="set-line" min="1" max="3" step="0.1" value="1.5" oninput="updateSettings()">
+        </div>
+        <div class="setting-group">
+            <label>Paragraph Spacing <span id="val-para-spacing">0em</span></label>
+            <input type="range" id="set-para-spacing" min="0" max="5" step="0.5" value="0" oninput="updateSettings()">
+        </div>
+        <div class="setting-group">
+            <label>Text Indent <span id="val-indent">0em</span></label>
+            <input type="range" id="set-indent" min="0" max="5" step="0.5" value="0" oninput="updateSettings()">
+        </div>
+        <div class="setting-group">
+            <label>Text Align</label>
+            <div class="segment-control">
+                <button class="segment-btn active" id="align-left" onclick="setTextAlign('left')">Left</button>
+                <button class="segment-btn" id="align-center" onclick="setTextAlign('center')">Center</button>
+            </div>
+        </div>
+        <div class="setting-group">
+            <label>Font Family</label>
+            <select id="set-font-family" onchange="updateSettings()">
+                <option value="system-ui">System Default</option>
+                <option value="serif">Standard Serif</option>
+                <option value="sans-serif">Standard Sans-Serif</option>
+                <option value="'KoPub Batang', serif">KoPub Batang (Korean)</option>
+                <option value="Georgia, serif">Georgia</option>
+                <option value="'Times New Roman', Times, serif">Times New Roman</option>
+                <option value="Arial, Helvetica, sans-serif">Arial</option>
+            </select>
+        </div>
+        <div class="setting-group">
+            <label>Text Color
+                <input type="color" id="set-text-color" value="#e4e4e7" onchange="updateSettings()" style="width: 30px; height: 30px;">
+            </label>
+        </div>
+        <div class="setting-group" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);">
+            <label style="cursor: pointer;">Pin Taskbar (Don't Hide)
+                <input type="checkbox" id="set-pin-taskbar" onchange="updateSettings()" style="width: auto;">
+            </label>
+        </div>
+    </div>
     <div id="toc-modal" class="modal center-modal large-modal"><div class="modal-header"><h3>Table of Contents</h3><button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button></div><ul id="toc-list" class="scroll-list"></ul></div>
 
     <script src="js/globals.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/library.js"></script>
-    <script src="js/reader.js"></script>
+    <script src="js/reader/epub-engine.js"></script>
+    <script type="module" src="js/reader/foliate-engine.js"></script>
+    <script src="js/reader/index.js"></script>
     <script src="js/editor.js"></script>
     <script src="js/tools.js"></script>
     <script>window.onload = () => { history.replaceState({ view: 'library' }, '', '#library'); loadLibrary(); };</script>

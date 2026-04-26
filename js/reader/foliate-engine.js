@@ -45,6 +45,12 @@ window.launchFoliateEngine = async function(bookId) {
             const fontFamily = document.getElementById('set-font-family').value;
             const textColor = document.getElementById('set-text-color').value;
 
+            // --- FIX: Update the numeric UI labels ---
+            if(document.getElementById('val-font')) document.getElementById('val-font').innerText = fontSize;
+            if(document.getElementById('val-line')) document.getElementById('val-line').innerText = lineHeight;
+            if(document.getElementById('val-para-spacing')) document.getElementById('val-para-spacing').innerText = paraSpacing;
+            if(document.getElementById('val-indent')) document.getElementById('val-indent').innerText = indent;
+
             let bgColor = '#18181b'; let color = textColor;
             if (theme === 'light') { bgColor = '#ffffff'; color = textColor === '#e4e4e7' ? '#000000' : textColor; }
             else if (theme === 'paper') { bgColor = '#f4ecd8'; color = textColor === '#e4e4e7' ? '#333333' : textColor; }
@@ -96,12 +102,7 @@ window.launchFoliateEngine = async function(bookId) {
 
         const blob = new Blob([actualBuffer], { type: 'application/epub+zip' });
         const file = new File([blob], "book.epub", { type: 'application/epub+zip' });
-        
-        try {
-            await window.foliateView.open(file);
-        } catch (openErr) {
-            throw new Error("Foliate failed to parse this EPUB file.");
-        }
+        await window.foliateView.open(file);
         
         document.getElementById('chapter-title').innerText = "Reading...";
 
@@ -149,12 +150,18 @@ window.launchFoliateEngine = async function(bookId) {
 
         window.foliateView.addEventListener('click', (e) => {
             const detail = e.detail || {};
+            const clientX = detail.clientX !== undefined ? detail.clientX : e.clientX;
             const target = detail.target || e.target;
-            if (target && target.tagName && target.tagName.toLowerCase() === 'a') return;
 
-            const taskbar = document.getElementById('bottom-taskbar');
-            const pinCheckbox = document.getElementById('set-pin-taskbar');
-            if (taskbar && (!pinCheckbox || !pinCheckbox.checked)) taskbar.classList.toggle('hidden');
+            if (target && target.tagName && target.tagName.toLowerCase() === 'a') return;
+            if (clientX === undefined) return; 
+
+            const w = window.innerWidth;
+            if (clientX > w * 0.25 && clientX < w * 0.75) {
+                const taskbar = document.getElementById('bottom-taskbar');
+                const pinCheckbox = document.getElementById('set-pin-taskbar');
+                if (taskbar && (!pinCheckbox || !pinCheckbox.checked)) taskbar.classList.toggle('hidden');
+            }
         });
 
         window.foliateView.addEventListener('load', (e) => {
@@ -221,7 +228,6 @@ window.launchFoliateEngine = async function(bookId) {
 
         window.updateSettings();
         
-        // --- NEW: THE BULLETPROOF FALLBACK SEQUENCE ---
         const savedLocation = localStorage.getItem('bookmark-' + bookId);
         
         setTimeout(async () => {
@@ -229,23 +235,23 @@ window.launchFoliateEngine = async function(bookId) {
                 if (savedLocation && typeof savedLocation === 'string' && savedLocation.length > 0) {
                     await window.foliateView.goTo(savedLocation);
                 } else {
-                    // Kickstart for fresh custom books that stall on white screen
                     if (window.foliateView.book && window.foliateView.book.toc && window.foliateView.book.toc.length > 0) {
                         await window.foliateView.goTo(window.foliateView.book.toc[0].href);
                     }
                 }
             } catch (err) {
-                console.warn("Foliate Navigation Error. Wiping bookmark and falling back to start.", err);
+                console.warn("Foliate Navigation Error. Wiping bad bookmark and falling back to start.", err);
                 localStorage.removeItem('bookmark-' + bookId);
                 
-                // Fallback: Force jump to the very first chapter in the TOC
                 try {
                     if (window.foliateView.book && window.foliateView.book.toc && window.foliateView.book.toc.length > 0) {
                         await window.foliateView.goTo(window.foliateView.book.toc[0].href);
                     }
-                } catch (fallbackErr) {}
+                } catch (fallbackErr) {
+                    console.error("Total failure opening book.", fallbackErr);
+                }
             }
-        }, 150); // Small buffer to ensure Foliate's DOM is completely initialized before jumping
+        }, 150);
 
     } catch (error) {
         console.error("Foliate Engine Error:", error);

@@ -6,6 +6,7 @@ window.foliateCurrentCfi = null;
 window.taskbarToggleBtn = null;
 
 window.launchFoliateEngine = async function(bookId) {
+    // --- LOAD SETTINGS BEFORE ENGINE BOOTS ---
     try {
         const saved = JSON.parse(localStorage.getItem('reader-settings'));
         if (saved) {
@@ -19,7 +20,7 @@ window.launchFoliateEngine = async function(bookId) {
             
             if(saved.readMode && document.getElementById('set-read-mode')) {
                 let mode = saved.readMode;
-                if (mode === 'continuous') mode = 'scrolled'; 
+                if (mode === 'continuous') mode = 'scrolled'; // Safety fallback, Foliate ignores continuous
                 document.getElementById('set-read-mode').value = mode;
             }
             
@@ -33,6 +34,7 @@ window.launchFoliateEngine = async function(bookId) {
         }
     } catch(e) {}
 
+    // --- SAVE READ MODE BEFORE THE RESTART LOOP HAPPENS ---
     const modeDropdown = document.getElementById('set-read-mode');
     if (modeDropdown && !modeDropdown.dataset.modeSaved) {
         modeDropdown.addEventListener('change', function() {
@@ -77,6 +79,7 @@ window.launchFoliateEngine = async function(bookId) {
         window.updateSettings = function() {
             if (!window.foliateView) return;
 
+            // --- SAVE SETTINGS SILENTLY ON CHANGE ---
             try {
                 const alignBtn = document.querySelector('.segment-btn.active');
                 const settings = {
@@ -321,7 +324,7 @@ window.destroyFoliateEngine = function() {
     if (window.taskbarObserver) { window.taskbarObserver.disconnect(); }
 };
 
-// --- NEW: FOLIATE SPECIFIC SEARCH FUNCTION ---
+// --- NEW: THE HTML FILE MATCHING SEARCH ---
 window.runGlobalSearch = async function() {
     if (!window.foliateView || !window.foliateView.book) return alert("Search is currently not available. Please wait for the book to finish loading.");
     const query = document.getElementById('global-search-input').value;
@@ -335,7 +338,6 @@ window.runGlobalSearch = async function() {
         const sections = book.sections || [];
         let allMatches = [];
 
-        // Scans through Foliate's internal document structure
         for (const section of sections) {
             try {
                 let text = "";
@@ -356,12 +358,34 @@ window.runGlobalSearch = async function() {
                     }
                 }
 
+                // Get the physical HTML file name
+                const fileName = section.href ? section.href.split('/').pop() : "Unknown File";
+                let chapterLabel = fileName;
+                
+                // Hunt for the Chapter name in the TOC
+                if (book.toc && book.toc.length > 0) {
+                    const findInToc = (items) => {
+                        for (let t of items) {
+                            if (t.href && t.href.includes(fileName)) return t.label ? t.label.trim() : fileName;
+                            if (t.subitems) { let sub = findInToc(t.subitems); if (sub) return sub; }
+                        }
+                        return null;
+                    };
+                    let foundLabel = findInToc(book.toc);
+                    if (foundLabel) chapterLabel = foundLabel;
+                }
+
                 if (text) {
                     let regex = new RegExp(query, "gi");
                     let match;
                     while ((match = regex.exec(text)) !== null) {
                         const snippet = text.substring(Math.max(0, match.index - 30), match.index + query.length + 30);
-                        allMatches.push({ href: section.href, snippet: snippet });
+                        allMatches.push({ 
+                            href: section.href, // Jumps directly to the physical HTML file
+                            snippet: snippet,
+                            chapter: chapterLabel,
+                            file: fileName
+                        });
                     }
                 }
             } catch(err) {
@@ -375,7 +399,12 @@ window.runGlobalSearch = async function() {
         allMatches.forEach(match => {
             const li = document.createElement('li');
             li.className = 'list-item';
-            li.innerHTML = `<span style="font-size: 13px;">...${match.snippet.replace(new RegExp(query, 'gi'), m => `<strong style="color:var(--accent);">${m}</strong>`)}...</span>`;
+            li.innerHTML = `
+                <div style="font-weight: 600; color: var(--accent); margin-bottom: 4px; font-size: 13px;">
+                    ${match.chapter} <span style="color:var(--text-muted); font-weight:normal; font-size:11px;">(${match.file})</span>
+                </div>
+                <span style="font-size: 13px;">...${match.snippet.replace(new RegExp(query, 'gi'), m => `<strong style="color:var(--accent); background:rgba(59,130,246,0.2); padding:0 2px; border-radius:3px;">${m}</strong>`)}...</span>
+            `;
             li.onclick = () => { 
                 window.foliateView.goTo(match.href); 
                 if (window.closeAllModals) window.closeAllModals(); 

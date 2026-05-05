@@ -363,20 +363,16 @@ window.destroyEpubJsEngine = function() {
     if (window.taskbarObserver) { window.taskbarObserver.disconnect(); }
 };
 
-// --- FIX: ULTRA-FAST SEARCH WITH BULLETPROOF JUMPING ---
+// --- FIX: FAST SEARCH WITH 3-TIER ROUTER JUMPING ---
 window.runGlobalSearch = async function() {
-    if (!window.book) return alert("Search is currently only available when a book is loaded.");
+    if (!window.book || !window.book.spine) return alert("Search is currently only available when a book is loaded.");
     const query = document.getElementById('global-search-input').value;
     if (!query) return;
     const resultsContainer = document.getElementById('search-results');
     resultsContainer.innerHTML = '<div style="padding:10px;">Searching...</div>';
     
     try {
-        // FIX 1: Ensures the book is fully unpacked before reading files. 
-        // If you hit search too quickly, JSZip gets locked and hangs forever!
-        await window.book.ready;
-
-        // Runs all chapters simultaneously (Lightning Fast)
+        // Runs all chapters simultaneously
         const searchPromises = window.book.spine.spineItems.map(async (item) => {
             try {
                 const doc = await item.load(window.book.load.bind(window.book));
@@ -406,7 +402,6 @@ window.runGlobalSearch = async function() {
                         const snippet = text.substring(Math.max(0, match.index - 30), match.index + query.length + 30);
                         sectionMatches.push({ 
                             href: item.href, 
-                            cfiBase: item.cfiBase, // Capture the secure exact chapter ID
                             snippet: snippet,
                             chapter: chapterLabel,
                             file: fileName
@@ -437,13 +432,17 @@ window.runGlobalSearch = async function() {
                 <span style="font-size: 13px;">...${match.snippet.replace(new RegExp(query, 'gi'), m => `<strong style="color:var(--accent); background:rgba(59,130,246,0.2); padding:0 2px; border-radius:3px;">${m}</strong>`)}...</span>
             `;
             li.onclick = () => { 
-                // FIX 2: 3-Tier Navigation Router. Tries the secure CFI first, then falls back to file paths
-                const target = match.cfiBase || match.href;
-                window.rendition.display(target).catch(() => {
-                    window.rendition.display(match.href).catch(() => {
+                // 3-TIER ROUTER JUMP LOGIC 
+                const targetHref = match.href;
+                window.rendition.display(targetHref).catch(() => {
+                    const cleanHref = targetHref.split('#')[0];
+                    window.rendition.display(cleanHref).catch(() => {
+                        const fileName = cleanHref.split('/').pop();
                         if (window.book && window.book.spine && window.book.spine.spineItems) {
-                            const spineItem = window.book.spine.spineItems.find(item => decodeURIComponent(item.href.split('/').pop()) === decodeURIComponent(match.file));
-                            if (spineItem) window.rendition.display(spineItem.href);
+                            const spineItem = window.book.spine.spineItems.find(item => decodeURIComponent(item.href.split('/').pop()) === decodeURIComponent(fileName));
+                            if (spineItem) {
+                                window.rendition.display(spineItem.href);
+                            }
                         }
                     });
                 });

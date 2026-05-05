@@ -6,7 +6,6 @@ window.foliateCurrentCfi = null;
 window.taskbarToggleBtn = null;
 
 window.launchFoliateEngine = async function(bookId) {
-    // --- NEW: LOAD SETTINGS BEFORE ENGINE BOOTS ---
     try {
         const saved = JSON.parse(localStorage.getItem('reader-settings'));
         if (saved) {
@@ -20,7 +19,7 @@ window.launchFoliateEngine = async function(bookId) {
             
             if(saved.readMode && document.getElementById('set-read-mode')) {
                 let mode = saved.readMode;
-                if (mode === 'continuous') mode = 'scrolled'; // Safety fallback, Foliate ignores continuous
+                if (mode === 'continuous') mode = 'scrolled'; 
                 document.getElementById('set-read-mode').value = mode;
             }
             
@@ -33,9 +32,7 @@ window.launchFoliateEngine = async function(bookId) {
             }
         }
     } catch(e) {}
-    // ----------------------------------------------
 
-    // --- FIX: SAVE READ MODE BEFORE THE RESTART LOOP HAPPENS ---
     const modeDropdown = document.getElementById('set-read-mode');
     if (modeDropdown && !modeDropdown.dataset.modeSaved) {
         modeDropdown.addEventListener('change', function() {
@@ -47,7 +44,6 @@ window.launchFoliateEngine = async function(bookId) {
         });
         modeDropdown.dataset.modeSaved = "true";
     }
-    // -----------------------------------------------------------
 
     try {
         const bookData = await localforage.getItem(bookId);
@@ -81,7 +77,6 @@ window.launchFoliateEngine = async function(bookId) {
         window.updateSettings = function() {
             if (!window.foliateView) return;
 
-            // --- NEW: SAVE SETTINGS SILENTLY ON CHANGE ---
             try {
                 const alignBtn = document.querySelector('.segment-btn.active');
                 const settings = {
@@ -99,7 +94,6 @@ window.launchFoliateEngine = async function(bookId) {
                 };
                 localStorage.setItem('reader-settings', JSON.stringify(settings));
             } catch(e) {}
-            // ---------------------------------------------
 
             const theme = document.getElementById('set-reader-theme').value;
             const fontSize = document.getElementById('set-font').value + 'px';
@@ -325,4 +319,71 @@ window.destroyFoliateEngine = function() {
     if (window.foliateView) { window.foliateView.remove(); window.foliateView = null; window.foliateCurrentCfi = null; window.rendition = null; }
     if (window.taskbarToggleBtn) { window.taskbarToggleBtn.remove(); window.taskbarToggleBtn = null; }
     if (window.taskbarObserver) { window.taskbarObserver.disconnect(); }
+};
+
+// --- NEW: FOLIATE SPECIFIC SEARCH FUNCTION ---
+window.runGlobalSearch = async function() {
+    if (!window.foliateView || !window.foliateView.book) return alert("Search is currently not available. Please wait for the book to finish loading.");
+    const query = document.getElementById('global-search-input').value;
+    if (!query) return;
+    
+    const resultsContainer = document.getElementById('search-results');
+    resultsContainer.innerHTML = '<div style="padding:10px;">Searching...</div>';
+    
+    try {
+        const book = window.foliateView.book;
+        const sections = book.sections || [];
+        let allMatches = [];
+
+        // Scans through Foliate's internal document structure
+        for (const section of sections) {
+            try {
+                let text = "";
+                if (typeof section.createDocument === 'function') {
+                    const doc = await section.createDocument();
+                    text = doc.body ? doc.body.textContent : "";
+                } else if (typeof book.load === 'function') {
+                    const content = await book.load(section.href);
+                    if (typeof content === 'string') {
+                        const doc = new DOMParser().parseFromString(content, "text/html");
+                        text = doc.body ? doc.body.textContent : content.replace(/<[^>]+>/g, '');
+                    } else if (content instanceof Blob) {
+                        const str = await content.text();
+                        const doc = new DOMParser().parseFromString(str, "text/html");
+                        text = doc.body ? doc.body.textContent : str.replace(/<[^>]+>/g, '');
+                    } else if (content instanceof Document) {
+                        text = content.body ? content.body.textContent : "";
+                    }
+                }
+
+                if (text) {
+                    let regex = new RegExp(query, "gi");
+                    let match;
+                    while ((match = regex.exec(text)) !== null) {
+                        const snippet = text.substring(Math.max(0, match.index - 30), match.index + query.length + 30);
+                        allMatches.push({ href: section.href, snippet: snippet });
+                    }
+                }
+            } catch(err) {
+                console.warn("Skipped section during search", err);
+            }
+        }
+
+        resultsContainer.innerHTML = '';
+        if (allMatches.length === 0) return resultsContainer.innerHTML = '<div style="padding:10px;">No results found.</div>';
+        
+        allMatches.forEach(match => {
+            const li = document.createElement('li');
+            li.className = 'list-item';
+            li.innerHTML = `<span style="font-size: 13px;">...${match.snippet.replace(new RegExp(query, 'gi'), m => `<strong style="color:var(--accent);">${m}</strong>`)}...</span>`;
+            li.onclick = () => { 
+                window.foliateView.goTo(match.href); 
+                if (window.closeAllModals) window.closeAllModals(); 
+            };
+            resultsContainer.appendChild(li);
+        });
+    } catch (e) { 
+        resultsContainer.innerHTML = '<div style="padding:10px; color:red;">Search failed.</div>'; 
+        console.error("Search error:", e);
+    }
 };

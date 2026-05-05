@@ -365,9 +365,8 @@ window.destroyEpubJsEngine = function() {
     if (window.taskbarObserver) { window.taskbarObserver.disconnect(); }
 };
 
-// --- FIX: FAST SEARCH WITH 3-TIER ROUTER JUMPING ---
 window.runGlobalSearch = async function() {
-    if (!window.book) return alert("Search is currently not available.");
+    if (!window.book || !window.book.spine) return alert("Search is currently not available.");
     
     const query = document.getElementById('global-search-input').value;
     if (!query) return;
@@ -376,57 +375,58 @@ window.runGlobalSearch = async function() {
     resultsContainer.innerHTML = '<div style="padding:10px;">Searching...</div>';
     
     try {
-        // FIX 1: Actually wait for the book structure to initialize completely
         await window.book.ready;
         
         if (!window.book.spine || !window.book.spine.spineItems) {
              return resultsContainer.innerHTML = '<div style="padding:10px;">Error: Book structure not readable.</div>';
         }
 
-        // Fast concurrent searching
-        const searchPromises = window.book.spine.spineItems.map(async (item) => {
+        let allMatches = [];
+
+        // FIX: Changed from Promise.all() to a sequential for...of loop.
+        // This prevents the browser from running out of memory and crashing on the live site.
+        for (const item of window.book.spine.spineItems) {
             try {
+                // Load one chapter into memory
                 await item.load(window.book.load.bind(window.book));
                 
-                // FIX 2: Use EPUB.js native .find() API. 
-                // This bypasses sandbox crashing and generates exact coordinates (CFIs)
-                const matches = item.find(query);
-                item.unload(); // Free memory immediately
-
-                if (!matches || matches.length === 0) return [];
-
-                const rawHref = item.href || "Unknown File";
-                const fileName = decodeURIComponent(rawHref.split('/').pop().split('#')[0]);
-                let chapterLabel = fileName !== "Unknown File" ? fileName : "Unknown Chapter";
+                // Use EPUB.js native .find() to get exact coordinates (CFIs)
+                const matches = item.find(query) || [];
                 
-                // Match the raw file to the human-readable TOC name
-                if (window.book.navigation && window.book.navigation.toc) {
-                    const findInToc = (items) => {
-                        for (let t of items) {
-                            if (t.href && decodeURIComponent(t.href).includes(fileName)) return t.label ? t.label.trim() : null;
-                            if (t.subitems) { let sub = findInToc(t.subitems); if (sub) return sub; }
-                        }
-                        return null;
-                    };
-                    let foundLabel = findInToc(window.book.navigation.toc);
-                    if (foundLabel) chapterLabel = foundLabel;
-                }
+                // Instantly unload it to free up memory for the next chapter
+                item.unload(); 
 
-                return matches.map(match => ({
-                    cfi: match.cfi, // The exact EPUB coordinate for the word
-                    href: item.href, 
-                    snippet: match.excerpt || "", // Native excerpt text
-                    chapter: chapterLabel,
-                    file: fileName
-                }));
+                if (matches.length > 0) {
+                    const rawHref = item.href || "Unknown File";
+                    const fileName = decodeURIComponent(rawHref.split('/').pop().split('#')[0]);
+                    let chapterLabel = fileName !== "Unknown File" ? fileName : "Unknown Chapter";
+                    
+                    if (window.book.navigation && window.book.navigation.toc) {
+                        const findInToc = (items) => {
+                            for (let t of items) {
+                                if (t.href && decodeURIComponent(t.href).includes(fileName)) return t.label ? t.label.trim() : null;
+                                if (t.subitems) { let sub = findInToc(t.subitems); if (sub) return sub; }
+                            }
+                            return null;
+                        };
+                        let foundLabel = findInToc(window.book.navigation.toc);
+                        if (foundLabel) chapterLabel = foundLabel;
+                    }
+
+                    matches.forEach(match => {
+                        allMatches.push({
+                            cfi: match.cfi, 
+                            href: item.href, 
+                            snippet: match.excerpt || "", 
+                            chapter: chapterLabel,
+                            file: fileName
+                        });
+                    });
+                }
             } catch(e) {
                 console.warn("Skipped section during search", e);
-                return [];
             }
-        });
-
-        const results = await Promise.all(searchPromises);
-        const allMatches = results.flat();
+        }
         
         resultsContainer.innerHTML = '';
         if (allMatches.length === 0) return resultsContainer.innerHTML = '<div style="padding:10px;">No results found.</div>';
@@ -435,7 +435,6 @@ window.runGlobalSearch = async function() {
             const li = document.createElement('li');
             li.className = 'list-item';
             
-            // Format and truncate the excerpt natively provided by EPUB.js
             let safeSnippet = match.snippet;
             if (safeSnippet.length > 80) safeSnippet = safeSnippet.substring(0, 80) + "...";
 
@@ -447,7 +446,7 @@ window.runGlobalSearch = async function() {
             `;
             
             li.onclick = () => { 
-                // FIX 3: Jump instantly using the exact native CFI coordinate!
+                // Navigate instantly to the exact text coordinate!
                 if (match.cfi) {
                     window.rendition.display(match.cfi).catch(() => window.rendition.display(match.href));
                 } else if (match.href) {

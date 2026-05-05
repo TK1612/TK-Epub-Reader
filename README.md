@@ -37,7 +37,7 @@ Transform the reader into a professional EPUB IDE with a single click. The edito
 
 * **HTML5 / CSS3 / Vanilla JavaScript**
 * **[ePub.js](https://github.com/futurepress/epub.js/)**
-* **[Phosphor Icons](https://github.com/johnfactotum/foliate-js)**
+* **[foliate.js](https://github.com/johnfactotum/foliate-js)**
 * **[JSZip](https://stuk.github.io/jszip/)**
 * **[localForage](https://localforage.github.io/localForage/)**
 * **[CodeMirror (v5)](https://codemirror.net/5/)**

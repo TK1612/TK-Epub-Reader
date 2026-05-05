@@ -5,7 +5,7 @@ window.rendition = null;
 window.taskbarToggleBtn = null;
 
 window.launchEpubJsEngine = async function(bookId) {
-    // --- NEW: LOAD SETTINGS BEFORE ENGINE BOOTS ---
+    // --- LOAD SETTINGS BEFORE ENGINE BOOTS ---
     try {
         const saved = JSON.parse(localStorage.getItem('reader-settings'));
         if (saved) {
@@ -26,9 +26,8 @@ window.launchEpubJsEngine = async function(bookId) {
             }
         }
     } catch(e) {}
-    // ----------------------------------------------
 
-    // --- FIX: SAVE READ MODE BEFORE THE RESTART LOOP HAPPENS ---
+    // --- SAVE READ MODE BEFORE THE RESTART LOOP HAPPENS ---
     const modeDropdown = document.getElementById('set-read-mode');
     if (modeDropdown && !modeDropdown.dataset.modeSaved) {
         modeDropdown.addEventListener('change', function() {
@@ -40,12 +39,10 @@ window.launchEpubJsEngine = async function(bookId) {
         });
         modeDropdown.dataset.modeSaved = "true";
     }
-    // -----------------------------------------------------------
 
     const bookData = await localforage.getItem(bookId);
     if (!bookData) throw new Error("Could not retrieve book from database.");
     
-    // Safely unwrap the ArrayBuffer to prevent crashes
     const actualBuffer = bookData.buffer || bookData; 
     if (!actualBuffer || actualBuffer.byteLength === 0) throw new Error("Book file is empty or corrupted.");
 
@@ -67,7 +64,7 @@ window.launchEpubJsEngine = async function(bookId) {
     window.updateSettings = function() {
         if (!window.rendition) return;
 
-        // --- NEW: SAVE SETTINGS SILENTLY ON CHANGE ---
+        // --- SAVE SETTINGS SILENTLY ON CHANGE ---
         try {
             const alignBtn = document.querySelector('.segment-btn.active');
             const settings = {
@@ -85,7 +82,6 @@ window.launchEpubJsEngine = async function(bookId) {
             };
             localStorage.setItem('reader-settings', JSON.stringify(settings));
         } catch(e) {}
-        // ---------------------------------------------
 
         const theme = document.getElementById('set-reader-theme').value;
         const fontSize = document.getElementById('set-font').value + 'px';
@@ -102,7 +98,7 @@ window.launchEpubJsEngine = async function(bookId) {
         if(document.getElementById('val-para-spacing')) document.getElementById('val-para-spacing').innerText = paraSpacing;
         if(document.getElementById('val-indent')) document.getElementById('val-indent').innerText = indent;
 
-        // Dynamic Background Theming
+        // Dynamic Background Theming 
         let bgColor = '#18181b'; let color = textColor;
         if (theme === 'light') { bgColor = '#ffffff'; color = textColor === '#e4e4e7' ? '#000000' : textColor; }
         else if (theme === 'paper') { bgColor = '#f4ecd8'; color = textColor === '#e4e4e7' ? '#333333' : textColor; }
@@ -226,14 +222,10 @@ window.launchEpubJsEngine = async function(bookId) {
         });
     });
 
-    // Suppress generation crashes gracefully
     window.book.ready.then(() => {
         return window.book.locations.generate(1600);
-    }).catch(err => {
-        console.warn("Locations generation skipped due to non-standard EPUB HTML.");
-    });
+    }).catch(err => {});
 
-    // Build the TOC safely
     window.book.loaded.navigation.then(function(nav) {
         const tocList = document.getElementById('toc-list');
         if (!tocList || !nav) return;
@@ -253,6 +245,7 @@ window.launchEpubJsEngine = async function(bookId) {
                 li.style.paddingLeft = padding;
                 li.dataset.originalPadding = padding; 
                 
+                // 3-TIER SMART ROUTER
                 li.onclick = () => { 
                     const targetHref = chapter.href;
                     window.rendition.display(targetHref).catch(() => {
@@ -285,7 +278,6 @@ window.launchEpubJsEngine = async function(bookId) {
         }
     }).catch(err => console.warn("TOC loading failed", err));
 
-    // --- UNIVERSAL FLOATING BUTTON SETUP ---
     if (document.getElementById('taskbar-toggle-btn')) document.getElementById('taskbar-toggle-btn').remove();
     
     const btn = document.createElement('button');
@@ -327,7 +319,7 @@ window.launchEpubJsEngine = async function(bookId) {
         }
     });
 
-    // --- RESTORED WORKING MOBILE TOUCH LOGIC ---
+    // Mobile Touch Logic
     window.rendition.hooks.content.register(function(contents) {
         let startX = 0; let startY = 0; let startTime = 0;
         
@@ -354,7 +346,6 @@ window.launchEpubJsEngine = async function(bookId) {
                 if (event.target && event.target.tagName && event.target.tagName.toLowerCase() !== 'a') {
                     try { if (contents.window.getSelection().toString().length > 0) return; } catch(err) {}
                     
-                    // The secret: Trust lexical scope and skip the broken middle-screen math!
                     const taskbarEl = document.getElementById('bottom-taskbar');
                     const pinCheckbox = document.getElementById('set-pin-taskbar');
                     if (taskbarEl && (!pinCheckbox || !pinCheckbox.checked)) {
@@ -372,37 +363,79 @@ window.destroyEpubJsEngine = function() {
     if (window.taskbarObserver) { window.taskbarObserver.disconnect(); }
 };
 
+// --- NEW: THE HTML FILE MATCHING SEARCH ---
 window.runGlobalSearch = async function() {
-    if (!window.book) return alert("Search is currently only available on the EPUB.js engine.");
+    if (!window.book) return alert("Search is currently only available when a book is loaded.");
     const query = document.getElementById('global-search-input').value;
     if (!query) return;
     const resultsContainer = document.getElementById('search-results');
     resultsContainer.innerHTML = '<div style="padding:10px;">Searching...</div>';
     try {
-        const results = await Promise.all(
-            window.book.spine.spineItems.map(item => 
-                item.load(window.book.load.bind(window.book)).then(doc => {
-                    const text = doc.textContent || "";
-                    const matches = [];
+        const allMatches = [];
+        
+        for (let i = 0; i < window.book.spine.spineItems.length; i++) {
+            const item = window.book.spine.spineItems[i];
+            try {
+                // Safely load the raw text
+                const doc = await item.load(window.book.load.bind(window.book));
+                const text = doc.body ? doc.body.textContent : "";
+                
+                // Get the physical HTML file name
+                const fileName = item.href ? item.href.split('/').pop() : "Unknown File";
+                let chapterLabel = fileName;
+                
+                // Hunt for the Chapter name in the TOC
+                if (window.book.navigation && window.book.navigation.toc) {
+                    const findInToc = (items) => {
+                        for (let t of items) {
+                            if (t.href && t.href.includes(fileName)) return t.label ? t.label.trim() : fileName;
+                            if (t.subitems) { let sub = findInToc(t.subitems); if (sub) return sub; }
+                        }
+                        return null;
+                    };
+                    let foundLabel = findInToc(window.book.navigation.toc);
+                    if (foundLabel) chapterLabel = foundLabel;
+                }
+
+                if (text) {
                     let regex = new RegExp(query, "gi");
                     let match;
                     while ((match = regex.exec(text)) !== null) {
                         const snippet = text.substring(Math.max(0, match.index - 30), match.index + query.length + 30);
-                        matches.push({ cfi: item.cfiFromElement(match[0] ? match[0] : doc.body), snippet: snippet });
+                        allMatches.push({ 
+                            href: item.href, // Jumps directly to the physical HTML file
+                            snippet: snippet,
+                            chapter: chapterLabel,
+                            file: fileName
+                        });
                     }
-                    item.unload(); return matches;
-                })
-            )
-        );
-        const allMatches = results.flat();
+                }
+                item.unload();
+            } catch(e) {
+                console.warn("Skipped section during search", e);
+            }
+        }
+        
         resultsContainer.innerHTML = '';
         if (allMatches.length === 0) return resultsContainer.innerHTML = '<div style="padding:10px;">No results found.</div>';
+        
         allMatches.forEach(match => {
             const li = document.createElement('li');
             li.className = 'list-item';
-            li.innerHTML = `<span style="font-size: 13px;">...${match.snippet.replace(new RegExp(query, 'gi'), match => `<strong style="color:var(--accent);">${match}</strong>`)}...</span>`;
-            li.onclick = () => { window.rendition.display(match.cfi); if (window.closeAllModals) window.closeAllModals(); };
+            li.innerHTML = `
+                <div style="font-weight: 600; color: var(--accent); margin-bottom: 4px; font-size: 13px;">
+                    ${match.chapter} <span style="color:var(--text-muted); font-weight:normal; font-size:11px;">(${match.file})</span>
+                </div>
+                <span style="font-size: 13px;">...${match.snippet.replace(new RegExp(query, 'gi'), m => `<strong style="color:var(--accent); background:rgba(59,130,246,0.2); padding:0 2px; border-radius:3px;">${m}</strong>`)}...</span>
+            `;
+            li.onclick = () => { 
+                window.rendition.display(match.href); 
+                if (window.closeAllModals) window.closeAllModals(); 
+            };
             resultsContainer.appendChild(li);
         });
-    } catch (e) { resultsContainer.innerHTML = '<div style="padding:10px; color:red;">Search failed.</div>'; }
+    } catch (e) { 
+        resultsContainer.innerHTML = '<div style="padding:10px; color:red;">Search failed.</div>'; 
+        console.error("Search Error:", e);
+    }
 };

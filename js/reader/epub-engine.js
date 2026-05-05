@@ -367,23 +367,39 @@ window.destroyEpubJsEngine = function() {
 
 // --- FIX: FAST SEARCH WITH 3-TIER ROUTER JUMPING ---
 window.runGlobalSearch = async function() {
-    if (!window.book || !window.book.spine) return alert("Search is currently only available when a book is loaded.");
+    if (!window.book) return alert("Search is currently not available.");
+    
     const query = document.getElementById('global-search-input').value;
     if (!query) return;
+    
     const resultsContainer = document.getElementById('search-results');
     resultsContainer.innerHTML = '<div style="padding:10px;">Searching...</div>';
     
     try {
-        // Runs all chapters simultaneously
+        // FIX 1: Actually wait for the book structure to initialize completely
+        await window.book.ready;
+        
+        if (!window.book.spine || !window.book.spine.spineItems) {
+             return resultsContainer.innerHTML = '<div style="padding:10px;">Error: Book structure not readable.</div>';
+        }
+
+        // Fast concurrent searching
         const searchPromises = window.book.spine.spineItems.map(async (item) => {
             try {
-                const doc = await item.load(window.book.load.bind(window.book));
-                const text = doc.body ? doc.body.textContent : "";
+                await item.load(window.book.load.bind(window.book));
                 
+                // FIX 2: Use EPUB.js native .find() API. 
+                // This bypasses sandbox crashing and generates exact coordinates (CFIs)
+                const matches = item.find(query);
+                item.unload(); // Free memory immediately
+
+                if (!matches || matches.length === 0) return [];
+
                 const rawHref = item.href || "Unknown File";
                 const fileName = decodeURIComponent(rawHref.split('/').pop().split('#')[0]);
                 let chapterLabel = fileName !== "Unknown File" ? fileName : "Unknown Chapter";
                 
+                // Match the raw file to the human-readable TOC name
                 if (window.book.navigation && window.book.navigation.toc) {
                     const findInToc = (items) => {
                         for (let t of items) {
@@ -396,22 +412,13 @@ window.runGlobalSearch = async function() {
                     if (foundLabel) chapterLabel = foundLabel;
                 }
 
-                const sectionMatches = [];
-                if (text) {
-                    let regex = new RegExp(query, "gi");
-                    let match;
-                    while ((match = regex.exec(text)) !== null) {
-                        const snippet = text.substring(Math.max(0, match.index - 30), match.index + query.length + 30);
-                        sectionMatches.push({ 
-                            href: item.href, 
-                            snippet: snippet,
-                            chapter: chapterLabel,
-                            file: fileName
-                        });
-                    }
-                }
-                item.unload();
-                return sectionMatches;
+                return matches.map(match => ({
+                    cfi: match.cfi, // The exact EPUB coordinate for the word
+                    href: item.href, 
+                    snippet: match.excerpt || "", // Native excerpt text
+                    chapter: chapterLabel,
+                    file: fileName
+                }));
             } catch(e) {
                 console.warn("Skipped section during search", e);
                 return [];
@@ -427,27 +434,25 @@ window.runGlobalSearch = async function() {
         allMatches.forEach(match => {
             const li = document.createElement('li');
             li.className = 'list-item';
+            
+            // Format and truncate the excerpt natively provided by EPUB.js
+            let safeSnippet = match.snippet;
+            if (safeSnippet.length > 80) safeSnippet = safeSnippet.substring(0, 80) + "...";
+
             li.innerHTML = `
                 <div style="font-weight: 600; color: var(--accent); margin-bottom: 4px; font-size: 13px;">
                     ${match.chapter} <span style="color:var(--text-muted); font-weight:normal; font-size:11px;">(${match.file})</span>
                 </div>
-                <span style="font-size: 13px;">...${match.snippet.replace(new RegExp(query, 'gi'), m => `<strong style="color:var(--accent); background:rgba(59,130,246,0.2); padding:0 2px; border-radius:3px;">${m}</strong>`)}...</span>
+                <span style="font-size: 13px;">...${safeSnippet.replace(new RegExp(query, 'gi'), m => `<strong style="color:var(--accent); background:rgba(59,130,246,0.2); padding:0 2px; border-radius:3px;">${m}</strong>`)}...</span>
             `;
+            
             li.onclick = () => { 
-                // 3-TIER ROUTER JUMP LOGIC 
-                const targetHref = match.href;
-                window.rendition.display(targetHref).catch(() => {
-                    const cleanHref = targetHref.split('#')[0];
-                    window.rendition.display(cleanHref).catch(() => {
-                        const fileName = cleanHref.split('/').pop();
-                        if (window.book && window.book.spine && window.book.spine.spineItems) {
-                            const spineItem = window.book.spine.spineItems.find(item => decodeURIComponent(item.href.split('/').pop()) === decodeURIComponent(fileName));
-                            if (spineItem) {
-                                window.rendition.display(spineItem.href);
-                            }
-                        }
-                    });
-                });
+                // FIX 3: Jump instantly using the exact native CFI coordinate!
+                if (match.cfi) {
+                    window.rendition.display(match.cfi).catch(() => window.rendition.display(match.href));
+                } else if (match.href) {
+                    window.rendition.display(match.href);
+                }
                 if (window.closeAllModals) window.closeAllModals(); 
             };
             resultsContainer.appendChild(li);

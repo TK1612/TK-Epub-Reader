@@ -36,11 +36,12 @@ Transform the reader into a professional EPUB IDE with a single click. The edito
 ## 💻 Tech Stack
 
 * **HTML5 / CSS3 / Vanilla JavaScript**
-* **[ePub.js](https://github.com/futurepress/epub.js/)** - Core engine for parsing and rendering EPUB files.
-* **[JSZip](https://stuk.github.io/jszip/)** - Required dependency for extracting, editing, and repackaging EPUB archives in-memory.
-* **[localForage](https://localforage.github.io/localForage/)** - Offline storage wrapper for IndexedDB.
-* **[CodeMirror (v5)](https://codemirror.net/5/)** - Syntax highlighting engine for the built-in IDE.
-* **[Phosphor Icons](https://phosphoricons.com/)** - Clean, consistent iconography used throughout the app.
+* **[ePub.js](https://github.com/futurepress/epub.js/)**
+* **[Phosphor Icons](https://github.com/johnfactotum/foliate-js)**
+* **[JSZip](https://stuk.github.io/jszip/)**
+* **[localForage](https://localforage.github.io/localForage/)**
+* **[CodeMirror (v5)](https://codemirror.net/5/)**
+* **[Phosphor Icons](https://phosphoricons.com/)**
 
 ## 📝 Usage Notes
 

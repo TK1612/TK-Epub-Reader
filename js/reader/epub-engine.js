@@ -53,12 +53,14 @@ window.launchEpubJsEngine = async function(bookId) {
     const readMode = document.getElementById('set-read-mode').value || 'paginated';
     const isContinuous = (readMode === 'continuous');
 
+    // --- FIX: ADDED SANDBOX PERMISSIONS ---
     window.rendition = window.book.renderTo(viewer, {
         manager: isContinuous ? "continuous" : "default",
         flow: isContinuous ? "scrolled" : (readMode === 'scrolled' ? "scrolled" : "paginated"),
         width: "100%",
         height: "100%",
-        snap: !isContinuous 
+        snap: !isContinuous,
+        allowScriptedContent: true // Tells EPUB.js to allow scripts in the iframe
     });
 
     window.updateSettings = function() {

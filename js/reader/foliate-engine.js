@@ -198,9 +198,9 @@ window.launchFoliateEngine = async function(bookId) {
             document.getElementById('chapter-title').innerText = chapterName;
             localStorage.setItem('progress-' + bookId, JSON.stringify({ chapter: chapterName, percentage: loc.fraction || 0 }));
 
-            const targetPath = currentHref ? currentHref.split('#')[0].replace(/^\//, '') : null;
+            const targetPath = currentHref ? decodeURIComponent(currentHref.split('#')[0].replace(/^\//, '')) : null;
             document.querySelectorAll('#toc-list .list-item').forEach(li => {
-                const itemPath = li.dataset.href ? li.dataset.href.split('#')[0].replace(/^\//, '') : null;
+                const itemPath = li.dataset.href ? decodeURIComponent(li.dataset.href.split('#')[0].replace(/^\//, '')) : null;
                 if (itemPath && targetPath && itemPath === targetPath) {
                     li.style.color = 'var(--accent)'; li.style.fontWeight = 'bold'; li.style.borderLeft = '3px solid var(--accent)'; 
                     li.style.paddingLeft = '25px'; 
@@ -324,7 +324,7 @@ window.destroyFoliateEngine = function() {
     if (window.taskbarObserver) { window.taskbarObserver.disconnect(); }
 };
 
-// --- NEW: THE HTML FILE MATCHING SEARCH ---
+// --- RESTORED AND ULTRA-FAST SEARCH FUNCTION ---
 window.runGlobalSearch = async function() {
     if (!window.foliateView || !window.foliateView.book) return alert("Search is currently not available. Please wait for the book to finish loading.");
     const query = document.getElementById('global-search-input').value;
@@ -336,16 +336,16 @@ window.runGlobalSearch = async function() {
     try {
         const book = window.foliateView.book;
         const sections = book.sections || [];
-        let allMatches = [];
 
-        for (const section of sections) {
+        // Runs all sections simultaneously (Lightning Fast)
+        const searchPromises = sections.map(async (section) => {
             try {
                 let text = "";
                 if (typeof section.createDocument === 'function') {
                     const doc = await section.createDocument();
                     text = doc.body ? doc.body.textContent : "";
                 } else if (typeof book.load === 'function') {
-                    const content = await book.load(section.href);
+                    const content = await book.load(section.href || section.id);
                     if (typeof content === 'string') {
                         const doc = new DOMParser().parseFromString(content, "text/html");
                         text = doc.body ? doc.body.textContent : content.replace(/<[^>]+>/g, '');
@@ -358,15 +358,14 @@ window.runGlobalSearch = async function() {
                     }
                 }
 
-                // Get the physical HTML file name
-                const fileName = section.href ? section.href.split('/').pop() : "Unknown File";
-                let chapterLabel = fileName;
+                const rawHref = section.href || section.idref || section.id || "Unknown File";
+                const fileName = decodeURIComponent(rawHref.split('/').pop().split('#')[0]);
+                let chapterLabel = fileName !== "Unknown File" ? fileName : "Unknown Chapter";
                 
-                // Hunt for the Chapter name in the TOC
                 if (book.toc && book.toc.length > 0) {
                     const findInToc = (items) => {
                         for (let t of items) {
-                            if (t.href && t.href.includes(fileName)) return t.label ? t.label.trim() : fileName;
+                            if (t.href && decodeURIComponent(t.href).includes(fileName)) return t.label ? t.label.trim() : null;
                             if (t.subitems) { let sub = findInToc(t.subitems); if (sub) return sub; }
                         }
                         return null;
@@ -375,23 +374,29 @@ window.runGlobalSearch = async function() {
                     if (foundLabel) chapterLabel = foundLabel;
                 }
 
+                const sectionMatches = [];
                 if (text) {
                     let regex = new RegExp(query, "gi");
                     let match;
                     while ((match = regex.exec(text)) !== null) {
                         const snippet = text.substring(Math.max(0, match.index - 30), match.index + query.length + 30);
-                        allMatches.push({ 
-                            href: section.href, // Jumps directly to the physical HTML file
+                        sectionMatches.push({ 
+                            href: section.href || section.id,
                             snippet: snippet,
                             chapter: chapterLabel,
                             file: fileName
                         });
                     }
                 }
+                return sectionMatches;
             } catch(err) {
                 console.warn("Skipped section during search", err);
+                return [];
             }
-        }
+        });
+
+        const results = await Promise.all(searchPromises);
+        const allMatches = results.flat();
 
         resultsContainer.innerHTML = '';
         if (allMatches.length === 0) return resultsContainer.innerHTML = '<div style="padding:10px;">No results found.</div>';

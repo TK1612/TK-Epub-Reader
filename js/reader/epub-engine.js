@@ -170,14 +170,14 @@ window.launchEpubJsEngine = async function(bookId) {
         try {
             const spineItem = window.book.spine.get(location.start.cfi);
             const baseHref = spineItem ? spineItem.href : currentHref;
-            const cleanBaseFileName = baseHref.split('#')[0].split('/').pop();
-            const cleanCurrentFileName = currentHref.split('#')[0].split('/').pop();
+            const cleanBaseFileName = decodeURIComponent(baseHref.split('#')[0].split('/').pop());
+            const cleanCurrentFileName = decodeURIComponent(currentHref.split('#')[0].split('/').pop());
 
             if (window.book.navigation && window.book.navigation.toc) {
                 let matchedItem = null;
                 const findInToc = (items) => {
                     for (let item of items) {
-                        const cleanItemFileName = item.href.split('#')[0].split('/').pop();
+                        const cleanItemFileName = decodeURIComponent(item.href.split('#')[0].split('/').pop());
                         if (cleanItemFileName === cleanBaseFileName || cleanItemFileName === cleanCurrentFileName) {
                             matchedItem = item;
                             return;
@@ -201,10 +201,10 @@ window.launchEpubJsEngine = async function(bookId) {
             localStorage.setItem('progress-' + bookId, JSON.stringify({ chapter: chapterName, percentage: percentage }));
         }
 
-        const targetFileName = currentHref ? currentHref.split('#')[0].split('/').pop() : null;
+        const targetFileName = currentHref ? decodeURIComponent(currentHref.split('#')[0].split('/').pop()) : null;
 
         document.querySelectorAll('#toc-list .list-item').forEach(li => {
-            const itemFileName = li.dataset.href ? li.dataset.href.split('#')[0].split('/').pop() : null;
+            const itemFileName = li.dataset.href ? decodeURIComponent(li.dataset.href.split('#')[0].split('/').pop()) : null;
             
             if (itemFileName && targetFileName && itemFileName === targetFileName) {
                 li.style.color = 'var(--accent)'; 
@@ -253,7 +253,7 @@ window.launchEpubJsEngine = async function(bookId) {
                         window.rendition.display(cleanHref).catch(() => {
                             const fileName = cleanHref.split('/').pop();
                             if (window.book && window.book.spine && window.book.spine.spineItems) {
-                                const spineItem = window.book.spine.spineItems.find(item => item.href.split('/').pop() === fileName);
+                                const spineItem = window.book.spine.spineItems.find(item => decodeURIComponent(item.href.split('/').pop()) === decodeURIComponent(fileName));
                                 if (spineItem) {
                                     window.rendition.display(spineItem.href);
                                 }
@@ -363,7 +363,7 @@ window.destroyEpubJsEngine = function() {
     if (window.taskbarObserver) { window.taskbarObserver.disconnect(); }
 };
 
-// --- NEW: THE HTML FILE MATCHING SEARCH ---
+// --- RESTORED AND ULTRA-FAST SEARCH FUNCTION ---
 window.runGlobalSearch = async function() {
     if (!window.book) return alert("Search is currently only available when a book is loaded.");
     const query = document.getElementById('global-search-input').value;
@@ -371,24 +371,20 @@ window.runGlobalSearch = async function() {
     const resultsContainer = document.getElementById('search-results');
     resultsContainer.innerHTML = '<div style="padding:10px;">Searching...</div>';
     try {
-        const allMatches = [];
-        
-        for (let i = 0; i < window.book.spine.spineItems.length; i++) {
-            const item = window.book.spine.spineItems[i];
+        // Runs all chapters simultaneously (Lightning Fast)
+        const searchPromises = window.book.spine.spineItems.map(async (item) => {
             try {
-                // Safely load the raw text
                 const doc = await item.load(window.book.load.bind(window.book));
                 const text = doc.body ? doc.body.textContent : "";
                 
-                // Get the physical HTML file name
-                const fileName = item.href ? item.href.split('/').pop() : "Unknown File";
-                let chapterLabel = fileName;
+                const rawHref = item.href || "Unknown File";
+                const fileName = decodeURIComponent(rawHref.split('/').pop().split('#')[0]);
+                let chapterLabel = fileName !== "Unknown File" ? fileName : "Unknown Chapter";
                 
-                // Hunt for the Chapter name in the TOC
                 if (window.book.navigation && window.book.navigation.toc) {
                     const findInToc = (items) => {
                         for (let t of items) {
-                            if (t.href && t.href.includes(fileName)) return t.label ? t.label.trim() : fileName;
+                            if (t.href && decodeURIComponent(t.href).includes(fileName)) return t.label ? t.label.trim() : null;
                             if (t.subitems) { let sub = findInToc(t.subitems); if (sub) return sub; }
                         }
                         return null;
@@ -397,13 +393,14 @@ window.runGlobalSearch = async function() {
                     if (foundLabel) chapterLabel = foundLabel;
                 }
 
+                const sectionMatches = [];
                 if (text) {
                     let regex = new RegExp(query, "gi");
                     let match;
                     while ((match = regex.exec(text)) !== null) {
                         const snippet = text.substring(Math.max(0, match.index - 30), match.index + query.length + 30);
-                        allMatches.push({ 
-                            href: item.href, // Jumps directly to the physical HTML file
+                        sectionMatches.push({ 
+                            href: item.href, 
                             snippet: snippet,
                             chapter: chapterLabel,
                             file: fileName
@@ -411,10 +408,15 @@ window.runGlobalSearch = async function() {
                     }
                 }
                 item.unload();
+                return sectionMatches;
             } catch(e) {
                 console.warn("Skipped section during search", e);
+                return [];
             }
-        }
+        });
+
+        const results = await Promise.all(searchPromises);
+        const allMatches = results.flat();
         
         resultsContainer.innerHTML = '';
         if (allMatches.length === 0) return resultsContainer.innerHTML = '<div style="padding:10px;">No results found.</div>';

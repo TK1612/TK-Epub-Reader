@@ -1,0 +1,46 @@
+@namespace epub "http://www.idpf.org/2007/ops";
+
+/* Foliate.js CSS Overrides */
+/* This CSS uses CSS custom properties that are set by foliate-engine.js */
+
+html, body {
+    background: var(--bg-color, transparent) !important;
+    color: var(--text-color, #000000) !important;
+    font-family: var(--font-family, sans-serif) !important;
+    font-size: var(--font-size, 1em) !important;
+    line-height: var(--line-height, 1.5) !important;
+    text-align: var(--text-align, left) !important;
+    cursor: pointer !important;
+    -webkit-tap-highlight-color: transparent;
+    margin: 0 !important;
+    padding: 20px !important;
+}
+
+/* Apply to all text elements for better coverage */
+p, div, span, li, td, th, blockquote, pre, code {
+    line-height: var(--line-height, 1.5) !important;
+    text-align: var(--text-align, left) !important;
+}
+
+/* Headings should also respect the settings */
+h1, h2, h3, h4, h5, h6 {
+    line-height: var(--line-height, 1.5) !important;
+    text-align: var(--text-align, left) !important;
+}
+
+/* Paragraph specific styles */
+p {
+    margin-bottom: var(--para-spacing, 1em) !important;
+    text-indent: var(--indent, 0) !important;
+}
+
+/* EPUB-specific elements */
+[epub|type] {
+    line-height: var(--line-height, 1.5) !important;
+    text-align: var(--text-align, left) !important;
+}
+
+/* Prevent inheritance issues */
+* {
+    line-height: inherit !important;
+}

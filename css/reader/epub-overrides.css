@@ -1,0 +1,47 @@
+/* EPUB.js Brute-force CSS Overrides */
+/* This CSS uses CSS custom properties that are set by epub-engine.js */
+
+html, body {
+    background: var(--bg-color, transparent) !important;
+    color: var(--text-color, #000000) !important;
+    font-family: var(--font-family, sans-serif) !important;
+    font-size: var(--font-size, 1em) !important;
+    line-height: var(--line-height, 1.5) !important;
+    text-align: var(--text-align, left) !important;
+    margin: 0 !important;
+    padding: 20px !important;
+}
+
+/* Aggressively target ALL text elements */
+p, div, span, li, td, th, blockquote, pre, code, a, em, strong, b, i, u {
+    font-family: var(--font-family, sans-serif) !important;
+    font-size: var(--font-size, 1em) !important;
+    line-height: var(--line-height, 1.5) !important;
+    text-align: var(--text-align, left) !important;
+    color: var(--text-color, #000000) !important;
+}
+
+/* Headings should also respect the settings */
+h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-family, sans-serif) !important;
+    line-height: var(--line-height, 1.5) !important;
+    text-align: var(--text-align, left) !important;
+    color: var(--text-color, #000000) !important;
+}
+
+/* Paragraph specific styles - override publisher hardcoding */
+p {
+    margin-bottom: var(--para-spacing, 1em) !important;
+    text-indent: var(--indent, 0) !important;
+    line-height: var(--line-height, 1.5) !important;
+}
+
+/* Ensure all elements inherit properly */
+* {
+    line-height: inherit !important;
+}
+
+/* Force background transparency on all elements */
+* {
+    background-color: transparent !important;
+}

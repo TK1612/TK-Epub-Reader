@@ -54,35 +54,20 @@ function waitForFoliateDefinition(timeoutMs = 10000) {
         }
         
         let timeoutId;
-        const observer = new MutationObserver(() => {
-            if (customElements.get('foliate-view')) {
-                clearTimeout(timeoutId);
-                observer.disconnect();
-                resolve();
-            }
-        });
         
         // Set timeout
         timeoutId = setTimeout(() => {
-            observer.disconnect();
             reject(new Error('Timeout waiting for Foliate.js to load (10s)'));
         }, timeoutMs);
         
-        // Start observing
-        customElements.addEventListener('whenDefined', (e) => {
-            if (e.detail && e.detail.name === 'foliate-view') {
-                clearTimeout(timeoutId);
-                observer.disconnect();
-                resolve();
-            }
-        });
-        
-        // Also try the standard way
+        // Use the standard whenDefined() which returns a promise
         customElements.whenDefined('foliate-view').then(() => {
             clearTimeout(timeoutId);
-            observer.disconnect();
             resolve();
-        }).catch(reject);
+        }).catch((err) => {
+            clearTimeout(timeoutId);
+            reject(err);
+        });
     });
 }
 

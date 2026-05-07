@@ -28,29 +28,37 @@
 ## ✨ Key Features
 
 ### 📚 Reader Features
-- **Offline Local Library** — Upload and store EPUB files directly in your browser using IndexedDB (`localforage`)
-- **Dual Engine Support** — Choose between **Epub.js** and **Foliate.js** rendering engines
+- **Offline Local Library** — Upload and store EPUB files directly in your browser using IndexedDB (`localforage`). Books persist between sessions and survive browser restarts.
+- **Dual Engine Support** — Choose between **Epub.js** and **Foliate.js** rendering engines with seamless switching
 - **Modern Glassmorphism UI** — Beautiful frosted-glass interface with Light and Dark mode support
 - **Flexible Reading Modes:**
-  - 📜 **Continuous Scroll** — Seamless reading with visual chapter breaks
-  - 📄 **Single Chapter** — Traditional vertical scrolling
-  - 📖 **Paginated** — Classic book-like page turning
+  - 📜 **Continuous Scroll** — Seamless reading with visual chapter breaks (Epub.js only)
+  - 📄 **Single Chapter Scroll** — Traditional vertical scrolling within chapters
+  - 📖 **Paginated** — Classic book-like page turning with swipe/click navigation
 - **Immersive Themes** — Black, White, Sepia (Paper), and Light Blue with custom CSS injection
-- **Deep Customization** — Font size, line height, font family (including **KoPub Batang** for Korean), text alignment, and colors
-- **Smart Navigation** — Auto-highlighting Table of Contents and bookmark support
-- **Mobile Responsive** — Touch/swipe controls with adaptive layout
+- **Advanced Customization:**
+  - Font size, line height, paragraph spacing, and indent controls
+  - Font family selection including **KoPub Batang** for Korean novels
+  - Text alignment options (left, center, right, justify)
+  - Custom text and background colors
+- **Smart Navigation:**
+  - Auto-highlighting Table of Contents with current chapter tracking
+  - Manual and auto-bookmarking capabilities
+  - Location saving and recovery (protected against race conditions)
+- **Mobile Responsive** — Touch/swipe controls with adaptive layout for all screen sizes
 
-### 🛠️ Built-in EPUB Editor
-Transform the reader into a full-featured EPUB IDE:
+### 🛠️ Built-in EPUB Editor (Calibre Alternative)
+Transform the reader into a full-featured EPUB IDE with lazy loading:
 
-- **CodeMirror Integration** — Syntax highlighting for HTML, CSS, and XML with image preview
-- **Intelligent Scanner** — Detect typos and OCR errors in English, Korean, Japanese, and Chinese
-- **Global Search & Replace** — Support for strings and Regex patterns across the entire book
-- **TOC & Metadata Management** — Auto-generate Table of Contents and edit book metadata
-- **Asset Management** — Import images, stylesheets, or create new chapters with automatic `.opf` manifest updates
-- **EPUB Debugger** — Detect broken links and missing files by scanning manifest against ZIP contents
-- **Base64 String Cleaner** — Clean up encoded content
-- **Revert Save** — Instantly restore the book to its original state
+- **CodeMirror Integration** — Syntax highlighting for HTML, CSS, and XML with visual image preview
+- **Intelligent Scanner** — Detect typos and OCR errors in English, Korean (Hangul), Japanese (Kana), and Chinese (Hanzi/Kanji)
+- **Global Search & Replace** — Support for strings and Regex patterns across the entire book simultaneously
+- **TOC & Metadata Management** — Auto-generate Table of Contents from heading tags (`<h1>`, `<h2>`) and edit book metadata (Title/Author)
+- **Asset Management** — Import images, stylesheets, or create new chapters directly into the EPUB with automatic `.opf` manifest updates
+- **EPUB Debugger** — Scan the book's manifest against actual ZIP contents to detect broken links and missing files
+- **EPUB Base64 String Cleaner** — Clean up encoded content for better readability
+- **Revert Save** — Instantly restore the book to its original state from when you opened the editor
+- **Modular Architecture** — Cleanly separated into workspace, file-manager, xml-tools, search-replace, and diagnostics modules
 
 ---
 
@@ -58,13 +66,13 @@ Transform the reader into a full-featured EPUB IDE:
 
 | Technology | Purpose |
 |------------|---------|
-| **HTML5 / CSS3 / Vanilla JavaScript** | Core application |
+| **HTML5 / CSS3 / Vanilla JavaScript** | Core application (no frameworks) |
 | **[ePub.js](https://github.com/futurepress/epub.js/)** | Primary EPUB rendering engine |
 | **[foliate.js](https://github.com/johnfactotum/foliate-js)** | Alternative rendering engine |
-| **[JSZip](https://stuk.github.io/jszip/)** | EPUB archive handling |
-| **[localForage](https://localforage.github.io/localForage/)** | Local storage (IndexedDB) |
-| **[CodeMirror (v5)](https://codemirror.net/5/)** | Code editor integration |
-| **[Phosphor Icons](https://phosphoricons.com/)** | UI iconography |
+| **[JSZip](https://stuk.github.io/jszip/)** | EPUB archive handling and parsing |
+| **[localForage](https://localforage.github.io/localForage/)** | Local storage abstraction (IndexedDB) |
+| **[CodeMirror (v5)](https://codemirror.net/5/)** | Code editor integration with syntax highlighting |
+| **[Phosphor Icons](https://phosphoricons.com/)** | Modern, lightweight iconography |
 
 ---
 
@@ -95,17 +103,21 @@ cd TK-Epub-Reader
 
 ### Reader Controls
 - **Delete Books:** Click the red "X" icon in the Library view to toggle Delete Mode
-- **Dynamic Taskbar:** Auto-hides when scrolling for maximum screen space (pin it in Settings)
-- **Progress Protection:** Location data is safeguarded against race conditions when switching modes
+- **Dynamic Taskbar:** Auto-hides when scrolling for maximum screen space (pin it permanently in Settings)
+- **Progress Protection:** Location data is safeguarded against race conditions when switching modes or closing the app quickly
+- **Engine Switching:** Switch between Epub.js and Foliate.js while preserving your current reading position
 
 ### Editor Tips
-- **Lazy Loading:** EPUB files are only unzipped into RAM when you open the Editor—keeping the reader lightning-fast
+- **Lazy Loading:** EPUB files are only unzipped into RAM when you explicitly open the Editor—keeping the reader lightning-fast
 - **Memory Management:** Close and reopen the Editor to free browser memory for large books
+- **File Tree Navigation:** Browse and edit individual files within the EPUB archive
+- **Real-time Preview:** See changes instantly with the integrated preview panel
 
 ### Keyboard Shortcuts
 | Shortcut | Action |
 |----------|--------|
 | `Ctrl + F` | Search in Reader |
+| `Ctrl + H` | Search & Replace in Editor |
 | `Ctrl + S` | Save changes (Editor) |
 | `Esc` | Close modals / Exit Editor |
 
@@ -116,50 +128,54 @@ cd TK-Epub-Reader
 ```
 TK-Epub-Reader/
 ├── css/
-│   ├── base.css              # Base styles
-│   ├── components.css        # Reusable components
+│   ├── base.css              # Base styles and CSS variables
+│   ├── components.css        # Reusable UI components
 │   ├── editor.css            # Editor-specific styles
-│   ├── layout.css            # Layout utilities
+│   ├── layout.css            # Layout utilities and grid system
 │   ├── library.css           # Library view styles
 │   ├── reader.css            # Reader styles
 │   ├── style.css             # Main stylesheet
 │   └── reader/               # Reader engine overrides
-│       ├── epub-overrides.css
-│       ├── foliate-overrides.css
-│       └── reader-layout.css
+│       ├── epub-overrides.css    # Epub.js CSS injection template
+│       ├── foliate-overrides.css # Foliate.js CSS injection template
+│       └── reader-layout.css    # Reader layout utilities
 ├── js/
-│   ├── editor.js             # Editor main module
-│   ├── globals.js            # Global variables
-│   ├── library.js            # Library management
-│   ├── reader.js             # Reader main module
+│   ├── editor.js             # Editor main entry point (loads modules)
+│   ├── globals.js            # Global variables and constants
+│   ├── library.js            # Library management and upload handling
+│   ├── reader.js             # Reader module loader
 │   ├── tools.js              # Utility functions
-│   ├── ui.js                 # UI controller
+│   ├── ui.js                 # UI controller and modal management
 │   ├── editor/               # Editor submodules
-│   │   ├── diagnostics.js
-│   │   ├── file-manager.js
-│   │   ├── modal-helper.js
-│   │   ├── search-replace.js
-│   │   ├── workspace.js
-│   │   ├── xml-helper.js
-│   │   └── xml-tools.js
+│   │   ├── diagnostics.js      # Debugging and spell-check tools
+│   │   ├── file-manager.js    # File I/O operations
+│   │   ├── modal-helper.js    # Modal open/close operations
+│   │   ├── search-replace.js  # Search and replace logic
+│   │   ├── workspace.js       # CodeMirror workspace and file tree
+│   │   ├── xml-helper.js      # XML parsing and serialization
+│   │   └── xml-tools.js       # TOC and metadata management
 │   ├── reader/               # Reader submodules
-│   │   ├── epub-engine.js
-│   │   ├── foliate-engine.js
-│   │   ├── index.js
-│   │   └── settings-helper.js
+│   │   ├── epub-engine.js      # Epub.js rendering engine
+│   │   ├── foliate-engine.js   # Foliate.js rendering engine
+│   │   ├── index.js            # Engine dispatcher and switching
+│   │   └── settings-helper.js  # Settings load/save utilities
 │   └── ui/library/           # UI submodules
-│       ├── bookmarks.js
-│       ├── delete.js
-│       ├── editor-list.js
-│       ├── index.js
-│       ├── renderer.js
-│       ├── search.js
-│       ├── selection.js
-│       ├── settings.js
-│       ├── state.js
-│       └── upload.js
+│       ├── bookmarks.js        # Bookmark management
+│       ├── delete.js           # Book deletion handling
+│       ├── editor-list.js      # Editor book list rendering
+│       ├── index.js            # Library UI module loader
+│       ├── renderer.js         # Library grid/card rendering
+│       ├── search.js           # Search and filter logic
+│       ├── selection.js        # Book selection handling
+│       ├── settings.js         # Library settings modal
+│       ├── state.js            # Library state management
+│       └── upload.js           # Upload progress and handling
 ├── assets/                   # Static assets (icons, manifest)
-├── index.html                # Entry point
+│   ├── favicon.ico
+│   ├── favicon.svg
+│   ├── apple-touch-icon.png
+│   └── site.webmanifest
+├── index.html                # Application entry point
 └── README.md                 # This file
 ```
 
@@ -181,6 +197,12 @@ Contributions are welcome! Feel free to:
 - Suggest features
 - Submit pull requests
 
+### Development Guidelines
+- Follow the modular architecture pattern
+- Maintain backward compatibility
+- Test with both Epub.js and Foliate.js engines
+- Ensure mobile responsiveness
+
 ---
 
 ## 📜 License
@@ -193,7 +215,18 @@ This project is open-source. (Add your license here if applicable)
 
 - [ePub.js](https://github.com/futurepress/epub.js/) for the excellent EPUB rendering library
 - [Foliate](https://github.com/johnfactotum/foliate) for the alternative reader engine
+- [CodeMirror](https://codemirror.net/) for the powerful code editor
+- [localForage](https://localforage.github.io/localForage/) for simplifying IndexedDB
 - All the open-source libraries that made this project possible
+
+---
+
+## 📊 Stats
+
+- **Zero backend** — Pure client-side application
+- **Lightweight** — No heavy frameworks or dependencies
+- **Fast** — Lazy loading keeps the reader responsive
+- **Compatible** — Works offline after initial load
 
 ---
 

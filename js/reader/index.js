@@ -8,11 +8,27 @@ window.activeBookId = null;
 window.isSwitchingEngine = false; 
 
 /**
+ * Detect if the user is on iOS
+ * @returns {boolean}
+ */
+window.isIOS = function() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+};
+
+/**
  * Get the currently selected reader engine from localStorage
+ * Defaults to 'foliate' on iOS, 'epubjs' on other platforms
  * @returns {string} 'epubjs' or 'foliate'
  */
 window.getReaderEngine = function() {
-    return localStorage.getItem('setting-reader-engine') || 'epubjs';
+    const saved = localStorage.getItem('setting-reader-engine');
+    if (saved) return saved;
+    
+    // Default to Foliate on iOS (better compatibility)
+    if (window.isIOS()) {
+        return 'foliate';
+    }
+    return 'epubjs';
 };
 
 /**
@@ -70,14 +86,24 @@ window.openReader = async function(bookId) {
     
     try {
         if (engine === 'foliate') {
-            if (typeof window.launchFoliateEngine === 'function') await window.launchFoliateEngine(bookId);
-            else alert("Foliate engine is still loading. Please wait a moment.");
+            if (typeof window.launchFoliateEngine === 'function') {
+                await window.launchFoliateEngine(bookId);
+            } else {
+                throw new Error("Foliate engine not available. Try refreshing the page or switch to EPUB.js engine.");
+            }
         } else {
-            if (typeof window.launchEpubJsEngine === 'function') await window.launchEpubJsEngine(bookId);
+            if (typeof window.launchEpubJsEngine === 'function') {
+                await window.launchEpubJsEngine(bookId);
+            } else {
+                throw new Error("EPUB.js engine not available. Try refreshing the page or switch to Foliate engine.");
+            }
         }
+        // Update chapter title after successful load
+        document.getElementById('chapter-title').innerText = "Ready";
     } catch (e) {
         console.error("Boot error:", e);
-        alert("Failed to load this specific book. Check the F12 console for the exact error.");
+        const errorMsg = e.message || "Unknown error occurred";
+        alert("Failed to load book: " + errorMsg);
         window.closeReader(); 
     }
 };

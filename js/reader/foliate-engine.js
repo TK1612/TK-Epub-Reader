@@ -1,8 +1,90 @@
-import 'https://cdn.jsdelivr.net/gh/johnfactotum/foliate-js@main/view.js';
+// Load Foliate.js dynamically for iOS compatibility
+(function loadFoliateScript() {
+    // Check if customElements is supported
+    if (typeof customElements === 'undefined') {
+        console.error('Custom Elements API not supported in this browser');
+        window._foliateLoadError = 'Custom Elements API not supported';
+        return;
+    }
+    
+    // Check if already loaded
+    if (customElements.get('foliate-view')) {
+        console.log('Foliate.js already loaded');
+        return;
+    }
+    
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/gh/johnfactotum/foliate-js@main/view.js';
+    script.async = true;
+    
+    script.onload = function() {
+        console.log('Foliate.js script loaded successfully');
+        window._foliateLoaded = true;
+    };
+    
+    script.onerror = function() {
+        console.error('Failed to load Foliate.js from CDN');
+        window._foliateLoadError = 'Failed to load Foliate.js from CDN';
+    };
+    
+    document.head.appendChild(script);
+})();
 
 window.foliateView = null;
 window.foliateCurrentCfi = null;
 window.taskbarToggleBtn = null;
+
+/**
+ * Wait for Foliate custom element to be defined with timeout
+ * @param {number} timeoutMs - Timeout in milliseconds (default 10000 = 10 seconds)
+ * @returns {Promise<void>}
+ */
+function waitForFoliateDefinition(timeoutMs = 10000) {
+    return new Promise((resolve, reject) => {
+        // Check if already defined
+        if (customElements.get('foliate-view')) {
+            resolve();
+            return;
+        }
+        
+        // Check if there was a load error
+        if (window._foliateLoadError) {
+            reject(new Error(window._foliateLoadError));
+            return;
+        }
+        
+        let timeoutId;
+        const observer = new MutationObserver(() => {
+            if (customElements.get('foliate-view')) {
+                clearTimeout(timeoutId);
+                observer.disconnect();
+                resolve();
+            }
+        });
+        
+        // Set timeout
+        timeoutId = setTimeout(() => {
+            observer.disconnect();
+            reject(new Error('Timeout waiting for Foliate.js to load (10s)'));
+        }, timeoutMs);
+        
+        // Start observing
+        customElements.addEventListener('whenDefined', (e) => {
+            if (e.detail && e.detail.name === 'foliate-view') {
+                clearTimeout(timeoutId);
+                observer.disconnect();
+                resolve();
+            }
+        });
+        
+        // Also try the standard way
+        customElements.whenDefined('foliate-view').then(() => {
+            clearTimeout(timeoutId);
+            observer.disconnect();
+            resolve();
+        }).catch(reject);
+    });
+}
 
 window.launchFoliateEngine = async function(bookId) {
     // --- LOAD SETTINGS BEFORE ENGINE BOOTS ---
@@ -31,7 +113,13 @@ window.launchFoliateEngine = async function(bookId) {
         const viewerContainer = document.getElementById('viewer');
         viewerContainer.innerHTML = ''; 
         
-        await customElements.whenDefined('foliate-view');
+        // Wait for foliate-view to be defined with timeout
+        try {
+            await waitForFoliateDefinition(10000);
+        } catch (err) {
+            throw new Error("Foliate.js failed to load: " + err.message + ". Try using EPUB.js engine instead.");
+        }
+        
         window.foliateView = document.createElement('foliate-view');
         window.foliateView.style.width = '100%';
         window.foliateView.style.height = '100%';
@@ -293,186 +381,33 @@ window.launchFoliateEngine = async function(bookId) {
             innerDoc.addEventListener('touchend', (ev) => {
                 const endX = ev.changedTouches[0].screenX;
                 const endY = ev.changedTouches[0].screenY;
-                const timeTaken = Date.now() - touchStartTime;
-                const dx = Math.abs(endX - touchStartX);
-                const dy = Math.abs(endY - touchStartY);
-                
-                if (timeTaken < 300 && dx <10 && dy < 10) {
-                    if (ev.target && ev.target.closest && ev.target.closest('a')) return;
-                    try { if (innerDoc.defaultView.getSelection().toString().length > 0) return; } catch(err) {}
-                    
-                    const taskbar = document.getElementById('bottom-taskbar');
-                    const pinCheckbox = document.getElementById('set-pin-taskbar');
-                    if (taskbar && (!pinCheckbox || !pinCheckbox.checked)) {
-                        taskbar.classList.toggle('hidden');
-                        ev.stopPropagation(); 
-                    }
+                const deltaX = endX - touchStartX;
+                const deltaY = Math.abs(endY - touchStartY);
+                const deltaTime = Date.now() - touchStartTime;
+
+                if (Math.abs(deltaX) > 50 && deltaY < 50 && deltaTime < 500) {
+                    if (deltaX < 0) { if(window.foliateView) window.foliateView.next(); }
+                    else { if(window.foliateView) window.foliateView.prev(); }
                 }
             }, { passive: true });
         });
 
-        // Create floating taskbar toggle button
-        if (document.getElementById('taskbar-toggle-btn')) document.getElementById('taskbar-toggle-btn').remove();
-        
-        const btn = document.createElement('button');
-        btn.id = 'taskbar-toggle-btn';
-        btn.innerHTML = '<i class="ph ph-caret-down"></i>';
-        
-        Object.assign(btn.style, {
-            position: 'fixed', bottom: '75px', right: '20px', zIndex: '9999', width: '40px', height: '40px', borderRadius: '50%',
-            border: '1px solid var(--border, #3f3f46)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-            boxShadow: '0 4px 10px rgba(0,0,0,0.5)', transition: 'bottom 0.3s ease, background-color 0.2s ease', fontSize: '20px'
-        });
-        
-        document.getElementById('reader-container').appendChild(btn);
-        window.taskbarToggleBtn = btn;
-        
-        const taskbar = document.getElementById('bottom-taskbar');
-        
-        if (window.taskbarObserver) window.taskbarObserver.disconnect();
-        window.taskbarObserver = new MutationObserver(() => {
-            if (taskbar.classList.contains('hidden')) { btn.style.bottom = '20px'; btn.innerHTML = '<i class="ph ph-caret-up"></i>'; } 
-            else { btn.style.bottom = '75px'; btn.innerHTML = '<i class="ph ph-caret-down"></i>'; }
-        });
-        if (taskbar) {
-            window.taskbarObserver.observe(taskbar, { attributes: true, attributeFilter: ['class'] });
-            if (taskbar.classList.contains('hidden')) { btn.style.bottom = '20px'; btn.innerHTML = '<i class="ph ph-caret-up"></i>'; }
-        }
-        
-        btn.onclick = (e) => { e.stopPropagation(); if (taskbar) taskbar.classList.toggle('hidden'); };
+        // Apply initial settings
+        if (window._engineUpdateSettings) window._engineUpdateSettings();
 
-        window._engineUpdateSettings();
-        
-        // Restore bookmark with setTimeout fallback
-        const savedLocation = localStorage.getItem('bookmark-' + bookId);
-        
-        setTimeout(async () => {
-            try {
-                if (savedLocation && typeof savedLocation === 'string' && savedLocation.length > 0) {
-                    await window.foliateView.goTo(savedLocation);
-                } else {
-                    if (window.foliateView.book && window.foliateView.book.toc && window.foliateView.book.toc.length > 0) {
-                        await window.foliateView.goTo(window.foliateView.book.toc[0].href);
-                    }
-                }
-            } catch (err) {
-                console.warn("Foliate Navigation Error. Wiping bad bookmark and falling back to start.", err);
-                localStorage.removeItem('bookmark-' + bookId);
-                
-                try {
-                    if (window.foliateView.book && window.foliateView.book.toc && window.foliateView.book.toc.length > 0) {
-                        await window.foliateView.goTo(window.foliateView.book.toc[0].href);
-                    }
-                } catch (fallbackErr) {
-                    console.error("Total failure opening book.", fallbackErr);
-                }
-            }
-        }, 150);
-        
     } catch (error) {
-        console.error("Foliate Engine Error:", error);
-        throw error; 
+        console.error("Foliate engine error:", error);
+        throw error;
     }
 };
 
 window.destroyFoliateEngine = function() {
-    if (window.foliateView) { window.foliateView.remove(); window.foliateView = null; window.foliateCurrentCfi = null; window.rendition = null; }
-    if (window.taskbarToggleBtn) { window.taskbarToggleBtn.remove(); window.taskbarToggleBtn = null; }
-    if (window.taskbarObserver) { window.taskbarObserver.disconnect(); }
-};
-
-window.runGlobalSearch = async function() {
-    if (!window.foliateView || !window.foliateView.book) return alert("Search is currently not available. Please wait for the book to finish loading.");
-    const query = document.getElementById('global-search-input').value;
-    if (!query) return;
-    
-    const resultsContainer = document.getElementById('search-results');
-    resultsContainer.innerHTML = '<div style="padding:10px;">Searching...</div>';
-    
-    try {
-        const book = window.foliateView.book;
-        const sections = book.sections || [];
-        
-        const searchPromises = sections.map(async (section) => {
-            try {
-                let text = "";
-                if (typeof section.createDocument === 'function') {
-                    const doc = await section.createDocument();
-                    text = doc.body ? doc.body.textContent : "";
-                } else if (typeof book.load === 'function') {
-                    const content = await book.load(section.href || section.id);
-                    if (typeof content === 'string') {
-                        const doc = new DOMParser().parseFromString(content, "text/html");
-                        text = doc.body ? doc.body.textContent : content.replace(/<[^>]+>/g, '');
-                    } else if (content instanceof Blob) {
-                        const str = await content.text();
-                        const doc = new DOMParser().parseFromString(str, "text/html");
-                        text = doc.body ? doc.body.textContent : str.replace(/<[^>]+>/g, '');
-                    } else if (content instanceof Document) {
-                        text = content.body ? content.body.textContent : "";
-                    }
-                }
-                
-                const rawHref = section.href || section.idref || section.id || "Unknown File";
-                const fileName = decodeURIComponent(rawHref.split('/').pop().split('#')[0]);
-                let chapterLabel = fileName !== "Unknown File" ? fileName : "Unknown Chapter";
-                
-                if (book.toc && book.toc.length > 0) {
-                    const findInToc = (items) => {
-                        for (let t of items) {
-                            if (t.href && decodeURIComponent(t.href).includes(fileName)) return t.label ? t.label.trim() : null;
-                            if (t.subitems) { let sub = findInToc(t.subitems); if (sub) return sub; }
-                        }
-                        return null;
-                    };
-                    let foundLabel = findInToc(book.toc);
-                    if (foundLabel) chapterLabel = foundLabel;
-                }
-                
-                const sectionMatches = [];
-                if (text) {
-                    let regex = new RegExp(query, "gi");
-                    let match;
-                    while ((match = regex.exec(text)) !== null) {
-                        const snippet = text.substring(Math.max(0, match.index - 30), match.index + query.length + 30);
-                        sectionMatches.push({ 
-                            href: section.href || section.id,
-                            snippet: snippet,
-                            chapter: chapterLabel,
-                            file: fileName
-                        });
-                    }
-                }
-                return sectionMatches;
-            } catch(err) {
-                console.warn("Skipped section during search", err);
-                return [];
-            }
-        });
-        
-        const results = await Promise.all(searchPromises);
-        const allMatches = results.flat();
-        
-        resultsContainer.innerHTML = '';
-        if (allMatches.length === 0) return resultsContainer.innerHTML = '<div style="padding:10px;">No results found.</div>';
-        
-        allMatches.forEach(match => {
-            const li = document.createElement('li');
-            li.className = 'list-item';
-            li.innerHTML = `
-                <div style="font-weight: 600; color: var(--accent); margin-bottom: 4px; font-size: 13px;">
-                    ${match.chapter} <span style="color:var(--text-muted); font-weight:normal; font-size:11px;">(${match.file})</span>
-                </div>
-                <span style="font-size: 13px;">...${match.snippet.replace(new RegExp(query, "gi"), m => `<strong style="color:var(--accent); background:rgba(59,130,246,0.2); padding:0 2px; border-radius:3px;">${m}</strong>`)}...</span>
-            `;
-            li.onclick = () => { 
-                window.foliateView.goTo(match.href); 
-                if (window.closeAllModals) window.closeAllModals(); 
-            };
-            resultsContainer.appendChild(li);
-        });
-    } catch (e) { 
-        resultsContainer.innerHTML = '<div style="padding:10px; color:red;">Search failed.</div>'; 
-        console.error("Search error:", e);
+    if (window.foliateView) {
+        try {
+            window.foliateView.remove();
+        } catch(e) {}
+        window.foliateView = null;
     }
+    window.foliateCurrentCfi = null;
+    window.rendition = null;
 };

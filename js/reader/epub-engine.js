@@ -1,16 +1,7 @@
-/**
- * EPUB.js Engine Module
- * Handles EPUB.js specific rendering, theming, and event handling.
- * Uses rendition.themes.register() and rendition.themes.select() for CSS injection
- */
-
 window.book = null;
 window.rendition = null;
 window.taskbarToggleBtn = null;
 
-/**
- * Launch EPUB.js engine for a specific book
- */
 window.launchEpubJsEngine = async function(bookId) {
     // --- LOAD SETTINGS BEFORE ENGINE BOOTS ---
     window.loadReaderSettings();
@@ -38,30 +29,24 @@ window.launchEpubJsEngine = async function(bookId) {
     const viewer = document.getElementById('viewer');
     viewer.innerHTML = '';
 
-    const readMode = document.getElementById('set-read-mode').value || 'paginated';
+    const readMode = document.getElementById('set-read-mode').value || 'scrolled';
     const isContinuous = (readMode === 'continuous');
 
     window.rendition = window.book.renderTo(viewer, {
         manager: isContinuous ? "continuous" : "default",
-        flow: isContinuous ? "scrolled" : (readMode === 'scrolled' ? "scrolled" : "paginated"),
+        flow: isContinuous ? "scrolled" : "scrolled",
         width: "100%",
         height: "100%",
-        snap: !isContinuous,
+        snap: false,
         allowScriptedContent: true
     });
 
-    /**
-     * Update reader settings and apply theme.
-     * Uses brute-force CSS injection directly into iframe documents
-     * to bypass EPUB.js themes API which can be overpowered by internal CSS
-     */
+    // Store body style observers so we can disconnect them later
+    window._bodyObservers = [];
 
     // Cache for the CSS template
     let cssTemplateCache = null;
     
-    /**
-     * Load CSS template from file
-     */
     async function loadCSSTemplate() {
         if (cssTemplateCache) return cssTemplateCache;
         try {
@@ -74,10 +59,6 @@ window.launchEpubJsEngine = async function(bookId) {
         }
     }
 
-    /**
-     * Brute-force CSS injection function
-     * Injects CSS file content directly into all active iframe documents
-     */
     function injectCSSIntoIframes(cssString) {
         if (!window.rendition) return;
         
@@ -100,10 +81,6 @@ window.launchEpubJsEngine = async function(bookId) {
         });
     }
 
-    /**
-     * Set CSS custom properties on iframe documents
-     * This sets variables that are used by the CSS file
-     */
     function setCSSVariablesOnIframes(variables) {
         if (!window.rendition) return;
         
@@ -121,15 +98,135 @@ window.launchEpubJsEngine = async function(bookId) {
         });
     }
 
-    // Register content hook ONCE for injecting CSS into new chapters
-    // This ensures settings apply when user flips to a new chapter
-    // Using a flag to prevent memory leaks from multiple registrations
-    if (!window._contentHookRegistered) {
-        window.rendition.hooks.content.register(function() {
-            // Re-inject CSS when new content loads
-            if (window._engineUpdateSettings) {
-                window._engineUpdateSettings();
+    function setupBodyStyleObserver(content) {
+        if (!content || !content.document || !content.document.body) return;
+        
+        const body = content.document.body;
+        const isMobile = window.innerWidth <= 768;
+        const paddingValue = isMobile ? '16px' : '20px';
+        
+        // Function to force override styles - aggressively sets both left and right
+        const overrideStyles = () => {
+            // Clear any inline margins that EPUB.js injected
+            body.style.setProperty('margin', '0', 'important');
+            body.style.setProperty('margin-left', '0', 'important');
+            body.style.setProperty('margin-right', '0', 'important');
+            
+            // Force equal padding on both sides - use setProperty for each side
+            body.style.setProperty('padding', paddingValue, 'important');
+            body.style.setProperty('padding-left', paddingValue, 'important');
+            body.style.setProperty('padding-right', paddingValue, 'important');
+            
+            // Prevent the body from stretching to full width
+            body.style.setProperty('max-width', '100%', 'important');
+            body.style.setProperty('box-sizing', 'border-box', 'important');
+        };
+        
+        // Create a MutationObserver to watch for style changes
+        const observer = new MutationObserver(function(mutations) {
+            let needsOverride = false;
+            mutations.forEach(function(mutation) {
+                if (mutation.attributeName === 'style') {
+                    const style = body.getAttribute('style') || '';
+                    // Check if EPUB.js injected margins
+                    if (style.includes('margin') || style.includes('padding')) {
+                        needsOverride = true;
+                    }
+                }
+            });
+            if (needsOverride) {
+                overrideStyles();
             }
+        });
+        
+        // Start observing
+        observer.observe(body, { attributes: true, attributeFilter: ['style'] });
+        
+        // Store observer for cleanup
+        window._bodyObservers.push(observer);
+        
+        // Initial override
+        overrideStyles();
+        
+        // Also set up a continuous enforcement using requestAnimationFrame
+        // This ensures the styles stick even if EPUB.js tries to override them
+        let enforcing = true;
+        function enforceStyles() {
+            if (!enforcing) return;
+            
+            // Check if styles are still correct
+            const currentPaddingRight = body.style.getPropertyValue('padding-right');
+            const currentPaddingLeft = body.style.getPropertyValue('padding-left');
+            const currentMarginLeft = body.style.getPropertyValue('margin-left');
+            const currentMarginRight = body.style.getPropertyValue('margin-right');
+            
+            // If either padding is not what we want, re-apply
+            if (currentPaddingRight !== paddingValue || 
+                currentPaddingLeft !== paddingValue ||
+                currentMarginLeft !== '0px' ||
+                currentMarginRight !== '0px') {
+                overrideStyles();
+            }
+            
+            requestAnimationFrame(enforceStyles);
+        }
+        
+        // Start enforcement
+        requestAnimationFrame(enforceStyles);
+        
+        // Store the enforcement stop function
+        body._stopEnforcement = () => { enforcing = false; };
+    }
+
+    function setupAllObservers() {
+        if (!window.rendition) return;
+        
+        const contents = window.rendition.getContents();
+        if (!contents || contents.length === 0) return;
+        
+        contents.forEach(function(content) {
+            setupBodyStyleObserver(content);
+        });
+    }
+
+    if (!window._contentHookRegistered) {
+        window.rendition.hooks.content.register(function(content) {
+            // Inject CSS when new content loads
+            const cssTemplate = cssTemplateCache;
+            if (cssTemplate) {
+                if (!content.document.getElementById('custom-override-styles')) {
+                    const styleEl = content.document.createElement('style');
+                    styleEl.id = 'custom-override-styles';
+                    content.document.head.appendChild(styleEl);
+                    styleEl.innerHTML = cssTemplate;
+                }
+            }
+            
+            // Set CSS variables
+            if (window._currentCssVariables) {
+                const root = content.document.documentElement;
+                Object.keys(window._currentCssVariables).forEach(function(varName) {
+                    root.style.setProperty(varName, window._currentCssVariables[varName]);
+                });
+            }
+            
+            // Setup observer for this content
+            setupBodyStyleObserver(content);
+            
+            // Force override after a short delay to catch late injections
+            setTimeout(() => {
+                if (content && content.document && content.document.body) {
+                    const isMobile = window.innerWidth <= 768;
+                    const paddingValue = isMobile ? '16px' : '20px';
+                    const body = content.document.body;
+                    body.style.setProperty('margin', '0', 'important');
+                    body.style.setProperty('margin-left', '0', 'important');
+                    body.style.setProperty('margin-right', '0', 'important');
+                    body.style.setProperty('padding', paddingValue, 'important');
+                    body.style.setProperty('padding-left', paddingValue, 'important');
+                    body.style.setProperty('padding-right', paddingValue, 'important');
+                }
+            }, 100);
         });
         window._contentHookRegistered = true;
     }
@@ -172,15 +269,12 @@ window.launchEpubJsEngine = async function(bookId) {
             }
         }
 
-        // Load CSS template from external file (only need to inject once)
         const cssTemplate = await loadCSSTemplate();
         
         if (cssTemplate) {
-            // Inject the base CSS file (with CSS variables) into iframes
             injectCSSIntoIframes(cssTemplate);
         }
         
-        // Set CSS custom properties on all iframe documents
         const cssVariables = {
             '--bg-color': bgColor,
             '--text-color': color,
@@ -192,9 +286,12 @@ window.launchEpubJsEngine = async function(bookId) {
             '--indent': indent
         };
         
+        window._currentCssVariables = cssVariables;
+        
         setCSSVariablesOnIframes(cssVariables);
+        
+        setupAllObservers();
 
-        // Sync Floating Button Settings
         const showFloatCheckbox = document.getElementById('set-show-float-btn');
         const taskbarElement = document.getElementById('bottom-taskbar');
         
@@ -215,7 +312,6 @@ window.launchEpubJsEngine = async function(bookId) {
 
     window._engineUpdateSettings();
 
-    // Bulletproof Load Sequence
     const savedLocation = localStorage.getItem('bookmark-' + bookId);
     try {
         if (savedLocation) {
@@ -239,7 +335,8 @@ window.launchEpubJsEngine = async function(bookId) {
         }
     }
 
-    // Bookmarks and Active TOC Highlighting
+    setTimeout(setupAllObservers, 200);
+
     window.rendition.on("relocated", function(location) {
         localStorage.setItem('bookmark-' + bookId, location.start.cfi);
         
@@ -301,7 +398,6 @@ window.launchEpubJsEngine = async function(bookId) {
         });
     });
 
-    // EPUB.js: builds TOC from book.loaded.navigation
     window.book.ready.then(() => {
         return window.book.locations.generate(1600);
     }).catch(err => {});
@@ -357,7 +453,6 @@ window.launchEpubJsEngine = async function(bookId) {
         }
     }).catch(err => console.warn("TOC loading failed", err));
 
-    // Create floating taskbar toggle button
     if (document.getElementById('taskbar-toggle-btn')) document.getElementById('taskbar-toggle-btn').remove();
     
     const btn = document.createElement('button');
@@ -387,7 +482,6 @@ window.launchEpubJsEngine = async function(bookId) {
 
     btn.onclick = (e) => { e.stopPropagation(); if (taskbar) taskbar.classList.toggle('hidden'); };
 
-    // PC Click Handling
     window.rendition.on('click', (e) => {
         if (e.target && e.target.tagName && e.target.tagName.toLowerCase() === 'a') return;
         try { if (window.rendition.getContents()[0].window.getSelection().toString().length > 0) return; } catch(err) {}
@@ -399,30 +493,23 @@ window.launchEpubJsEngine = async function(bookId) {
         }
     });
 
-    // Mobile Touch Logic
     window.rendition.hooks.content.register(function(contents) {
         let startX = 0; let startY = 0; let startTime = 0;
         
         contents.document.addEventListener('touchstart', (event) => {
-            startX = event.changedTouches[0].screenX; 
-            startY = event.changedTouches[0].screenY; 
+            startX = event.changedTouches[0].screenX;
+            startY = event.changedTouches[0].screenY;
             startTime = new Date().getTime();
         }, { passive: true });
 
         contents.document.addEventListener('touchend', (event) => {
-            const endX = event.changedTouches[0].screenX; 
+            const endX = event.changedTouches[0].screenX;
             const endY = event.changedTouches[0].screenY;
             const timeTaken = new Date().getTime() - startTime;
-            const deltaX = endX - startX; 
+            const deltaX = endX - startX;
             const deltaY = endY - startY;
             
-            const currentReadMode = document.getElementById('set-read-mode').value;
-            const isPaginated = (currentReadMode === 'paginated');
-
-            if (isPaginated && timeTaken < 300 && Math.abs(deltaX) > 40 && Math.abs(deltaY) < 40) {
-                if (deltaX > 0) window.rendition.prev(); else window.rendition.next();
-            } 
-            else if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
+            if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
                 if (event.target && event.target.tagName && event.target.tagName.toLowerCase() !== 'a') {
                     try { if (contents.window.getSelection().toString().length > 0) return; } catch(err) {}
                     
@@ -437,15 +524,31 @@ window.launchEpubJsEngine = async function(bookId) {
     });
 };
 
-/**
- * Destroy EPUB.js engine and clean up resources
- */
 window.destroyEpubJsEngine = function() {
+    // Disconnect all body observers
+    if (window._bodyObservers) {
+        window._bodyObservers.forEach(observer => observer.disconnect());
+        window._bodyObservers = [];
+    }
+    
+    // Stop all enforcement loops
+    if (window.rendition && typeof window.rendition.getContents === 'function') {
+        const contents = window.rendition.getContents();
+        if (contents && contents.length > 0) {
+            contents.forEach(function(content) {
+                if (content && content.document && content.document.body && content.document.body._stopEnforcement) {
+                    content.document.body._stopEnforcement();
+                }
+            });
+        }
+    }
+    
     if (window.book) { window.book.destroy(); window.book = null; window.rendition = null; }
     if (window.taskbarToggleBtn) { window.taskbarToggleBtn.remove(); window.taskbarToggleBtn = null; }
     if (window.taskbarObserver) { window.taskbarObserver.disconnect(); }
     // Clean up variables
     window._contentHookRegistered = false;
+    window._currentCssVariables = null;
 };
 
 /**
@@ -523,7 +626,7 @@ window.runGlobalSearch = async function() {
                 <div style="font-weight: 600; color: var(--accent); margin-bottom: 4px; font-size: 13px;">
                     ${match.chapter} <span style="color:var(--text-muted); font-weight:normal; font-size:11px;">(${match.file})</span>
                 </div>
-                <span style="font-size: 13px;">...${safeSnippet.replace(new RegExp(query, 'gi'), m => `<strong style="color:var(--accent); background:rgba(59,130,246,0.2); padding:0 2px; border-radius:3px;">${m}</strong>`)}...</span>
+                <span style="font-size: 13px;">...${safeSnippet.replace(new RegExp(query, "gi"), m => `<strong style="color:var(--accent); background:rgba(59,130,246,0.2); padding:0 2px; border-radius:3px;">${m}</strong>`)}...</span>
             `;
             
             li.onclick = () => { 

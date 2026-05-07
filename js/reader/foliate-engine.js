@@ -1,18 +1,9 @@
-/**
- * Foliate.js Engine Module
- * Handles Foliate.js specific rendering, theming, and event handling.
- * Uses renderer.setStyles() for CSS injection
- */
-
 import 'https://cdn.jsdelivr.net/gh/johnfactotum/foliate-js@main/view.js';
 
 window.foliateView = null;
 window.foliateCurrentCfi = null;
 window.taskbarToggleBtn = null;
 
-/**
- * Launch Foliate.js engine for a specific book
- */
 window.launchFoliateEngine = async function(bookId) {
     // --- LOAD SETTINGS BEFORE ENGINE BOOTS ---
     window.loadReaderSettings();
@@ -63,9 +54,6 @@ window.launchFoliateEngine = async function(bookId) {
         // Cache for the CSS template
         let foliateCssTemplateCache = null;
         
-        /**
-         * Load CSS template from file
-         */
         async function loadFoliateCSSTemplate() {
             if (foliateCssTemplateCache) return foliateCssTemplateCache;
             try {
@@ -78,10 +66,6 @@ window.launchFoliateEngine = async function(bookId) {
             }
         }
 
-        /**
-         * Update reader settings and apply theme
-         * Uses renderer.setStyles() for CSS injection
-         */
         window._engineUpdateSettings = async function() {
             if (!window.foliateView) return;
 
@@ -108,7 +92,9 @@ window.launchFoliateEngine = async function(bookId) {
 
             const currentReadMode = document.getElementById('set-read-mode').value;
             const currentLayout = (currentReadMode === 'continuous' || currentReadMode === 'scrolled') ? 'scrolled' : 'paginated';
-            if (window.foliateView.renderer) window.foliateView.renderer.setAttribute('flow', currentLayout);
+            if (window.foliateView.renderer) {
+                window.foliateView.renderer.setAttribute('flow', currentLayout);
+            }
 
             // Get text align from active button - support ALL options (left, center, right, justify)
             const activeAlignBtn = document.querySelector('.segment-btn.active');
@@ -164,7 +150,7 @@ window.launchFoliateEngine = async function(bookId) {
                         cursor: pointer !important;
                         -webkit-tap-highlight-color: transparent;
                         margin: 0 !important;
-                        padding: 20px !important;
+                        padding: 16px !important;
                     }
                     
                     /* Apply to all text elements for better coverage */
@@ -311,7 +297,7 @@ window.launchFoliateEngine = async function(bookId) {
                 const dx = Math.abs(endX - touchStartX);
                 const dy = Math.abs(endY - touchStartY);
                 
-                if (timeTaken < 300 && dx < 10 && dy < 10) {
+                if (timeTaken < 300 && dx <10 && dy < 10) {
                     if (ev.target && ev.target.closest && ev.target.closest('a')) return;
                     try { if (innerDoc.defaultView.getSelection().toString().length > 0) return; } catch(err) {}
                     
@@ -389,18 +375,12 @@ window.launchFoliateEngine = async function(bookId) {
     }
 };
 
-/**
- * Destroy Foliate.js engine and clean up resources
- */
 window.destroyFoliateEngine = function() {
     if (window.foliateView) { window.foliateView.remove(); window.foliateView = null; window.foliateCurrentCfi = null; window.rendition = null; }
     if (window.taskbarToggleBtn) { window.taskbarToggleBtn.remove(); window.taskbarToggleBtn = null; }
     if (window.taskbarObserver) { window.taskbarObserver.disconnect(); }
 };
 
-/**
- * Search across all sections using Foliate's section.createDocument()
- */
 window.runGlobalSearch = async function() {
     if (!window.foliateView || !window.foliateView.book) return alert("Search is currently not available. Please wait for the book to finish loading.");
     const query = document.getElementById('global-search-input').value;
@@ -483,7 +463,7 @@ window.runGlobalSearch = async function() {
                 <div style="font-weight: 600; color: var(--accent); margin-bottom: 4px; font-size: 13px;">
                     ${match.chapter} <span style="color:var(--text-muted); font-weight:normal; font-size:11px;">(${match.file})</span>
                 </div>
-                <span style="font-size: 13px;">...${match.snippet.replace(new RegExp(query, 'gi'), m => `<strong style="color:var(--accent); background:rgba(59,130,246,0.2); padding:0 2px; border-radius:3px;">${m}</strong>`)}...</span>
+                <span style="font-size: 13px;">...${match.snippet.replace(new RegExp(query, "gi"), m => `<strong style="color:var(--accent); background:rgba(59,130,246,0.2); padding:0 2px; border-radius:3px;">${m}</strong>`)}...</span>
             `;
             li.onclick = () => { 
                 window.foliateView.goTo(match.href); 

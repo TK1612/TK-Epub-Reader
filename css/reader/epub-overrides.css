@@ -1,15 +1,25 @@
 /* EPUB.js Brute-force CSS Overrides */
 /* This CSS uses CSS custom properties that are set by epub-engine.js */
 
-html, body {
+/* Target html and body elements with maximum specificity */
+html, body, html body {
     background: var(--bg-color, transparent) !important;
     color: var(--text-color, #000000) !important;
     font-family: var(--font-family, sans-serif) !important;
     font-size: var(--font-size, 1em) !important;
     line-height: var(--line-height, 1.5) !important;
     text-align: var(--text-align, left) !important;
+}
+
+/* Force equal margins and padding - LEFT +2px, RIGHT +4px from original */
+html, body {
     margin: 0 !important;
     padding: 20px !important;
+    padding-left: 22px !important;
+    padding-right: 24px !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    box-sizing: border-box !important;
 }
 
 /* Aggressively target ALL text elements */
@@ -44,4 +54,18 @@ p {
 /* Force background transparency on all elements */
 * {
     background-color: transparent !important;
+}
+
+/* Mobile-specific overrides to fix EPUB.js internal margin math */
+/* LEFT +2px (18px), RIGHT +4px (20px) from original 16px */
+@media (max-width: 768px) {
+    html, body {
+        margin: 0 !important;
+        padding: 16px !important;
+        padding-left: 18px !important;
+        padding-right: 20px !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        box-sizing: border-box !important;
+    }
 }

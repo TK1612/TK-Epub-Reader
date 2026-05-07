@@ -25,11 +25,15 @@ window.syncEngineUI = function() {
     
     if (readModeSelect) {
         const continuousOption = readModeSelect.querySelector('option[value="continuous"]');
+        const paginatedOption = readModeSelect.querySelector('option[value="paginated"]');
+        
         if (engine === 'foliate') {
+            // Gray out continuous scroll for Foliate (not supported)
             if (continuousOption) {
                 continuousOption.disabled = true;
                 continuousOption.innerText = "Continuous Scroll (EPUB.js Only)";
             }
+            // Reset to scrolled if continuous was selected
             if (readModeSelect.value === 'continuous') readModeSelect.value = 'scrolled';
         } else {
             if (continuousOption) {
@@ -37,7 +41,16 @@ window.syncEngineUI = function() {
                 continuousOption.innerText = "Continuous Scroll (All Chapters)";
             }
         }
+        
+        // Gray out paginated for EPUB.js (currently unusable)
+        if (paginatedOption) {
+            paginatedOption.disabled = true;
+            paginatedOption.innerText = "Paginated (Disabled)";
+        }
+        // Reset to scrolled if paginated was selected
+        if (readModeSelect.value === 'paginated') readModeSelect.value = 'scrolled';
     }
+    
     const engineSelect = document.getElementById('set-reader-engine');
     if (engineSelect) engineSelect.value = engine;
 };

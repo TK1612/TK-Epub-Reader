@@ -38,16 +38,15 @@ window.launchEpubJsEngine = async function(bookId) {
     const viewer = document.getElementById('viewer');
     viewer.innerHTML = '';
 
-    const readMode = document.getElementById('set-read-mode').value || 'continuous';
+    const readMode = document.getElementById('set-read-mode').value || 'paginated';
     const isContinuous = (readMode === 'continuous');
 
-    // Paginated mode removed - always use continuous manager with scrolled flow
     window.rendition = window.book.renderTo(viewer, {
-        manager: "continuous",
-        flow: "scrolled",
+        manager: isContinuous ? "continuous" : "default",
+        flow: isContinuous ? "scrolled" : (readMode === 'scrolled' ? "scrolled" : "paginated"),
         width: "100%",
         height: "100%",
-        snap: false,
+        snap: !isContinuous,
         allowScriptedContent: true
     });
 
@@ -418,12 +417,11 @@ window.launchEpubJsEngine = async function(bookId) {
             const deltaY = endY - startY;
             
             const currentReadMode = document.getElementById('set-read-mode').value;
-            const isContinuous = (currentReadMode === 'continuous');
+            const isPaginated = (currentReadMode === 'paginated');
 
-            // Swipe navigation for non-continuous modes (scrolled mode)
-            if (!isContinuous && timeTaken < 300 && Math.abs(deltaX) > 40 && Math.abs(deltaY) < 40) {
+            if (isPaginated && timeTaken < 300 && Math.abs(deltaX) > 40 && Math.abs(deltaY) < 40) {
                 if (deltaX > 0) window.rendition.prev(); else window.rendition.next();
-            }
+            } 
             else if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
                 if (event.target && event.target.tagName && event.target.tagName.toLowerCase() !== 'a') {
                     try { if (contents.window.getSelection().toString().length > 0) return; } catch(err) {}

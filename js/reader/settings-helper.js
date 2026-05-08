@@ -98,7 +98,7 @@ window.saveReaderSettings = function() {
             indent: document.getElementById('set-indent')?.value || '0',
             fontFamily: document.getElementById('set-font-family')?.value || 'Inter, sans-serif',
             textAlign: textAlign,
-            readMode: document.getElementById('set-read-mode')?.value || 'continuous',
+            readMode: document.getElementById('set-read-mode')?.value || 'paginated',
             pinTaskbar: document.getElementById('set-pin-taskbar')?.checked !== false,
             showFloatBtn: document.getElementById('set-show-float-btn')?.checked !== false
         };

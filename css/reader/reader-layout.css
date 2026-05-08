@@ -40,10 +40,10 @@
 /* --- MOBILE READER TASKBAR --- */
 @media (max-width: 768px) {
     .bottom-bar {
-        bottom: 16px;
-        width: calc(100% - 24px);
-        padding: 14px 16px;
-        border-radius: 12px;
+        bottom: 12px;
+        width: calc(100% - 16px);
+        padding: 10px 12px;
+        border-radius: 10px;
         /* Allow wrapping for two rows */
         flex-wrap: wrap;
         /* Spread icon groups across the bar */
@@ -54,20 +54,33 @@
         /* Take full width on the top row */
         flex: 1 1 100%;
         order: -1;
-        margin: 0 0 12px 0;
-        font-size: 13px;
+        margin: 0 0 8px 0;
+        font-size: 12px;
         font-weight: 600;
         color: var(--text-color);
         text-align: left;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        line-height: 1;
+        line-height: 1.2;
     }
 
     .bar-group {
         /* Ensure no conflicting order properties */
         order: 0;
+    }
+}
+
+/* --- MOBILE TOC MODAL FIX --- */
+@media (max-width: 768px) {
+    #toc-modal {
+        /* Override center-modal positioning that causes left-clipping */
+        left: 10px !important;
+        right: 10px !important;
+        width: auto !important;
+        max-width: none !important;
+        transform: translateY(-50%) !important;
+        top: 50% !important;
     }
 }
 

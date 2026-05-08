@@ -25,16 +25,30 @@ window.syncEngineUI = function() {
     
     if (readModeSelect) {
         const continuousOption = readModeSelect.querySelector('option[value="continuous"]');
+        const paginatedOption = readModeSelect.querySelector('option[value="paginated"]');
+        
         if (engine === 'foliate') {
+            // Foliate: disable continuous, keep paginated
             if (continuousOption) {
                 continuousOption.disabled = true;
                 continuousOption.innerText = "Continuous Scroll (EPUB.js Only)";
             }
+            if (paginatedOption) {
+                paginatedOption.disabled = false;
+            }
             if (readModeSelect.value === 'continuous') readModeSelect.value = 'scrolled';
         } else {
+            // EPUB.js: disable paginated, keep continuous
             if (continuousOption) {
                 continuousOption.disabled = false;
                 continuousOption.innerText = "Continuous Scroll (All Chapters)";
+            }
+            if (paginatedOption) {
+                paginatedOption.disabled = true;
+            }
+            // Force switch away from paginated if somehow selected
+            if (readModeSelect.value === 'paginated') {
+                readModeSelect.value = 'scrolled';
             }
         }
     }
@@ -52,6 +66,9 @@ window.openReader = async function(bookId) {
     document.getElementById('reader-container').style.display = 'block';
     document.getElementById('chapter-title').innerText = "Loading Engine...";
 
+    // Add reader-active class for iOS handling
+    document.body.classList.add('reader-active');
+
     window.syncEngineUI();
     const engine = window.getReaderEngine();
     
@@ -65,7 +82,7 @@ window.openReader = async function(bookId) {
     } catch (e) {
         console.error("Boot error:", e);
         alert("Failed to load this specific book. Check the F12 console for the exact error.");
-        window.closeReader(); 
+        window.closeReader();
     }
 };
 
@@ -82,8 +99,11 @@ window.closeReader = function() {
     document.getElementById('reader-container').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
     
+    // Remove reader-active class for iOS handling
+    document.body.classList.remove('reader-active');
+
     if (typeof window.loadLibrary === 'function') {
-        window.loadLibrary(typeof currentLibraryPage !== 'undefined' ? currentLibraryPage : 1); 
+        window.loadLibrary(typeof currentLibraryPage !== 'undefined' ? currentLibraryPage : 1);
     }
 };
 

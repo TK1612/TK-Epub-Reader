@@ -25,15 +25,6 @@
 
 ---
 
-## 🚀 What's New in v1.2.0
-
-* **Improved Find/Replace UI** — Redesigned the editor's search interface with a cleaner two-row layout for better usability on all screen sizes
-* **Enhanced Mobile Responsiveness** — Better touch controls and layout adaptations for the editor workspace on mobile devices
-* **Regex Checkbox Fix** — Resolved styling issues with the regex toggle in the search bar that caused it to expand incorrectly
-* **Performance Improvements** — Optimized library rendering and editor file tree for smoother navigation
-
----
-
 ## ✨ Key Features
 
 ### 📚 Reader Features
@@ -44,7 +35,7 @@
   - 📜 **Continuous Scroll** — Seamless reading with visual chapter breaks (Epub.js only)
   - 📄 **Single Chapter Scroll** — Traditional vertical scrolling within chapters
   - 📖 **Paginated** — Classic book-like page turning with swipe/click navigation
-- **Immersive Themes** — Black, White, Sepia (Paper), and Light Blue with custom CSS injection that overrides publisher styles
+- **Immersive Themes** — Black, White, Sepia (Paper), and Light Blue with custom CSS injection
 - **Advanced Customization:**
   - Font size, line height, paragraph spacing, and indent controls
   - Font family selection including **KoPub Batang** for Korean novels
@@ -61,7 +52,7 @@ Transform the reader into a full-featured EPUB IDE with lazy loading:
 
 - **CodeMirror Integration** — Syntax highlighting for HTML, CSS, and XML with visual image preview
 - **Intelligent Scanner** — Detect typos and OCR errors in English, Korean (Hangul), Japanese (Kana), and Chinese (Hanzi/Kanji)
-- **Global Search & Replace** — Support for strings and Regex patterns across the entire book simultaneously with improved UI
+- **Global Search & Replace** — Support for strings and Regex patterns across the entire book simultaneously
 - **TOC & Metadata Management** — Auto-generate Table of Contents from heading tags (`<h1>`, `<h2>`) and edit book metadata (Title/Author)
 - **Asset Management** — Import images, stylesheets, or create new chapters directly into the EPUB with automatic `.opf` manifest updates
 - **EPUB Debugger** — Scan the book's manifest against actual ZIP contents to detect broken links and missing files
@@ -76,7 +67,7 @@ Transform the reader into a full-featured EPUB IDE with lazy loading:
 | Technology | Purpose |
 |------------|---------|
 | **HTML5 / CSS3 / Vanilla JavaScript** | Core application (no frameworks) |
-| **[ePub.js](https://github.com/futurepress/epub.js/)** | Primary EPUB rendering engine |
+| **[Epub.js](https://github.com/futurepress/epub.js/)** | Primary EPUB rendering engine |
 | **[foliate.js](https://github.com/johnfactotum/foliate-js)** | Alternative rendering engine |
 | **[JSZip](https://stuk.github.io/jszip/)** | EPUB archive handling and parsing |
 | **[localForage](https://localforage.github.io/localForage/)** | Local storage abstraction (IndexedDB) |
@@ -121,7 +112,6 @@ cd TK-Epub-Reader
 - **Memory Management:** Close and reopen the Editor to free browser memory for large books
 - **File Tree Navigation:** Browse and edit individual files within the EPUB archive
 - **Real-time Preview:** See changes instantly with the integrated preview panel
-- **Improved Search:** Use the redesigned two-row Find/Replace bar for better workflow
 
 ### Keyboard Shortcuts
 | Shortcut | Action |
@@ -152,8 +142,6 @@ TK-Epub-Reader/
 ├── js/
 │   ├── editor.js             # Editor main entry point (loads modules)
 │   ├── globals.js            # Global variables and constants
-│   ├── library.js            # Library management and upload handling
-│   ├── reader.js             # Reader module loader
 │   ├── tools.js              # Utility functions
 │   ├── ui.js                 # UI controller and modal management
 │   ├── editor/               # Editor submodules
@@ -171,13 +159,13 @@ TK-Epub-Reader/
 │   │   └── settings-helper.js  # Settings load/save utilities
 │   └── ui/library/           # UI submodules
 │       ├── bookmarks.js        # Bookmark management
-│       ├── delete.js           # Book deletion handling
+│       ├── delete.js           # Book deletion and batch delete handling
 │       ├── editor-list.js      # Editor book list rendering
 │       ├── index.js            # Library UI module loader
-│       ├── renderer.js         # Library grid/card rendering
-│       ├── search.js           # Search and filter logic
-│       ├── selection.js        # Book selection handling
-│       ├── settings.js         # Library settings modal
+│       ├── renderer.js         # Library grid/card rendering with pagination
+│       ├── search.js           # Universal search and filter logic
+│       ├── selection.js        # Book selection handling for deletion
+│       ├── settings.js         # Library settings and sort modal
 │       ├── state.js            # Library state management
 │       └── upload.js           # Upload progress and handling
 ├── assets/                   # Static assets (icons, manifest)

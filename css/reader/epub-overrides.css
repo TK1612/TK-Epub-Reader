@@ -9,7 +9,8 @@ html, body {
     line-height: var(--line-height, 1.5) !important;
     text-align: var(--text-align, left) !important;
     margin: 0 !important;
-    padding: 20px !important;
+    padding: 15px 25px 15px 15px !important;
+    box-sizing: border-box !important;
 }
 
 /* Aggressively target ALL text elements */

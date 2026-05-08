@@ -1,34 +1,49 @@
-// Load Foliate.js dynamically for iOS compatibility
-(function loadFoliateScript() {
-    // Check if customElements is supported
-    if (typeof customElements === 'undefined') {
-        console.error('Custom Elements API not supported in this browser');
-        window._foliateLoadError = 'Custom Elements API not supported';
-        return;
-    }
+// Foliate.js engine - Module version for iOS compatibility
+// This file must be loaded as a module (type="module" in HTML)
+
+// Import Foliate.js - this will only work as a module
+let foliateLoaded = false;
+let foliateLoadPromise = null;
+
+async function loadFoliateModule() {
+    if (foliateLoadPromise) return foliateLoadPromise;
     
-    // Check if already loaded
-    if (customElements.get('foliate-view')) {
-        console.log('Foliate.js already loaded');
-        return;
-    }
+    foliateLoadPromise = new Promise(async (resolve, reject) => {
+        try {
+            // Try to import Foliate.js
+            // Note: This only works if this file is loaded as a module
+            await import('./foliate-view.js');
+            
+            // Check if the custom element is registered
+            setTimeout(() => {
+                if (customElements.get('foliate-view')) {
+                    foliateLoaded = true;
+                    window._foliateLoaded = true;
+                    console.log('Foliate.js loaded successfully as module');
+                    resolve();
+                } else {
+                    reject(new Error('Foliate.js loaded but foliate-view not registered'));
+                }
+            }, 500);
+        } catch (err) {
+            console.error('Failed to load Foliate.js module:', err);
+            reject(err);
+        }
+    });
     
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/gh/johnfactotum/foliate-js@main/view.js';
-    script.async = true;
-    
-    script.onload = function() {
-        console.log('Foliate.js script loaded successfully');
-        window._foliateLoaded = true;
-    };
-    
-    script.onerror = function() {
-        console.error('Failed to load Foliate.js from CDN');
-        window._foliateLoadError = 'Failed to load Foliate.js from CDN';
-    };
-    
-    document.head.appendChild(script);
-})();
+    return foliateLoadPromise;
+}
+
+// Try to load Foliate on module script initialization
+try {
+    loadFoliateModule().catch(e => {
+        console.warn('Foliate module load failed:', e.message);
+        window._foliateLoadError = e.message;
+    });
+} catch (e) {
+    console.warn('Foliate module initialization failed:', e.message);
+    window._foliateLoadError = e.message;
+}
 
 window.foliateView = null;
 window.foliateCurrentCfi = null;
@@ -36,7 +51,7 @@ window.taskbarToggleBtn = null;
 
 /**
  * Wait for Foliate custom element to be defined with timeout
- * @param {number} timeoutMs - Timeout in milliseconds (default 10000 = 10 seconds)
+ * @param {number} timeoutMs - Timeout in milliseconds
  * @returns {Promise<void>}
  */
 function waitForFoliateDefinition(timeoutMs = 10000) {
@@ -57,7 +72,7 @@ function waitForFoliateDefinition(timeoutMs = 10000) {
         
         // Set timeout
         timeoutId = setTimeout(() => {
-            reject(new Error('Timeout waiting for Foliate.js to load (10s)'));
+            reject(new Error('Timeout waiting for Foliate.js to load (10s). Try EPUB.js engine instead.'));
         }, timeoutMs);
         
         // Use the standard whenDefined() which returns a promise
@@ -80,7 +95,7 @@ window.launchFoliateEngine = async function(bookId) {
     if (modeDropdown && !modeDropdown.dataset.modeSaved) {
         modeDropdown.addEventListener('change', function() {
             try {
-                const settings = JSON.parse(localStorage.getItem('reader-settings')) || {};
+                const settings = JSON.parse(localStorage.getItem('reader-settings') || {});
                 settings.readMode = this.value;
                 localStorage.setItem('reader-settings', JSON.stringify(settings));
             } catch(e) {}
@@ -102,7 +117,7 @@ window.launchFoliateEngine = async function(bookId) {
         try {
             await waitForFoliateDefinition(10000);
         } catch (err) {
-            throw new Error("Foliate.js failed to load: " + err.message + ". Try using EPUB.js engine instead.");
+            throw new Error("Foliate.js failed to load: " + err.message);
         }
         
         window.foliateView = document.createElement('foliate-view');
@@ -169,27 +184,22 @@ window.launchFoliateEngine = async function(bookId) {
                 window.foliateView.renderer.setAttribute('flow', currentLayout);
             }
 
-            // Get text align from active button - support ALL options (left, center, right, justify)
+            // Get text align from active button
             const activeAlignBtn = document.querySelector('.segment-btn.active');
-            let alignValue = 'left'; // default
+            let alignValue = 'left';
             
             if (activeAlignBtn) {
-                // First try data-align attribute, then fallback to ID-based detection
                 if (activeAlignBtn.dataset && activeAlignBtn.dataset.align) {
                     alignValue = activeAlignBtn.dataset.align;
                 } else if (activeAlignBtn.id) {
-                    // Fallback: extract from ID (e.g., "align-center" -> "center")
                     const match = activeAlignBtn.id.match(/align-(.+)/);
                     if (match) alignValue = match[1];
                 }
             }
 
-            // Load CSS template from external file
             const cssTemplate = await loadFoliateCSSTemplate();
             
             if (cssTemplate) {
-                // Combine the CSS template with custom property definitions
-                // This ensures both the base styles and variable values are set together
                 const fullCSS = cssTemplate + '\n:root {\n' +
                     `    --bg-color: ${bgColor};\n` +
                     `    --text-color: ${color};\n` +
@@ -204,61 +214,6 @@ window.launchFoliateEngine = async function(bookId) {
                 if (window.foliateView.renderer && typeof window.foliateView.renderer.setStyles === 'function') {
                     try {
                         window.foliateView.renderer.setStyles(fullCSS);
-                    } catch(e) {
-                        console.warn("Foliate setStyles failed:", e);
-                    }
-                }
-            } else {
-                // Fallback: use inline CSS if template loading failed
-                const fallbackCSS = `
-                    @namespace epub "http://www.idpf.org/2007/ops";
-                    
-                    html, body {
-                        background: ${bgColor} !important;
-                        color: ${color} !important;
-                        font-family: ${fontFamily} !important;
-                        font-size: ${fontSize} !important;
-                        line-height: ${lineHeight} !important;
-                        text-align: ${alignValue} !important;
-                        cursor: pointer !important;
-                        -webkit-tap-highlight-color: transparent;
-                        margin: 0 !important;
-                        padding: 16px !important;
-                    }
-                    
-                    /* Apply to all text elements for better coverage */
-                    p, div, span, li, td, th, blockquote, pre, code {
-                        line-height: ${lineHeight} !important;
-                        text-align: ${alignValue} !important;
-                    }
-                    
-                    /* Headings should also respect the settings */
-                    h1, h2, h3, h4, h5, h6 {
-                        line-height: ${lineHeight} !important;
-                        text-align: ${alignValue} !important;
-                    }
-                    
-                    /* Paragraph specific styles */
-                    p {
-                        margin-bottom: ${paraSpacing} !important;
-                        text-indent: ${indent} !important;
-                    }
-                    
-                    /* EPUB-specific elements */
-                    [epub|type] {
-                        line-height: ${lineHeight} !important;
-                        text-align: ${alignValue} !important;
-                    }
-                    
-                    /* Prevent inheritance issues */
-                    * {
-                        line-height: inherit !important;
-                    }
-                `;
-                
-                if (window.foliateView.renderer && typeof window.foliateView.renderer.setStyles === 'function') {
-                    try {
-                        window.foliateView.renderer.setStyles(fallbackCSS);
                     } catch(e) {
                         console.warn("Foliate setStyles failed:", e);
                     }
@@ -295,7 +250,7 @@ window.launchFoliateEngine = async function(bookId) {
         
         document.getElementById('chapter-title').innerText = "Reading...";
 
-        // Foliate-specific: builds TOC from foliateView.book.toc
+        // Build TOC
         const tocList = document.getElementById('toc-list');
         tocList.innerHTML = '';
         if (window.foliateView.book.toc && typeof window.foliateView.book.toc.forEach === 'function') {
@@ -311,70 +266,20 @@ window.launchFoliateEngine = async function(bookId) {
             });
         }
 
-        // Foliate-specific: uses addEventListener('relocate') with loc.tocItem
+        // Handle relocate event
         window.foliateView.addEventListener('relocate', (e) => {
             const loc = e.detail;
             window.foliateCurrentCfi = loc.cfi;
             localStorage.setItem('bookmark-' + bookId, loc.cfi);
             
             let chapterName = "Reading...";
-            let currentHref = loc.href || null;
-            
-            if (loc.tocItem) { if (loc.tocItem.label) chapterName = loc.tocItem.label; if (loc.tocItem.href) currentHref = loc.tocItem.href; }
+            if (loc.tocItem && loc.tocItem.label) chapterName = loc.tocItem.label;
             document.getElementById('chapter-title').innerText = chapterName;
-            localStorage.setItem('progress-' + bookId, JSON.stringify({ chapter: chapterName, percentage: loc.fraction || 0 }));
             
-            const targetPath = currentHref ? decodeURIComponent(currentHref.split('#')[0].replace(/^\//, '')) : null;
-            document.querySelectorAll('#toc-list .list-item').forEach(li => {
-                const itemPath = li.dataset.href ? decodeURIComponent(li.dataset.href.split('#')[0].replace(/^\//, '')) : null;
-                if (itemPath && targetPath && itemPath === targetPath) {
-                    li.style.color = 'var(--accent)'; li.style.fontWeight = 'bold'; li.style.borderLeft = '3px solid var(--accent)'; 
-                    li.style.paddingLeft = '25px'; 
-                    li.id = "active-toc-item"; 
-                } else {
-                    li.style.color = ''; li.style.fontWeight = 'normal'; li.style.borderLeft = 'none'; 
-                    li.style.paddingLeft = '15px'; 
-                    if (li.id === "active-toc-item") li.removeAttribute('id');
-                }
-            });
-        });
-
-        // Foliate-specific: click handler on foliateView
-        window.foliateView.addEventListener('click', (e) => {
-            const detail = e.detail || {};
-            const target = detail.target || e.target;
-            if (target && target.tagName && target.tagName.toLowerCase() === 'a') return;
-            
-            const taskbar = document.getElementById('bottom-taskbar');
-            const pinCheckbox = document.getElementById('set-pin-taskbar');
-            if (taskbar && (!pinCheckbox || !pinCheckbox.checked)) taskbar.classList.toggle('hidden');
-        });
-
-        // Foliate-specific: touch events registered on 'load' event
-        window.foliateView.addEventListener('load', (e) => {
-            const innerDoc = e.detail.doc;
-            if (!innerDoc) return;
-            
-            let touchStartX = 0; let touchStartY = 0; let touchStartTime = 0;
-            
-            innerDoc.addEventListener('touchstart', (ev) => {
-                touchStartX = ev.changedTouches[0].screenX;
-                touchStartY = ev.changedTouches[0].screenY;
-                touchStartTime = Date.now();
-            }, { passive: true });
-
-            innerDoc.addEventListener('touchend', (ev) => {
-                const endX = ev.changedTouches[0].screenX;
-                const endY = ev.changedTouches[0].screenY;
-                const deltaX = endX - touchStartX;
-                const deltaY = Math.abs(endY - touchStartY);
-                const deltaTime = Date.now() - touchStartTime;
-
-                if (Math.abs(deltaX) > 50 && deltaY < 50 && deltaTime < 500) {
-                    if (deltaX < 0) { if(window.foliateView) window.foliateView.next(); }
-                    else { if(window.foliateView) window.foliateView.prev(); }
-                }
-            }, { passive: true });
+            localStorage.setItem('progress-' + bookId, JSON.stringify({ 
+                chapter: chapterName, 
+                percentage: loc.fraction || 0 
+            }));
         });
 
         // Apply initial settings

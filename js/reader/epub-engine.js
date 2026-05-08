@@ -3,6 +3,29 @@ window.rendition = null;
 window.taskbarToggleBtn = null;
 
 /**
+ * Wrapper to add timeout to a promise
+ * @param {Promise} promise - The promise to wrap
+ * @param {number} timeoutMs - Timeout in milliseconds
+ * @param {string} operationName - Name for error message
+ * @returns {Promise}
+ */
+function withTimeout(promise, timeoutMs, operationName) {
+    return new Promise((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+            reject(new Error(`${operationName} timed out after ${timeoutMs/1000} seconds`));
+        }, timeoutMs);
+        
+        promise.then((result) => {
+            clearTimeout(timeoutId);
+            resolve(result);
+        }).catch((err) => {
+            clearTimeout(timeoutId);
+            reject(err);
+        });
+    });
+}
+
+/**
  * Check if EPUB.js is loaded and available
  * @returns {Promise<void>}
  */
@@ -15,7 +38,7 @@ function waitForEpubJs(timeoutMs = 10000) {
         }
         
         let timeoutId = setTimeout(() => {
-            reject(new Error('Timeout waiting for EPUB.js to load (10s)'));
+            reject(new Error('Timeout waiting for EPUB.js to load (10s). Check your internet connection.'));
         }, timeoutMs);
         
         // Poll for ePub to become available
@@ -56,7 +79,7 @@ window.launchEpubJsEngine = async function(bookId) {
         try {
             await waitForEpubJs(10000);
         } catch (err) {
-            throw new Error("EPUB.js failed to load: " + err.message + ". Check your internet connection or try using Foliate.js engine instead.");
+            throw new Error("EPUB.js failed to load: " + err.message + ". Try using Foliate.js engine instead.");
         }
         
         const bookData = await localforage.getItem(bookId);
@@ -65,21 +88,40 @@ window.launchEpubJsEngine = async function(bookId) {
         const actualBuffer = bookData.buffer || bookData; 
         if (!actualBuffer || actualBuffer.byteLength === 0) throw new Error("Book file is empty or corrupted.");
 
-        window.book = ePub(actualBuffer);
+        // Create book with timeout
+        try {
+            window.book = await withTimeout(
+                Promise.resolve(ePub(actualBuffer)),
+                15000,
+                "EPUB.js book creation"
+            );
+        } catch (err) {
+            throw new Error("EPUB.js failed to parse the book: " + err.message);
+        }
+        
         const viewer = document.getElementById('viewer');
         viewer.innerHTML = '';
 
         const readMode = document.getElementById('set-read-mode').value || 'scrolled';
         const isContinuous = (readMode === 'continuous');
 
-        window.rendition = window.book.renderTo(viewer, {
-            manager: isContinuous ? "continuous" : "default",
-            flow: isContinuous ? "scrolled" : "scrolled",
-            width: "100%",
-            height: "100%",
-            snap: false,
-            allowScriptedContent: true
-        });
+        // Render with timeout
+        try {
+            window.rendition = await withTimeout(
+                Promise.resolve(window.book.renderTo(viewer, {
+                    manager: isContinuous ? "continuous" : "default",
+                    flow: isContinuous ? "scrolled" : "scrolled",
+                    width: "100%",
+                    height: "100%",
+                    snap: false,
+                    allowScriptedContent: true
+                })),
+                15000,
+                "EPUB.js rendition creation"
+            );
+        } catch (err) {
+            throw new Error("EPUB.js failed to create rendition: " + err.message);
+        }
 
         // Store body style observers so we can disconnect them later
         window._bodyObservers = [];
@@ -350,17 +392,25 @@ window.launchEpubJsEngine = async function(bookId) {
             }
         };
 
-        // Display the book
+        // Display the book with timeout
         try {
-            await window.rendition.display();
+            await withTimeout(
+                window.rendition.display(),
+                20000,
+                "EPUB.js display"
+            );
         } catch (displayErr) {
             console.error("Display error:", displayErr);
-            throw new Error("Failed to display the book. The EPUB format may be incompatible.");
+            throw new Error("Failed to display the book: " + displayErr.message + ". The EPUB format may be incompatible.");
         }
 
         // Build TOC
         try {
-            const toc = await window.book.loaded.navigation;
+            const toc = await withTimeout(
+                window.book.loaded.navigation,
+                10000,
+                "TOC loading"
+            );
             const tocList = document.getElementById('toc-list');
             tocList.innerHTML = '';
             

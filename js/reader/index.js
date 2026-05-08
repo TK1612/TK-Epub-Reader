@@ -6,6 +6,7 @@
 
 window.activeBookId = null;
 window.isSwitchingEngine = false; 
+window._engineLaunchTimeout = null;
 
 /**
  * Detect if the user is on iOS
@@ -75,7 +76,7 @@ window.syncEngineUI = function() {
  * Open the reader with the specified book
  * @param {string} bookId - The ID of the book in IndexedDB
  */
-window.openReader = async function(bookId) {
+window.openReader = function(bookId) {
     window.activeBookId = bookId;
     document.getElementById('app').style.display = 'none';
     document.getElementById('reader-container').style.display = 'block';
@@ -84,28 +85,49 @@ window.openReader = async function(bookId) {
     window.syncEngineUI();
     const engine = window.getReaderEngine();
     
-    try {
-        if (engine === 'foliate') {
-            if (typeof window.launchFoliateEngine === 'function') {
-                await window.launchFoliateEngine(bookId);
+    // Set a global timeout to detect if engine is stuck (iOS Safari issue)
+    window._engineLaunchTimeout = setTimeout(() => {
+        console.error("Engine launch timeout - stuck for 15 seconds");
+        alert("The reader engine appears to be stuck. This may be due to iOS Safari compatibility issues. Try switching to the other engine in Settings.");
+        window.closeReader();
+    }, 15000); // 15 second timeout
+    
+    // Launch engine with async wrapper
+    const launchPromise = (async () => {
+        try {
+            if (engine === 'foliate') {
+                if (typeof window.launchFoliateEngine === 'function') {
+                    await window.launchFoliateEngine(bookId);
+                } else {
+                    throw new Error("Foliate engine not available. Try refreshing the page or switch to EPUB.js engine.");
+                }
             } else {
-                throw new Error("Foliate engine not available. Try refreshing the page or switch to EPUB.js engine.");
+                if (typeof window.launchEpubJsEngine === 'function') {
+                    await window.launchEpubJsEngine(bookId);
+                } else {
+                    throw new Error("EPUB.js engine not available. Try refreshing the page or switch to Foliate engine.");
+                }
             }
-        } else {
-            if (typeof window.launchEpubJsEngine === 'function') {
-                await window.launchEpubJsEngine(bookId);
-            } else {
-                throw new Error("EPUB.js engine not available. Try refreshing the page or switch to Foliate engine.");
+            // Clear timeout on success
+            if (window._engineLaunchTimeout) {
+                clearTimeout(window._engineLaunchTimeout);
+                window._engineLaunchTimeout = null;
             }
+            document.getElementById('chapter-title').innerText = "Ready";
+        } catch (e) {
+            // Clear timeout on error
+            if (window._engineLaunchTimeout) {
+                clearTimeout(window._engineLaunchTimeout);
+                window._engineLaunchTimeout = null;
+            }
+            console.error("Boot error:", e);
+            const errorMsg = e.message || "Unknown error occurred";
+            alert("Failed to load book: " + errorMsg);
+            window.closeReader(); 
         }
-        // Update chapter title after successful load
-        document.getElementById('chapter-title').innerText = "Ready";
-    } catch (e) {
-        console.error("Boot error:", e);
-        const errorMsg = e.message || "Unknown error occurred";
-        alert("Failed to load book: " + errorMsg);
-        window.closeReader(); 
-    }
+    })();
+    
+    return launchPromise;
 };
 
 /**
@@ -113,6 +135,12 @@ window.openReader = async function(bookId) {
  * Dispatches to appropriate engine destroy function
  */
 window.closeReader = function() {
+    // Clear any pending timeout
+    if (window._engineLaunchTimeout) {
+        clearTimeout(window._engineLaunchTimeout);
+        window._engineLaunchTimeout = null;
+    }
+    
     const engine = window.getReaderEngine();
     if (engine === 'foliate' && typeof window.destroyFoliateEngine === 'function') window.destroyFoliateEngine();
     else if (typeof window.destroyEpubJsEngine === 'function') window.destroyEpubJsEngine();

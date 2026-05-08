@@ -1,62 +1,16 @@
+/**
+ * EPUB.js Engine Module
+ * Handles EPUB.js specific rendering, theming, and event handling.
+ * Uses rendition.themes.register() and rendition.themes.select() for CSS injection
+ */
+
 window.book = null;
 window.rendition = null;
 window.taskbarToggleBtn = null;
 
 /**
- * Wrapper to add timeout to a promise
- * @param {Promise} promise - The promise to wrap
- * @param {number} timeoutMs - Timeout in milliseconds
- * @param {string} operationName - Name for error message
- * @returns {Promise}
+ * Launch EPUB.js engine for a specific book
  */
-function withTimeout(promise, timeoutMs, operationName) {
-    return new Promise((resolve, reject) => {
-        const timeoutId = setTimeout(() => {
-            reject(new Error(`${operationName} timed out after ${timeoutMs/1000} seconds`));
-        }, timeoutMs);
-        
-        promise.then((result) => {
-            clearTimeout(timeoutId);
-            resolve(result);
-        }).catch((err) => {
-            clearTimeout(timeoutId);
-            reject(err);
-        });
-    });
-}
-
-/**
- * Check if EPUB.js is loaded and available
- * @returns {Promise<void>}
- */
-function waitForEpubJs(timeoutMs = 10000) {
-    return new Promise((resolve, reject) => {
-        // Check if already loaded
-        if (typeof ePub !== 'undefined') {
-            resolve();
-            return;
-        }
-        
-        let timeoutId = setTimeout(() => {
-            reject(new Error('Timeout waiting for EPUB.js to load (10s). Check your internet connection.'));
-        }, timeoutMs);
-        
-        // Poll for ePub to become available
-        const checkInterval = setInterval(() => {
-            if (typeof ePub !== 'undefined') {
-                clearTimeout(timeoutId);
-                clearInterval(checkInterval);
-                resolve();
-            }
-        }, 100);
-        
-        // Clean up interval on timeout
-        setTimeout(() => {
-            clearInterval(checkInterval);
-        }, timeoutMs);
-    });
-}
-
 window.launchEpubJsEngine = async function(bookId) {
     // --- LOAD SETTINGS BEFORE ENGINE BOOTS ---
     window.loadReaderSettings();
@@ -74,445 +28,518 @@ window.launchEpubJsEngine = async function(bookId) {
         modeDropdown.dataset.modeSaved = "true";
     }
 
+    const bookData = await localforage.getItem(bookId);
+    if (!bookData) throw new Error("Could not retrieve book from database.");
+    
+    const actualBuffer = bookData.buffer || bookData; 
+    if (!actualBuffer || actualBuffer.byteLength === 0) throw new Error("Book file is empty or corrupted.");
+
+    window.book = ePub(actualBuffer);
+    const viewer = document.getElementById('viewer');
+    viewer.innerHTML = '';
+
+    const readMode = document.getElementById('set-read-mode').value || 'continuous';
+    const isContinuous = (readMode === 'continuous');
+
+    // Paginated mode removed - always use continuous manager with scrolled flow
+    window.rendition = window.book.renderTo(viewer, {
+        manager: "continuous",
+        flow: "scrolled",
+        width: "100%",
+        height: "100%",
+        snap: false,
+        allowScriptedContent: true
+    });
+
+    /**
+     * Update reader settings and apply theme.
+     * Uses brute-force CSS injection directly into iframe documents
+     * to bypass EPUB.js themes API which can be overpowered by internal CSS
+     */
+
+    // Cache for the CSS template
+    let cssTemplateCache = null;
+    
+    /**
+     * Load CSS template from file
+     */
+    async function loadCSSTemplate() {
+        if (cssTemplateCache) return cssTemplateCache;
+        try {
+            const response = await fetch('css/reader/epub-overrides.css');
+            cssTemplateCache = await response.text();
+            return cssTemplateCache;
+        } catch(e) {
+            console.warn('Failed to load CSS template, using fallback');
+            return null;
+        }
+    }
+
+    /**
+     * Brute-force CSS injection function
+     * Injects CSS file content directly into all active iframe documents
+     */
+    function injectCSSIntoIframes(cssString) {
+        if (!window.rendition) return;
+        
+        const contents = window.rendition.getContents();
+        if (!contents || contents.length === 0) return;
+        
+        contents.forEach(function(content) {
+            if (!content || !content.document || !content.document.head) return;
+            
+            // Find or create the style element
+            let styleEl = content.document.getElementById('custom-override-styles');
+            if (!styleEl) {
+                styleEl = content.document.createElement('style');
+                styleEl.id = 'custom-override-styles';
+                content.document.head.appendChild(styleEl);
+            }
+            
+            // Set the CSS content
+            styleEl.innerHTML = cssString;
+        });
+    }
+
+    /**
+     * Set CSS custom properties on iframe documents
+     * This sets variables that are used by the CSS file
+     */
+    function setCSSVariablesOnIframes(variables) {
+        if (!window.rendition) return;
+        
+        const contents = window.rendition.getContents();
+        if (!contents || contents.length === 0) return;
+        
+        contents.forEach(function(content) {
+            if (!content || !content.document || !content.document.documentElement) return;
+            
+            // Set CSS custom properties on the html element
+            const root = content.document.documentElement;
+            Object.keys(variables).forEach(function(varName) {
+                root.style.setProperty(varName, variables[varName]);
+            });
+        });
+    }
+
+    // Register content hook ONCE for injecting CSS into new chapters
+    // This ensures settings apply when user flips to a new chapter
+    // Using a flag to prevent memory leaks from multiple registrations
+    if (!window._contentHookRegistered) {
+        window.rendition.hooks.content.register(function() {
+            // Re-inject CSS when new content loads
+            if (window._engineUpdateSettings) {
+                window._engineUpdateSettings();
+            }
+        });
+        window._contentHookRegistered = true;
+    }
+
+    window._engineUpdateSettings = async function() {
+        if (!window.rendition) return;
+
+        const theme = document.getElementById('set-reader-theme').value;
+        const fontSize = document.getElementById('set-font').value + 'px';
+        const lineHeight = document.getElementById('set-line').value;
+        const paraSpacing = document.getElementById('set-para-spacing').value + 'em';
+        const indent = document.getElementById('set-indent').value + 'em';
+        const fontFamily = document.getElementById('set-font-family').value;
+
+        if(document.getElementById('val-font')) document.getElementById('val-font').innerText = fontSize;
+        if(document.getElementById('val-line')) document.getElementById('val-line').innerText = lineHeight;
+        if(document.getElementById('val-para-spacing')) document.getElementById('val-para-spacing').innerText = paraSpacing;
+        if(document.getElementById('val-indent')) document.getElementById('val-indent').innerText = indent;
+
+        // Dynamic Background Theming using shared helper
+        const { bgColor, color } = window.getThemeColors(theme);
+
+        // Set container background - this will show through the transparent iframe
+        document.getElementById('reader-container').style.backgroundColor = bgColor;
+        // Make viewer transparent so the container background shows through
+        viewer.style.backgroundColor = 'transparent';
+
+        // Get text align from active button - support ALL options (left, center, right, justify)
+        const activeAlignBtn = document.querySelector('.segment-btn.active');
+        let textAlign = 'left'; // default
+        
+        if (activeAlignBtn) {
+            // First try data-align attribute, then fallback to ID-based detection
+            if (activeAlignBtn.dataset && activeAlignBtn.dataset.align) {
+                textAlign = activeAlignBtn.dataset.align;
+            } else if (activeAlignBtn.id) {
+                // Fallback: extract from ID (e.g., "align-center" -> "center")
+                const match = activeAlignBtn.id.match(/align-(.+)/);
+                if (match) textAlign = match[1];
+            }
+        }
+
+        // Load CSS template from external file (only need to inject once)
+        const cssTemplate = await loadCSSTemplate();
+        
+        if (cssTemplate) {
+            // Inject the base CSS file (with CSS variables) into iframes
+            injectCSSIntoIframes(cssTemplate);
+        }
+        
+        // Set CSS custom properties on all iframe documents
+        const cssVariables = {
+            '--bg-color': bgColor,
+            '--text-color': color,
+            '--font-family': fontFamily,
+            '--font-size': fontSize,
+            '--line-height': lineHeight,
+            '--text-align': textAlign,
+            '--para-spacing': paraSpacing,
+            '--indent': indent
+        };
+        
+        setCSSVariablesOnIframes(cssVariables);
+
+        // Sync Floating Button Settings
+        const showFloatCheckbox = document.getElementById('set-show-float-btn');
+        const taskbarElement = document.getElementById('bottom-taskbar');
+        
+        if (window.taskbarToggleBtn) {
+            if (showFloatCheckbox && !showFloatCheckbox.checked) {
+                window.taskbarToggleBtn.style.display = 'none';
+            } else {
+                window.taskbarToggleBtn.style.display = 'flex';
+                if (taskbarElement) {
+                    const taskbarCSS = window.getComputedStyle(taskbarElement);
+                    window.taskbarToggleBtn.style.backgroundColor = taskbarCSS.backgroundColor;
+                    window.taskbarToggleBtn.style.color = taskbarCSS.color;
+                    window.taskbarToggleBtn.style.borderColor = taskbarCSS.borderTopColor !== 'rgba(0, 0, 0, 0)' ? taskbarCSS.borderTopColor : '#3f3f46';
+                }
+            }
+        }
+    };
+
+    window._engineUpdateSettings();
+
+    // Bulletproof Load Sequence
+    const savedLocation = localStorage.getItem('bookmark-' + bookId);
     try {
-        // Wait for EPUB.js to be available
-        try {
-            await waitForEpubJs(10000);
-        } catch (err) {
-            throw new Error("EPUB.js failed to load: " + err.message + ". Try using Foliate.js engine instead.");
+        if (savedLocation) {
+            await window.rendition.display(savedLocation);
+        } else {
+            await window.rendition.display();
         }
-        
-        const bookData = await localforage.getItem(bookId);
-        if (!bookData) throw new Error("Could not retrieve book from database.");
-        
-        const actualBuffer = bookData.buffer || bookData; 
-        if (!actualBuffer || actualBuffer.byteLength === 0) throw new Error("Book file is empty or corrupted.");
-
-        // Create book with timeout
+        document.getElementById('chapter-title').innerText = "Reading...";
+    } catch (err) {
+        console.warn("Bookmark rendering failed. Forcing spine fallback.", err);
+        localStorage.removeItem('bookmark-' + bookId); 
         try {
-            window.book = await withTimeout(
-                Promise.resolve(ePub(actualBuffer)),
-                15000,
-                "EPUB.js book creation"
-            );
-        } catch (err) {
-            throw new Error("EPUB.js failed to parse the book: " + err.message);
-        }
-        
-        const viewer = document.getElementById('viewer');
-        viewer.innerHTML = '';
-
-        const readMode = document.getElementById('set-read-mode').value || 'scrolled';
-        const isContinuous = (readMode === 'continuous');
-
-        // Render with timeout
-        try {
-            window.rendition = await withTimeout(
-                Promise.resolve(window.book.renderTo(viewer, {
-                    manager: isContinuous ? "continuous" : "default",
-                    flow: isContinuous ? "scrolled" : "scrolled",
-                    width: "100%",
-                    height: "100%",
-                    snap: false,
-                    allowScriptedContent: true
-                })),
-                15000,
-                "EPUB.js rendition creation"
-            );
-        } catch (err) {
-            throw new Error("EPUB.js failed to create rendition: " + err.message);
-        }
-
-        // Store body style observers so we can disconnect them later
-        window._bodyObservers = [];
-
-        // Cache for the CSS template
-        let cssTemplateCache = null;
-        
-        async function loadCSSTemplate() {
-            if (cssTemplateCache) return cssTemplateCache;
-            try {
-                const response = await fetch('css/reader/epub-overrides.css');
-                cssTemplateCache = await response.text();
-                return cssTemplateCache;
-            } catch(e) {
-                console.warn('Failed to load CSS template, using fallback');
-                return null;
+            if (window.book.spine && window.book.spine.first()) {
+                await window.rendition.display(window.book.spine.first().href);
+            } else {
+                await window.rendition.display();
             }
+            document.getElementById('chapter-title').innerText = "Reading...";
+        } catch (fallbackErr) {
+            throw new Error("EPUB.js could not parse the internal structure of this novel.");
         }
+    }
 
-        function injectCSSIntoIframes(cssString) {
-            if (!window.rendition) return;
-            
-            const contents = window.rendition.getContents();
-            if (!contents || contents.length === 0) return;
-            
-            contents.forEach(function(content) {
-                if (!content || !content.document || !content.document.head) return;
-                
-                // Find or create the style element
-                let styleEl = content.document.getElementById('custom-override-styles');
-                if (!styleEl) {
-                    styleEl = content.document.createElement('style');
-                    styleEl.id = 'custom-override-styles';
-                    content.document.head.appendChild(styleEl);
-                }
-                
-                // Set the CSS content
-                styleEl.innerHTML = cssString;
-            });
-        }
+    // Bookmarks and Active TOC Highlighting
+    window.rendition.on("relocated", function(location) {
+        localStorage.setItem('bookmark-' + bookId, location.start.cfi);
+        
+        let chapterName = "Chapter";
+        let currentHref = location.start.href;
 
-        function setCSSVariablesOnIframes(variables) {
-            if (!window.rendition) return;
-            
-            const contents = window.rendition.getContents();
-            if (!contents || contents.length === 0) return;
-            
-            contents.forEach(function(content) {
-                if (!content || !content.document || !content.document.documentElement) return;
-                
-                // Set CSS custom properties on the html element
-                const root = content.document.documentElement;
-                Object.keys(variables).forEach(function(varName) {
-                    root.style.setProperty(varName, variables[varName]);
-                });
-            });
-        }
+        try {
+            const spineItem = window.book.spine.get(location.start.cfi);
+            const baseHref = spineItem ? spineItem.href : currentHref;
+            const cleanBaseFileName = decodeURIComponent(baseHref.split('#')[0].split('/').pop());
+            const cleanCurrentFileName = decodeURIComponent(currentHref.split('#')[0].split('/').pop());
 
-        function setupBodyStyleObserver(content) {
-            if (!content || !content.document || !content.document.body) return;
-            
-            const body = content.document.body;
-            const isMobile = window.innerWidth <= 768;
-            const paddingValue = isMobile ? '16px' : '20px';
-            
-            // Function to force override styles - aggressively sets both left and right
-            const overrideStyles = () => {
-                // Clear any inline margins that EPUB.js injected
-                body.style.setProperty('margin', '0', 'important');
-                body.style.setProperty('margin-left', '0', 'important');
-                body.style.setProperty('margin-right', '0', 'important');
-                
-                // Force equal padding on both sides - use setProperty for each side
-                body.style.setProperty('padding', paddingValue, 'important');
-                body.style.setProperty('padding-left', paddingValue, 'important');
-                body.style.setProperty('padding-right', paddingValue, 'important');
-                
-                // Prevent the body from stretching to full width
-                body.style.setProperty('max-width', '100%', 'important');
-                body.style.setProperty('box-sizing', 'border-box', 'important');
-            };
-            
-            // Create a MutationObserver to watch for style changes
-            const observer = new MutationObserver(function(mutations) {
-                let needsOverride = false;
-                mutations.forEach(function(mutation) {
-                    if (mutation.attributeName === 'style') {
-                        const style = body.getAttribute('style') || '';
-                        // Check if EPUB.js injected margins
-                        if (style.includes('margin') || style.includes('padding')) {
-                            needsOverride = true;
+            if (window.book.navigation && window.book.navigation.toc) {
+                let matchedItem = null;
+                const findInToc = (items) => {
+                    for (let item of items) {
+                        const cleanItemFileName = decodeURIComponent(item.href.split('#')[0].split('/').pop());
+                        if (cleanItemFileName === cleanBaseFileName || cleanItemFileName === cleanCurrentFileName) {
+                            matchedItem = item;
+                            return;
                         }
+                        if (item.subitems && item.subitems.length > 0) findInToc(item.subitems);
                     }
-                });
-                if (needsOverride) {
-                    overrideStyles();
+                };
+                findInToc(window.book.navigation.toc);
+                
+                if (matchedItem) {
+                    chapterName = matchedItem.label.trim();
+                    currentHref = matchedItem.href;
                 }
-            });
-            
-            // Start observing
-            observer.observe(body, { attributes: true, attributeFilter: ['style'] });
-            
-            // Store observer for cleanup
-            window._bodyObservers.push(observer);
-            
-            // Initial override
-            overrideStyles();
-            
-            // Also set up a continuous enforcement using requestAnimationFrame
-            // This ensures the styles stick even if EPUB.js tries to override them
-            let enforcing = true;
-            function enforceStyles() {
-                if (!enforcing) return;
-                
-                // Check if styles are still correct
-                const currentPaddingRight = body.style.getPropertyValue('padding-right');
-                const currentPaddingLeft = body.style.getPropertyValue('padding-left');
-                const currentMarginLeft = body.style.getPropertyValue('margin-left');
-                const currentMarginRight = body.style.getPropertyValue('margin-right');
-                
-                // If either padding is not what we want, re-apply
-                if (currentPaddingRight !== paddingValue || 
-                    currentPaddingLeft !== paddingValue ||
-                    currentMarginLeft !== '0px' ||
-                    currentMarginRight !== '0px') {
-                    overrideStyles();
-                }
-                
-                requestAnimationFrame(enforceStyles);
             }
-            
-            // Start enforcement
-            requestAnimationFrame(enforceStyles);
-            
-            // Store the enforcement stop function
-            body._stopEnforcement = () => { enforcing = false; };
+        } catch(e) {}
+
+        document.getElementById('chapter-title').innerText = chapterName;
+        
+        if (window.book.locations && window.book.locations.length) {
+            const percentage = window.book.locations.percentageFromCfi(location.start.cfi);
+            localStorage.setItem('progress-' + bookId, JSON.stringify({ chapter: chapterName, percentage: percentage }));
         }
 
-        function setupAllObservers() {
-            if (!window.rendition) return;
-            
-            const contents = window.rendition.getContents();
-            if (!contents || contents.length === 0) return;
-            
-            contents.forEach(function(content) {
-                setupBodyStyleObserver(content);
-            });
-        }
+        const targetFileName = currentHref ? decodeURIComponent(currentHref.split('#')[0].split('/').pop()) : null;
 
-        if (!window._contentHookRegistered) {
-            window.rendition.hooks.content.register(function(content) {
-                // Inject CSS when new content loads
-                const cssTemplate = cssTemplateCache;
-                if (cssTemplate) {
-                    if (!content.document.getElementById('custom-override-styles')) {
-                        const styleEl = content.document.createElement('style');
-                        styleEl.id = 'custom-override-styles';
-                        content.document.head.appendChild(styleEl);
-                        styleEl.innerHTML = cssTemplate;
-                    }
-                }
+        document.querySelectorAll('#toc-list .list-item').forEach(li => {
+            const itemFileName = li.dataset.href ? decodeURIComponent(li.dataset.href.split('#')[0].split('/').pop()) : null;
+            
+            if (itemFileName && targetFileName && itemFileName === targetFileName) {
+                li.style.color = 'var(--accent)'; 
+                li.style.fontWeight = 'bold'; 
+                li.style.borderLeft = '3px solid var(--accent)'; 
+                li.style.paddingLeft = '10px'; 
+                li.id = "active-toc-item"; 
+            } else {
+                li.style.color = ''; 
+                li.style.fontWeight = 'normal'; 
+                li.style.borderLeft = 'none'; 
+                li.style.paddingLeft = li.dataset.originalPadding || '15px'; 
+                if (li.id === "active-toc-item") li.removeAttribute('id');
+            }
+        });
+    });
+
+    // EPUB.js: builds TOC from book.loaded.navigation
+    window.book.ready.then(() => {
+        return window.book.locations.generate(1600);
+    }).catch(err => {});
+
+    window.book.loaded.navigation.then(function(nav) {
+        const tocList = document.getElementById('toc-list');
+        if (!tocList || !nav) return;
+        tocList.innerHTML = '';
+        
+        const tocItems = nav.toc || nav; 
+        
+        const buildToc = (items, depth = 0) => {
+            if (!items || typeof items.forEach !== 'function') return;
+            items.forEach(chapter => {
+                const li = document.createElement('li');
+                li.className = 'list-item';
+                li.innerText = chapter.label ? chapter.label.trim() : "Chapter";
+                li.dataset.href = chapter.href; 
                 
-                // Set CSS variables
-                if (window._currentCssVariables) {
-                    const root = content.document.documentElement;
-                    Object.keys(window._currentCssVariables).forEach(function(varName) {
-                        root.style.setProperty(varName, window._currentCssVariables[varName]);
+                const padding = (15 + (depth * 15)) + 'px';
+                li.style.paddingLeft = padding;
+                li.dataset.originalPadding = padding; 
+                
+                li.onclick = () => { 
+                    const targetHref = chapter.href;
+                    window.rendition.display(targetHref).catch(() => {
+                        const cleanHref = targetHref.split('#')[0];
+                        window.rendition.display(cleanHref).catch(() => {
+                            const fileName = cleanHref.split('/').pop();
+                            if (window.book && window.book.spine && window.book.spine.spineItems) {
+                                const spineItem = window.book.spine.spineItems.find(item => decodeURIComponent(item.href.split('/').pop()) === decodeURIComponent(fileName));
+                                if (spineItem) {
+                                    window.rendition.display(spineItem.href);
+                                }
+                            }
+                        });
                     });
+                    if (window.closeAllModals) window.closeAllModals(); 
+                };
+
+                tocList.appendChild(li);
+
+                if (chapter.subitems && chapter.subitems.length > 0) {
+                    buildToc(chapter.subitems, depth + 1);
                 }
-                
-                // Setup observer for this content
-                setupBodyStyleObserver(content);
-                
-                // Force override after a short delay to catch late injections
-                setTimeout(() => {
-                    if (content && content.document && content.document.body) {
-                        const isMobile = window.innerWidth <= 768;
-                        const paddingValue = isMobile ? '16px' : '20px';
-                        const body = content.document.body;
-                        body.style.setProperty('margin', '0', 'important');
-                        body.style.setProperty('margin-left', '0', 'important');
-                        body.style.setProperty('margin-right', '0', 'important');
-                        body.style.setProperty('padding', paddingValue, 'important');
-                        body.style.setProperty('padding-left', paddingValue, 'important');
-                        body.style.setProperty('padding-right', paddingValue, 'important');
-                    }
-                }, 100);
             });
-            window._contentHookRegistered = true;
-        }
-
-        window._engineUpdateSettings = async function() {
-            if (!window.rendition) return;
-
-            const theme = document.getElementById('set-reader-theme').value;
-            const fontSize = document.getElementById('set-font').value + 'px';
-            const lineHeight = document.getElementById('set-line').value;
-            const paraSpacing = document.getElementById('set-para-spacing').value + 'em';
-            const indent = document.getElementById('set-indent').value + 'em';
-            const fontFamily = document.getElementById('set-font-family').value;
-
-            if(document.getElementById('val-font')) document.getElementById('val-font').innerText = fontSize;
-            if(document.getElementById('val-line')) document.getElementById('val-line').innerText = lineHeight;
-            if(document.getElementById('val-para-spacing')) document.getElementById('val-para-spacing').innerText = paraSpacing;
-            if(document.getElementById('val-indent')) document.getElementById('val-indent').innerText = indent;
-
-            // Dynamic Background Theming using shared helper
-            const { bgColor, color } = window.getThemeColors(theme);
-
-            // Set container background - this will show through the transparent iframe
-            document.getElementById('reader-container').style.backgroundColor = bgColor;
-            // Make viewer transparent so the container background shows through
-            viewer.style.backgroundColor = 'transparent';
-
-            // Get text align from active button - support ALL options (left, center, right, justify)
-            const activeAlignBtn = document.querySelector('.segment-btn.active');
-            let textAlign = 'left'; // default
-            
-            if (activeAlignBtn) {
-                // First try data-align attribute, then fallback to ID-based detection
-                if (activeAlignBtn.dataset && activeAlignBtn.dataset.align) {
-                    textAlign = activeAlignBtn.dataset.align;
-                } else if (activeAlignBtn.id) {
-                    // Fallback: extract from ID (e.g., "align-center" -> "center")
-                    const match = activeAlignBtn.id.match(/align-(.+)/);
-                    if (match) textAlign = match[1];
-                }
-            }
-
-            const cssTemplate = await loadCSSTemplate();
-            
-            if (cssTemplate) {
-                injectCSSIntoIframes(cssTemplate);
-            }
-            
-            const cssVariables = {
-                '--bg-color': bgColor,
-                '--text-color': color,
-                '--font-family': fontFamily,
-                '--font-size': fontSize,
-                '--line-height': lineHeight,
-                '--text-align': textAlign,
-                '--para-spacing': paraSpacing,
-                '--indent': indent
-            };
-            
-            window._currentCssVariables = cssVariables;
-            
-            setCSSVariablesOnIframes(cssVariables);
-            
-            setupAllObservers();
-
-            const showFloatCheckbox = document.getElementById('set-show-float-btn');
-            const taskbarElement = document.getElementById('bottom-taskbar');
-            
-            if (window.taskbarToggleBtn) {
-                if (showFloatCheckbox && !showFloatCheckbox.checked) {
-                    window.taskbarToggleBtn.style.display = 'none';
-                } else {
-                    window.taskbarToggleBtn.style.display = 'flex';
-                    if (taskbarElement) {
-                        const taskbarCSS = window.getComputedStyle(taskbarElement);
-                        window.taskbarToggleBtn.style.backgroundColor = taskbarCSS.backgroundColor;
-                        window.taskbarToggleBtn.style.color = taskbarCSS.color;
-                        window.taskbarToggleBtn.style.borderColor = taskbarCSS.borderTopColor !== 'rgba(0, 0, 0, 0)' ? taskbarCSS.borderTopColor : '#3f3f46';
-                    }
-                }
-            }
         };
 
-        // Display the book with timeout
         try {
-            await withTimeout(
-                window.rendition.display(),
-                20000,
-                "EPUB.js display"
-            );
-        } catch (displayErr) {
-            console.error("Display error:", displayErr);
-            throw new Error("Failed to display the book: " + displayErr.message + ". The EPUB format may be incompatible.");
+            buildToc(tocItems);
+        } catch(err) {
+            console.warn("Could not build standard TOC list", err);
         }
+    }).catch(err => console.warn("TOC loading failed", err));
 
-        // Build TOC
-        try {
-            const toc = await withTimeout(
-                window.book.loaded.navigation,
-                10000,
-                "TOC loading"
-            );
-            const tocList = document.getElementById('toc-list');
-            tocList.innerHTML = '';
-            
-            if (toc && toc.toc && typeof toc.toc.forEach === 'function') {
-                toc.toc.forEach(chapter => {
-                    const li = document.createElement('li');
-                    li.className = 'list-item';
-                    li.innerText = chapter.label;
-                    li.dataset.href = chapter.href;
-                    li.style.paddingLeft = '15px';
-                    
-                    li.onclick = () => {
-                        if (window.rendition) window.rendition.display(chapter.href);
-                        if (window.closeAllModals) window.closeAllModals();
-                    };
-                    tocList.appendChild(li);
-                });
-            }
-        } catch (tocErr) {
-            console.warn("Failed to load TOC:", tocErr);
-        }
+    // Create floating taskbar toggle button
+    if (document.getElementById('taskbar-toggle-btn')) document.getElementById('taskbar-toggle-btn').remove();
+    
+    const btn = document.createElement('button');
+    btn.id = 'taskbar-toggle-btn';
+    btn.innerHTML = '<i class="ph ph-caret-down"></i>';
+    
+    Object.assign(btn.style, {
+        position: 'fixed', bottom: '75px', right: '20px', zIndex: '9999', width: '40px', height: '40px', borderRadius: '50%',
+        border: '1px solid var(--border, #3f3f46)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+        boxShadow: '0 4px 10px rgba(0,0,0,0.5)', transition: 'bottom 0.3s ease, background-color 0.2s ease', fontSize: '20px'
+    });
 
-        // Update chapter title on location change
-        window.rendition.on('relocate', (location) => {
-            try {
-                const chapterName = location.start?.display || "Reading...";
-                document.getElementById('chapter-title').innerText = chapterName;
-                
-                // Save progress
-                localStorage.setItem('bookmark-' + bookId, location.start.cfi);
-                localStorage.setItem('progress-' + bookId, JSON.stringify({ 
-                    chapter: chapterName, 
-                    percentage: location.start.percentage || 0 
-                }));
-                
-                // Highlight active TOC item
-                const currentHref = location.start?.href || null;
-                if (currentHref) {
-                    document.querySelectorAll('#toc-list .list-item').forEach(li => {
-                        if (li.dataset.href && li.dataset.href === currentHref) {
-                            li.style.color = 'var(--accent)';
-                            li.style.fontWeight = 'bold';
-                            li.style.borderLeft = '3px solid var(--accent)';
-                            li.style.paddingLeft = '25px';
-                            li.id = "active-toc-item";
-                        } else {
-                            li.style.color = '';
-                            li.style.fontWeight = 'normal';
-                            li.style.borderLeft = 'none';
-                            li.style.paddingLeft = '15px';
-                            if (li.id === "active-toc-item") li.removeAttribute('id');
-                        }
-                    });
-                }
-            } catch (e) {
-                console.warn("Error in relocate handler:", e);
-            }
-        });
+    document.getElementById('reader-container').appendChild(btn);
+    window.taskbarToggleBtn = btn;
 
-        // Click handler for navigation
-        window.rendition.on('click', (e) => {
-            const taskbar = document.getElementById('bottom-taskbar');
+    const taskbar = document.getElementById('bottom-taskbar');
+    
+    if (window.taskbarObserver) window.taskbarObserver.disconnect();
+    window.taskbarObserver = new MutationObserver(() => {
+        if (taskbar.classList.contains('hidden')) { btn.style.bottom = '20px'; btn.innerHTML = '<i class="ph ph-caret-up"></i>'; } 
+        else { btn.style.bottom = '75px'; btn.innerHTML = '<i class="ph ph-caret-down"></i>'; }
+    });
+    if (taskbar) {
+        window.taskbarObserver.observe(taskbar, { attributes: true, attributeFilter: ['class'] });
+        if (taskbar.classList.contains('hidden')) { btn.style.bottom = '20px'; btn.innerHTML = '<i class="ph ph-caret-up"></i>'; }
+    }
+
+    btn.onclick = (e) => { e.stopPropagation(); if (taskbar) taskbar.classList.toggle('hidden'); };
+
+    // PC Click Handling
+    window.rendition.on('click', (e) => {
+        if (e.target && e.target.tagName && e.target.tagName.toLowerCase() === 'a') return;
+        try { if (window.rendition.getContents()[0].window.getSelection().toString().length > 0) return; } catch(err) {}
+
+        const w = window.innerWidth;
+        if (e.clientX > w * 0.25 && e.clientX < w * 0.75) {
             const pinCheckbox = document.getElementById('set-pin-taskbar');
             if (taskbar && (!pinCheckbox || !pinCheckbox.checked)) taskbar.classList.toggle('hidden');
-        });
-
-        // Apply initial settings
-        if (window._engineUpdateSettings) window._engineUpdateSettings();
-
-        // Restore last position if available
-        try {
-            const lastCfi = localStorage.getItem('bookmark-' + bookId);
-            if (lastCfi && window.rendition) {
-                await window.rendition.display(lastCfi);
-            }
-        } catch (e) {
-            console.warn("Failed to restore position:", e);
         }
+    });
 
-    } catch (error) {
-        console.error("EPUB.js engine error:", error);
-        throw error;
-    }
+    // Mobile Touch Logic
+    window.rendition.hooks.content.register(function(contents) {
+        let startX = 0; let startY = 0; let startTime = 0;
+        
+        contents.document.addEventListener('touchstart', (event) => {
+            startX = event.changedTouches[0].screenX; 
+            startY = event.changedTouches[0].screenY; 
+            startTime = new Date().getTime();
+        }, { passive: true });
+
+        contents.document.addEventListener('touchend', (event) => {
+            const endX = event.changedTouches[0].screenX; 
+            const endY = event.changedTouches[0].screenY;
+            const timeTaken = new Date().getTime() - startTime;
+            const deltaX = endX - startX; 
+            const deltaY = endY - startY;
+            
+            const currentReadMode = document.getElementById('set-read-mode').value;
+            const isContinuous = (currentReadMode === 'continuous');
+
+            // Swipe navigation for non-continuous modes (scrolled mode)
+            if (!isContinuous && timeTaken < 300 && Math.abs(deltaX) > 40 && Math.abs(deltaY) < 40) {
+                if (deltaX > 0) window.rendition.prev(); else window.rendition.next();
+            }
+            else if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
+                if (event.target && event.target.tagName && event.target.tagName.toLowerCase() !== 'a') {
+                    try { if (contents.window.getSelection().toString().length > 0) return; } catch(err) {}
+                    
+                    const taskbarEl = document.getElementById('bottom-taskbar');
+                    const pinCheckbox = document.getElementById('set-pin-taskbar');
+                    if (taskbarEl && (!pinCheckbox || !pinCheckbox.checked)) {
+                        taskbarEl.classList.toggle('hidden');
+                    }
+                }
+            }
+        }, { passive: true });
+    });
 };
 
+/**
+ * Destroy EPUB.js engine and clean up resources
+ */
 window.destroyEpubJsEngine = function() {
-    // Disconnect all body observers
-    if (window._bodyObservers && window._bodyObservers.length > 0) {
-        window._bodyObservers.forEach(observer => {
-            try { observer.disconnect(); } catch(e) {}
+    if (window.book) { window.book.destroy(); window.book = null; window.rendition = null; }
+    if (window.taskbarToggleBtn) { window.taskbarToggleBtn.remove(); window.taskbarToggleBtn = null; }
+    if (window.taskbarObserver) { window.taskbarObserver.disconnect(); }
+    // Clean up variables
+    window._contentHookRegistered = false;
+};
+
+/**
+ * Search across all chapters using EPUB.js native find()
+ */
+window.runGlobalSearch = async function() {
+    if (!window.book || !window.book.spine) return alert("Search is currently not available.");
+    
+    const query = document.getElementById('global-search-input').value;
+    if (!query) return;
+    
+    const resultsContainer = document.getElementById('search-results');
+    resultsContainer.innerHTML = '<div style="padding:10px;">Searching...</div>';
+    
+    try {
+        await window.book.ready;
+        
+        if (!window.book.spine || !window.book.spine.spineItems) {
+             return resultsContainer.innerHTML = '<div style="padding:10px;">Error: Book structure not readable.</div>';
+        }
+
+        let allMatches = [];
+
+        for (const item of window.book.spine.spineItems) {
+            try {
+                await item.load(window.book.load.bind(window.book));
+                
+                const matches = item.find(query) || [];
+                
+                item.unload(); 
+                
+                if (matches.length > 0) {
+                    const rawHref = item.href || "Unknown File";
+                    const fileName = decodeURIComponent(rawHref.split('/').pop().split('#')[0]);
+                    let chapterLabel = fileName !== "Unknown File" ? fileName : "Unknown Chapter";
+                    
+                    if (window.book.navigation && window.book.navigation.toc) {
+                        const findInToc = (items) => {
+                            for (let t of items) {
+                                if (t.href && decodeURIComponent(t.href).includes(fileName)) return t.label ? t.label.trim() : null;
+                                if (t.subitems) { let sub = findInToc(t.subitems); if (sub) return sub; }
+                            }
+                            return null;
+                        };
+                        let foundLabel = findInToc(window.book.navigation.toc);
+                        if (foundLabel) chapterLabel = foundLabel;
+                    }
+
+                    matches.forEach(match => {
+                        allMatches.push({
+                            cfi: match.cfi, 
+                            href: item.href, 
+                            snippet: match.excerpt || "", 
+                            chapter: chapterLabel,
+                            file: fileName
+                        });
+                    });
+                }
+            } catch(e) {
+                console.warn("Skipped section during search", e);
+            }
+        }
+        
+        resultsContainer.innerHTML = '';
+        if (allMatches.length === 0) return resultsContainer.innerHTML = '<div style="padding:10px;">No results found.</div>';
+        
+        allMatches.forEach(match => {
+            const li = document.createElement('li');
+            li.className = 'list-item';
+            
+            let safeSnippet = match.snippet;
+            if (safeSnippet.length > 80) safeSnippet = safeSnippet.substring(0, 80) + "...";
+            
+            li.innerHTML = `
+                <div style="font-weight: 600; color: var(--accent); margin-bottom: 4px; font-size: 13px;">
+                    ${match.chapter} <span style="color:var(--text-muted); font-weight:normal; font-size:11px;">(${match.file})</span>
+                </div>
+                <span style="font-size: 13px;">...${safeSnippet.replace(new RegExp(query, 'gi'), m => `<strong style="color:var(--accent); background:rgba(59,130,246,0.2); padding:0 2px; border-radius:3px;">${m}</strong>`)}...</span>
+            `;
+            
+            li.onclick = () => { 
+                if (match.cfi) {
+                    window.rendition.display(match.cfi).catch(() => window.rendition.display(match.href));
+                } else if (match.href) {
+                    window.rendition.display(match.href);
+                }
+                if (window.closeAllModals) window.closeAllModals(); 
+            };
+            resultsContainer.appendChild(li);
         });
-        window._bodyObservers = [];
+    } catch (e) { 
+        resultsContainer.innerHTML = '<div style="padding:10px; color:red;">Search failed.</div>'; 
+        console.error("Search Error:", e);
     }
-    
-    // Destroy the book
-    if (window.book) {
-        try {
-            window.book.destroy();
-        } catch(e) {}
-        window.book = null;
-    }
-    
-    window.rendition = null;
-    window._currentCssVariables = null;
 };

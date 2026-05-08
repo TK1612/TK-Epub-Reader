@@ -6,30 +6,13 @@
 
 window.activeBookId = null;
 window.isSwitchingEngine = false; 
-window._engineLaunchTimeout = null;
-
-/**
- * Detect if the user is on iOS
- * @returns {boolean}
- */
-window.isIOS = function() {
-    return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-};
 
 /**
  * Get the currently selected reader engine from localStorage
- * Defaults to 'foliate' on iOS, 'epubjs' on other platforms
  * @returns {string} 'epubjs' or 'foliate'
  */
 window.getReaderEngine = function() {
-    const saved = localStorage.getItem('setting-reader-engine');
-    if (saved) return saved;
-    
-    // Default to Foliate on iOS (better compatibility)
-    if (window.isIOS()) {
-        return 'foliate';
-    }
-    return 'epubjs';
+    return localStorage.getItem('setting-reader-engine') || 'epubjs';
 };
 
 /**
@@ -45,29 +28,30 @@ window.syncEngineUI = function() {
         const paginatedOption = readModeSelect.querySelector('option[value="paginated"]');
         
         if (engine === 'foliate') {
-            // Gray out continuous scroll for Foliate (not supported)
+            // Foliate: disable continuous, keep paginated
             if (continuousOption) {
                 continuousOption.disabled = true;
                 continuousOption.innerText = "Continuous Scroll (EPUB.js Only)";
             }
-            // Reset to scrolled if continuous was selected
+            if (paginatedOption) {
+                paginatedOption.disabled = false;
+            }
             if (readModeSelect.value === 'continuous') readModeSelect.value = 'scrolled';
         } else {
+            // EPUB.js: disable paginated, keep continuous
             if (continuousOption) {
                 continuousOption.disabled = false;
                 continuousOption.innerText = "Continuous Scroll (All Chapters)";
             }
+            if (paginatedOption) {
+                paginatedOption.disabled = true;
+            }
+            // Force switch away from paginated if somehow selected
+            if (readModeSelect.value === 'paginated') {
+                readModeSelect.value = 'scrolled';
+            }
         }
-        
-        // Gray out paginated for EPUB.js (currently unusable)
-        if (paginatedOption) {
-            paginatedOption.disabled = true;
-            paginatedOption.innerText = "Paginated (Disabled)";
-        }
-        // Reset to scrolled if paginated was selected
-        if (readModeSelect.value === 'paginated') readModeSelect.value = 'scrolled';
     }
-    
     const engineSelect = document.getElementById('set-reader-engine');
     if (engineSelect) engineSelect.value = engine;
 };
@@ -76,58 +60,30 @@ window.syncEngineUI = function() {
  * Open the reader with the specified book
  * @param {string} bookId - The ID of the book in IndexedDB
  */
-window.openReader = function(bookId) {
+window.openReader = async function(bookId) {
     window.activeBookId = bookId;
     document.getElementById('app').style.display = 'none';
     document.getElementById('reader-container').style.display = 'block';
     document.getElementById('chapter-title').innerText = "Loading Engine...";
 
+    // Add reader-active class for iOS handling
+    document.body.classList.add('reader-active');
+
     window.syncEngineUI();
     const engine = window.getReaderEngine();
     
-    // Set a global timeout to detect if engine is stuck (iOS Safari issue)
-    window._engineLaunchTimeout = setTimeout(() => {
-        console.error("Engine launch timeout - stuck for 15 seconds");
-        alert("The reader engine appears to be stuck. This may be due to iOS Safari compatibility issues. Try switching to the other engine in Settings.");
-        window.closeReader();
-    }, 15000); // 15 second timeout
-    
-    // Launch engine with async wrapper
-    const launchPromise = (async () => {
-        try {
-            if (engine === 'foliate') {
-                if (typeof window.launchFoliateEngine === 'function') {
-                    await window.launchFoliateEngine(bookId);
-                } else {
-                    throw new Error("Foliate engine not available. Try refreshing the page or switch to EPUB.js engine.");
-                }
-            } else {
-                if (typeof window.launchEpubJsEngine === 'function') {
-                    await window.launchEpubJsEngine(bookId);
-                } else {
-                    throw new Error("EPUB.js engine not available. Try refreshing the page or switch to Foliate engine.");
-                }
-            }
-            // Clear timeout on success
-            if (window._engineLaunchTimeout) {
-                clearTimeout(window._engineLaunchTimeout);
-                window._engineLaunchTimeout = null;
-            }
-            document.getElementById('chapter-title').innerText = "Ready";
-        } catch (e) {
-            // Clear timeout on error
-            if (window._engineLaunchTimeout) {
-                clearTimeout(window._engineLaunchTimeout);
-                window._engineLaunchTimeout = null;
-            }
-            console.error("Boot error:", e);
-            const errorMsg = e.message || "Unknown error occurred";
-            alert("Failed to load book: " + errorMsg);
-            window.closeReader(); 
+    try {
+        if (engine === 'foliate') {
+            if (typeof window.launchFoliateEngine === 'function') await window.launchFoliateEngine(bookId);
+            else alert("Foliate engine is still loading. Please wait a moment.");
+        } else {
+            if (typeof window.launchEpubJsEngine === 'function') await window.launchEpubJsEngine(bookId);
         }
-    })();
-    
-    return launchPromise;
+    } catch (e) {
+        console.error("Boot error:", e);
+        alert("Failed to load this specific book. Check the F12 console for the exact error.");
+        window.closeReader();
+    }
 };
 
 /**
@@ -135,12 +91,6 @@ window.openReader = function(bookId) {
  * Dispatches to appropriate engine destroy function
  */
 window.closeReader = function() {
-    // Clear any pending timeout
-    if (window._engineLaunchTimeout) {
-        clearTimeout(window._engineLaunchTimeout);
-        window._engineLaunchTimeout = null;
-    }
-    
     const engine = window.getReaderEngine();
     if (engine === 'foliate' && typeof window.destroyFoliateEngine === 'function') window.destroyFoliateEngine();
     else if (typeof window.destroyEpubJsEngine === 'function') window.destroyEpubJsEngine();
@@ -149,8 +99,11 @@ window.closeReader = function() {
     document.getElementById('reader-container').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
     
+    // Remove reader-active class for iOS handling
+    document.body.classList.remove('reader-active');
+
     if (typeof window.loadLibrary === 'function') {
-        window.loadLibrary(typeof currentLibraryPage !== 'undefined' ? currentLibraryPage : 1); 
+        window.loadLibrary(typeof currentLibraryPage !== 'undefined' ? currentLibraryPage : 1);
     }
 };
 

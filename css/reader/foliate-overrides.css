@@ -3,13 +3,6 @@
 /* Foliate.js CSS Overrides */
 /* This CSS uses CSS custom properties that are set by foliate-engine.js */
 
-/* Override Foliate's internal 'physical book' margin math for mobile */
-@media (max-width: 768px) {
-    foliate-paginator {
-        --_margin: 0px !important;
-    }
-}
-
 html, body {
     background: var(--bg-color, transparent) !important;
     color: var(--text-color, #000000) !important;
@@ -20,9 +13,8 @@ html, body {
     cursor: pointer !important;
     -webkit-tap-highlight-color: transparent;
     margin: 0 !important;
-    padding: 14px !important;
-    padding-left: 14px !important;
-    padding-right: 12px !important;
+    padding: 12px 9px 12px 7px !important;
+    box-sizing: border-box !important;
 }
 
 /* Apply to all text elements for better coverage */

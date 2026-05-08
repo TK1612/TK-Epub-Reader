@@ -9,7 +9,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Status-Active-success?style=flat-square" alt="Status">
-  <img src="https://img.shields.io/badge/Version-1.1.9-blue?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-1.2.0-blue?style=flat-square" alt="Version">
   <img src="https://img.shields.io/badge/Deployed-GitHub%20Pages-green?style=flat-square" alt="Deployed">
   <img src="https://img.shields.io/badge/Built%20With-Vanilla%20JS-yellow?style=flat-square" alt="Vanilla JS">
 </p>

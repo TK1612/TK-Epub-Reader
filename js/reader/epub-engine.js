@@ -41,15 +41,28 @@ window.launchEpubJsEngine = async function(bookId) {
     const readMode = document.getElementById('set-read-mode').value || 'continuous';
     const isContinuous = (readMode === 'continuous');
 
-    // Paginated mode removed - always use continuous manager with scrolled flow
-    window.rendition = window.book.renderTo(viewer, {
-        manager: "continuous",
-        flow: "scrolled",
+    // Configure rendition based on read mode
+    // - continuous: loads all chapters, allows continuous scrolling (manager: "continuous", flow: "scrolled")
+    // - single-chapter: one chapter at a time, scroll within chapter only (manager: "default", flow: "scrolled-doc")
+    const renditionConfig = {
         width: "100%",
         height: "100%",
         snap: false,
         allowScriptedContent: true
-    });
+    };
+
+    if (isContinuous) {
+        // Continuous mode: all chapters loaded, continuous scroll through all chapters
+        renditionConfig.manager = "continuous";
+        renditionConfig.flow = "scrolled";
+    } else {
+        // Single chapter mode: one chapter at a time, scroll only within current chapter
+        // User must use taskbar navigation to move between chapters
+        renditionConfig.manager = "default";
+        renditionConfig.flow = "scrolled-doc";
+    }
+
+    window.rendition = window.book.renderTo(viewer, renditionConfig);
 
     /**
      * Update reader settings and apply theme.
@@ -420,7 +433,7 @@ window.launchEpubJsEngine = async function(bookId) {
             const currentReadMode = document.getElementById('set-read-mode').value;
             const isContinuous = (currentReadMode === 'continuous');
 
-            // Swipe navigation for non-continuous modes (scrolled mode)
+            // Swipe navigation for non-continuous modes (single chapter mode)
             if (!isContinuous && timeTaken < 300 && Math.abs(deltaX) > 40 && Math.abs(deltaY) < 40) {
                 if (deltaX > 0) window.rendition.prev(); else window.rendition.next();
             }

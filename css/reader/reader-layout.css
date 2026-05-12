@@ -73,17 +73,31 @@
         /* Ensure no conflicting order properties */
         order: 0;
     }
+
+    /* --- MOBILE TOC MODAL --- */
+    #toc-modal {
+        /* Edge-to-edge on mobile for maximum readability */
+        left: 10px !important;
+        right: 10px !important;
+        width: auto !important;
+        max-width: none !important;
+        transform: translateY(-50%) !important;
+        top: 50% !important;
+    }
 }
 
-/* --- TOC MODAL FIX (PC & Mobile) --- */
-#toc-modal {
-    /* Override center-modal positioning that causes left-clipping on both PC and mobile */
-    left: 10px !important;
-    right: 10px !important;
-    width: auto !important;
-    max-width: none !important;
-    transform: translateY(-50%) !important;
-    top: 50% !important;
+/* --- TOC MODAL (PC) --- */
+/* Centered with capped width so it doesn't stretch too wide on desktop */
+@media (min-width: 769px) {
+    #toc-modal {
+        /* True centering with a comfortable max-width */
+        left: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        top: 50% !important;
+        width: 90% !important;
+        max-width: 600px !important;
+        right: auto !important;
+    }
 }
 
 /* --- iOS TOUCH IMPROVEMENTS --- */

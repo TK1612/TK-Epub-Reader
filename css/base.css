@@ -1,0 +1,43 @@
+@import url('https://cdn.jsdelivr.net/npm/kopubbatang@1.0.0/kopubbatang.min.css');
+
+/* --- CORE STYLES & VARIABLES --- */
+:root {
+    --bg-color: #ffffff;
+    --surface: #f4f4f5;
+    --glass-bg: rgba(255, 255, 255, 0.75);
+    --glass-surface: rgba(244, 244, 245, 0.75);
+    --text-color: #18181b;
+    --text-muted: #71717a;
+    --border: #e4e4e7;
+    --accent: #3b82f6;
+    --danger: #ef4444;
+    --success: #10b981;
+    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="dark"] {
+    --bg-color: #000000;
+    --surface: #121212; 
+    --glass-bg: rgba(0, 0, 0, 0.75);
+    --glass-surface: rgba(18, 18, 18, 0.75);
+    --text-color: #e4e4e7;
+    --text-muted: #a1a1aa;
+    --border: #27272a;
+    --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', system-ui, sans-serif; }
+
+body { 
+    background: var(--bg-color); 
+    color: var(--text-color); 
+    overflow: hidden; 
+    overscroll-behavior-y: none; 
+    overscroll-behavior-x: none; 
+}
+
+/* --- CUSTOM SCROLLBAR --- */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(150, 150, 150, 0.4); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(150, 150, 150, 0.7); }

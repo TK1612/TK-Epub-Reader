@@ -1,0 +1,89 @@
+/* LIBRARY GRID & DELETE MODE */
+.library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 24px; }
+.book-card { background: var(--surface); border-radius: 12px; overflow: hidden; cursor: pointer; border: 1px solid var(--border); box-shadow: var(--shadow); position: relative; transition: transform 0.2s; width: 100%; }
+.book-card:hover { transform: translateY(-4px); }
+.book-cover { width: 100%; aspect-ratio: 2/3; object-fit: cover; display: block; border-radius: 12px 12px 0 0; background: #111; }
+.book-info { padding: 15px; }
+.book-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
+.book-progress { font-size: 12px; color: var(--text-muted); }
+
+.delete-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(239, 68, 68, 0.7); display: flex; flex-direction: column; align-items: center; justify-content: center; color: white; font-size: 48px; opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 10; }
+.delete-overlay span { font-size: 14px; font-weight: bold; margin-top: 10px; }
+#library-grid.delete-mode .book-card .delete-overlay { opacity: 1; }
+#library-grid.delete-mode .book-card { border-color: var(--danger); transform: scale(0.98); box-shadow: none; }
+.delete-btn-active { background: var(--danger) !important; color: white !important; }
+
+/* --- BATCH DELETE SELECTION UI --- */
+#library-grid.delete-mode .book-card .delete-overlay { 
+    opacity: 1; 
+    background: rgba(0, 0, 0, 0.6); /* Dim unselected books */
+}
+#library-grid.delete-mode .book-card .delete-overlay i,
+#library-grid.delete-mode .book-card .delete-overlay span {
+    display: none; /* Hide old trash icon/text */
+}
+#library-grid.delete-mode .book-card .delete-overlay::after {
+    content: '';
+    width: 32px; height: 32px;
+    border: 3px solid rgba(255,255,255,0.5);
+    border-radius: 50%;
+    transition: all 0.2s ease;
+}
+#library-grid.delete-mode .book-card.selected-for-delete {
+    border-color: var(--danger) !important;
+    transform: scale(0.95);
+}
+#library-grid.delete-mode .book-card.selected-for-delete .delete-overlay { 
+    background: rgba(239, 68, 68, 0.85); /* Bright red when selected */
+}
+#library-grid.delete-mode .book-card.selected-for-delete .delete-overlay::after {
+    border-color: white;
+    background-color: white;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath fill='none' stroke='%23ef4444' stroke-linecap='round' stroke-linejoin='round' stroke-width='24' d='M216 72 104 184 40 120'/%3E%3C/svg%3E");
+    background-size: 70%;
+    background-position: center;
+    background-repeat: no-repeat;
+    transform: scale(1.1);
+}
+
+/* Fixes the floating bottom bar blocking the pagination buttons */
+.pagination-container {
+    padding-bottom: 90px;
+}
+
+/* Mobile: Force 2-column grid for book cards */
+@media (max-width: 600px) {
+    .library-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+    }
+
+    .book-card {
+        border-radius: 8px;
+    }
+
+    .book-cover {
+        border-radius: 8px 8px 0 0;
+    }
+
+    .book-info {
+        padding: 8px;
+    }
+
+    .book-title {
+        font-size: 12px;
+        white-space: normal;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        line-height: 1.3;
+        max-height: 2.6em; /* 2 lines * 1.3 line-height */
+        margin-bottom: 2px;
+    }
+
+    .book-progress {
+        font-size: 10px;
+    }
+}

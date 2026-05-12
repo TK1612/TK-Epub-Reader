@@ -1,0 +1,4 @@
+/* Reader Stylesheet - Imports reader-specific CSS files */
+
+/* Reader layout styles: reader container, viewer, bottom bar */
+@import url('reader/reader-layout.css');

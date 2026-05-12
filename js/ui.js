@@ -41,26 +41,9 @@ window.toggleDarkMode = function() {
     
     if(window.rendition) {
         window.rendition.themes.select(newTheme);
-        const defaultColor = newTheme === 'dark' ? '#e4e4e7' : '#18181b';
-        document.getElementById('set-text-color').value = defaultColor;
-        window.rendition.themes.override('color', defaultColor + ' !important');
     }
 };
 
 window.closeAllModals = function() {
     document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
-};
-
-window.toggleDeleteMode = function() {
-    window.isDeleteMode = !window.isDeleteMode;
-    const grid = document.getElementById('library-grid');
-    const btn = document.getElementById('delete-mode-btn');
-    
-    if (window.isDeleteMode) {
-        grid.classList.add('delete-mode');
-        btn.classList.add('delete-btn-active');
-    } else {
-        grid.classList.remove('delete-mode');
-        btn.classList.remove('delete-btn-active');
-    }
 };

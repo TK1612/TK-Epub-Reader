@@ -2,7 +2,10 @@
 <html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Epub Reader</title>
     
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
@@ -145,22 +148,22 @@
         </main>
     </div>
 
-    <div id="reader-container"><div id="viewer"></div><div class="bottom-bar" id="bottom-taskbar"><div class="bar-group"><button class="icon-btn" onclick="closeReader()"><i class="ph ph-house"></i></button><button class="icon-btn" onclick="rendition.prev()"><i class="ph ph-caret-left"></i></button></div><div class="chapter-title" id="chapter-title">Loading...</div><div class="bar-group"><button class="icon-btn" onclick="toggleTOC()"><i class="ph ph-list-bullets"></i></button><button class="icon-btn" onclick="saveBookmark()"><i class="ph ph-heart"></i></button><button class="icon-btn" onclick="toggleSearch()"><i class="ph ph-magnifying-glass"></i></button><button class="icon-btn" onclick="toggleSettings()"><i class="ph ph-faders"></i></button><button class="icon-btn" onclick="rendition.next()"><i class="ph ph-caret-right"></i></button></div></div></div>
+    <div id="reader-container"><div id="viewer"></div><div class="bottom-bar" id="bottom-taskbar"><div class="bar-group"><button class="icon-btn" onclick="closeReader()"><i class="ph ph-house"></i></button><button class="icon-btn" onclick="rendition.prev()"><i class="ph ph-caret-left"></i></button></div><div class="chapter-title" id="chapter-title">Loading...</div><div class="bar-group"><button class="icon-btn" onclick="toggleTOC()"><i class="ph ph-list-bullets"></i></button><button class="icon-btn" onclick="saveBookmark()"><i class="ph ph-heart"></i></button><button class="icon-btn" onclick="toggleSearch()"><i class="ph ph-magnifying-glass"></i></button><button class="icon-btn" onclick="toggleSettings(event)"><i class="ph ph-faders"></i></button><button class="icon-btn" onclick="rendition.next()"><i class="ph ph-caret-right"></i></button></div></div></div>
 
     <div id="search-modal" class="modal center-modal"><div class="modal-header"><h3>Search Novel</h3><button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button></div><div class="search-controls" style="display:flex; gap:10px;"><input type="text" id="global-search-input" placeholder="Type word or phrase..."><button class="btn-primary" style="margin-bottom:10px;" onclick="runGlobalSearch()">Search</button></div><div id="search-results" class="scroll-list"></div></div>
-    <div id="editor-global-search-modal" class="modal center-modal large-modal"><div class="modal-header"><h3>Global Search (All HTML Files)</h3><button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button></div><div class="search-controls" style="display:flex; gap:10px; align-items: center;"><input type="text" id="editor-global-search-input" placeholder="Regex or String..." style="flex:1;"><label style="display:flex; align-items:center; gap:5px; font-size:12px; cursor:pointer; color:var(--text-muted);"><input type="checkbox" id="editor-global-use-regex"> Regex</label><button class="btn-primary" style="margin-bottom:10px;" onclick="runGlobalEditSearch()">Search All</button></div><div id="editor-global-search-results" class="scroll-list" style="margin-top: 10px;"></div></div>
+    <div id="editor-global-search-modal" class="modal center-modal large-modal"><div class="modal-header"><h3>Global Search (All HTML Files)</h3><button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button></div><div class="search-controls" style="display:flex; gap:10px; align-items:center;"><input type="text" id="editor-global-search-input" placeholder="Regex or String..." style="flex:1;"><label style="display:flex; align-items:center; gap:5px; font-size:12px; cursor:pointer; color:var(--text-muted);"><input type="checkbox" id="editor-global-use-regex"> Regex</label><button class="btn-primary" style="margin-bottom:10px;" onclick="runGlobalEditSearch()">Search All</button></div><div id="editor-global-search-results" class="scroll-list" style="margin-top: 10px;"></div></div>
     <div id="editor-metadata-modal" class="modal center-modal"><div class="modal-header"><h3>Edit Book Metadata</h3><button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button></div><div class="setting-group"><label>Book Title</label><input type="text" id="meta-title-input"></div><div class="setting-group"><label>Author / Creator</label><input type="text" id="meta-author-input"></div><button id="save-meta-btn" class="btn-primary" style="width: 100%; margin-top: 10px;" onclick="saveMetadata()">Save Metadata</button></div>
     
     <div id="editor-toc-modal" class="modal center-modal large-modal">
         <div class="modal-header"><div><h3>Edit Table of Contents</h3><span style="font-size:12px; color:var(--text-muted);">Modify names manually or auto-generate from tags.</span></div><button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button></div>
-        <div style="display:flex; gap:10px; margin-bottom:10px;"><button class="btn-secondary" style="flex:1; font-size:12px;" onclick="generateTocFromHeadings()">Auto-Generate from &lt;h1&gt; tags</button></div>
+        <div style="display:flex; gap:10px; margin-bottom:10px;"><button class="btn-secondary" style="flex:1; font-size:12px;" onclick="generateTocFromHeadings()">Auto-Generate from <h1> tags</button></div>
         <div id="toc-edit-list" class="scroll-list" style="margin: 10px 0; padding-right:10px;"></div><button id="save-toc-btn" class="btn-primary" style="width: 100%; margin-top: 10px;" onclick="saveTocEdits()">Save TOC XML</button>
     </div>
 
     <div id="editor-add-file-modal" class="modal center-modal">
         <div class="modal-header"><h3>Import Outside Files</h3><button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button></div>
         <div class="setting-group"><input type="file" id="add-outside-file-input" multiple style="display: none;" onchange="updateSelectedFilesList()"><div class="file-upload-dropzone" onclick="document.getElementById('add-outside-file-input').click()"><i class="ph ph-upload-simple"></i><span>Click here to browse and select files</span></div><div id="selected-files-list" class="selected-files-list"></div></div>
-        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 15px;">* Select multiple Images, Stylesheets, or HTML files. They will be auto-categorized into the EPUB manifest.</p>
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 15px;">* Select multiple Images, Stylesheets or HTML files. They will be auto-categorized into the EPUB manifest.</p>
         <button id="confirm-add-file-btn" class="btn-primary" style="width: 100%;" onclick="confirmAddOutsideFile()">Import Files</button>
     </div>
 
@@ -175,7 +178,7 @@
             <label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" id="clean-hidden-p" checked> Remove Hidden Paragraphs (height: 0px)</label>
             <label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" id="clean-inline-img" checked> Remove Inline Base64 Images</label>
             <label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" id="clean-orphans" checked> Remove Orphaned Base64 Strings</label>
-            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" id="clean-nested-p" checked> Fix Overwrapped/Nested Paragraphs (e.g. &lt;p&gt;&lt;p&gt;)</label>
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" id="clean-nested-p" checked> Fix Overwrapped/Nested Paragraphs (e.g. <p><p>)</label>
             <label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" id="clean-detect-tags" checked> Detect Unclosed HTML Tags</label>
         </div>
         <button id="run-cleaner-btn" class="btn-primary" style="width: 100%; margin-bottom: 10px;" onclick="runEpubCleaner()"><i class="ph ph-broom"></i> Run Cleaner</button>
@@ -195,7 +198,7 @@
         <button class="btn-primary" style="width: 100%; margin-top: 10px;" onclick="closeAllModals()">Apply</button>
     </div>
 
-    <div id="settings-modal" class="modal right-modal">
+    <div id="settings-modal" class="modal right-modal" ondblclick="if(event.target === this) closeAllModals()">
         <div class="modal-header">
             <h3>Reader Settings</h3>
             <button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button>
@@ -246,8 +249,10 @@
         <div class="setting-group">
             <label>Text Align</label>
             <div class="segment-control">
-                <button class="segment-btn active" id="align-left" onclick="setTextAlign('left')">Left</button>
-                <button class="segment-btn" id="align-center" onclick="setTextAlign('center')">Center</button>
+                <button class="segment-btn active" id="align-left" data-align="left" onclick="setTextAlign('left')">Left</button>
+                <button class="segment-btn" id="align-center" data-align="center" onclick="setTextAlign('center')">Center</button>
+                <button class="segment-btn" id="align-right" data-align="right" onclick="setTextAlign('right')">Right</button>
+                <button class="segment-btn" id="align-justify" data-align="justify" onclick="setTextAlign('justify')">Justify</button>
             </div>
         </div>
         <div class="setting-group">
@@ -261,11 +266,6 @@
                 <option value="'Times New Roman', Times, serif">Times New Roman</option>
                 <option value="Arial, Helvetica, sans-serif">Arial</option>
             </select>
-        </div>
-        <div class="setting-group">
-            <label>Text Color
-                <input type="color" id="set-text-color" value="#e4e4e7" onchange="updateSettings()" style="width: 30px; height: 30px;">
-            </label>
         </div>
         <div class="setting-group" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);">
             <label style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
@@ -283,14 +283,21 @@
     </div>
     <div id="toc-modal" class="modal center-modal large-modal"><div class="modal-header"><h3>Table of Contents</h3><button class="icon-btn" onclick="closeAllModals()"><i class="ph ph-x"></i></button></div><ul id="toc-list" class="scroll-list"></ul></div>
 
-    <script src="js/globals.js"></script>
-    <script src="js/ui.js"></script>
-    <script src="js/library.js"></script>
-    <script src="js/reader/epub-engine.js"></script>
-    <script type="module" src="js/reader/foliate-engine.js"></script>
-    <script src="js/reader/index.js"></script>
-    <script src="js/editor.js"></script>
-    <script src="js/tools.js"></script>
-    <script>window.onload = () => { history.replaceState({ view: 'library' }, '', '#library'); loadLibrary(); };</script>
+    <script src="js/globals.js?v=1.1"></script>
+    <script src="js/ui.js?v=1.1"></script>
+    <script type="module" src="js/ui/library/index.js?v=1.1"></script>
+    <script src="js/reader/settings-helper.js?v=1.1"></script>
+    <script src="js/editor/modal-helper.js?v=1.1"></script>
+    <script src="js/editor/xml-helper.js?v=1.1"></script>
+    <script src="js/editor/workspace.js?v=1.1"></script>
+    <script src="js/editor/file-manager.js?v=1.1"></script>
+    <script src="js/editor/xml-tools.js?v=1.1"></script>
+    <script src="js/editor/search-replace.js?v=1.1"></script>
+    <script src="js/editor/diagnostics.js?v=1.1"></script>
+    <script src="js/reader/epub-engine.js?v=1.1"></script>
+    <script type="module" src="js/reader/foliate-engine.js?v=1.1"></script>
+    <script src="js/reader/index.js?v=1.1"></script>
+    <script src="js/editor.js?v=1.1"></script>
+    <script src="js/tools.js?v=1.1"></script>
 </body>
 </html>

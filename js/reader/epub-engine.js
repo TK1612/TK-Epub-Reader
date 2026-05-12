@@ -1,38 +1,26 @@
-// js/reader/epub-engine.js
+/**
+ * EPUB.js Engine Module
+ * Handles EPUB.js specific rendering, theming, and event handling.
+ * Uses rendition.themes.register() and rendition.themes.select() for CSS injection
+ */
 
 window.book = null;
 window.rendition = null;
 window.taskbarToggleBtn = null;
 
+/**
+ * Launch EPUB.js engine for a specific book
+ */
 window.launchEpubJsEngine = async function(bookId) {
     // --- LOAD SETTINGS BEFORE ENGINE BOOTS ---
-    try {
-        const saved = JSON.parse(localStorage.getItem('reader-settings'));
-        if (saved) {
-            if(saved.theme && document.getElementById('set-reader-theme')) document.getElementById('set-reader-theme').value = saved.theme;
-            if(saved.fontSize && document.getElementById('set-font')) document.getElementById('set-font').value = saved.fontSize;
-            if(saved.lineHeight && document.getElementById('set-line')) document.getElementById('set-line').value = saved.lineHeight;
-            if(saved.paraSpacing !== undefined && document.getElementById('set-para-spacing')) document.getElementById('set-para-spacing').value = saved.paraSpacing;
-            if(saved.indent !== undefined && document.getElementById('set-indent')) document.getElementById('set-indent').value = saved.indent;
-            if(saved.fontFamily && document.getElementById('set-font-family')) document.getElementById('set-font-family').value = saved.fontFamily;
-            if(saved.textColor && document.getElementById('set-text-color')) document.getElementById('set-text-color').value = saved.textColor;
-            if(saved.readMode && document.getElementById('set-read-mode')) document.getElementById('set-read-mode').value = saved.readMode;
-            if(saved.pinTaskbar !== undefined && document.getElementById('set-pin-taskbar')) document.getElementById('set-pin-taskbar').checked = saved.pinTaskbar;
-            if(saved.showFloatBtn !== undefined && document.getElementById('set-show-float-btn')) document.getElementById('set-show-float-btn').checked = saved.showFloatBtn;
-            if(saved.textAlign) {
-                document.querySelectorAll('.segment-btn').forEach(btn => btn.classList.remove('active'));
-                const alignBtn = document.getElementById('align-' + saved.textAlign);
-                if (alignBtn) alignBtn.classList.add('active');
-            }
-        }
-    } catch(e) {}
-
+    window.loadReaderSettings();
+    
     // --- SAVE READ MODE BEFORE THE RESTART LOOP HAPPENS ---
     const modeDropdown = document.getElementById('set-read-mode');
     if (modeDropdown && !modeDropdown.dataset.modeSaved) {
         modeDropdown.addEventListener('change', function() {
             try {
-                const settings = JSON.parse(localStorage.getItem('reader-settings')) || {};
+                const settings = JSON.parse(localStorage.getItem('reader-settings') || {});
                 settings.readMode = this.value;
                 localStorage.setItem('reader-settings', JSON.stringify(settings));
             } catch(e) {}
@@ -50,38 +38,118 @@ window.launchEpubJsEngine = async function(bookId) {
     const viewer = document.getElementById('viewer');
     viewer.innerHTML = '';
 
-    const readMode = document.getElementById('set-read-mode').value || 'paginated';
+    const readMode = document.getElementById('set-read-mode').value || 'continuous';
     const isContinuous = (readMode === 'continuous');
 
-    window.rendition = window.book.renderTo(viewer, {
-        manager: isContinuous ? "continuous" : "default",
-        flow: isContinuous ? "scrolled" : (readMode === 'scrolled' ? "scrolled" : "paginated"),
+    // Configure rendition based on read mode
+    // - continuous: loads all chapters, allows continuous scrolling (manager: "continuous", flow: "scrolled")
+    // - single-chapter: one chapter at a time, scroll within chapter only (manager: "default", flow: "scrolled-doc")
+    const renditionConfig = {
         width: "100%",
         height: "100%",
-        snap: !isContinuous 
-    });
+        snap: false,
+        allowScriptedContent: true
+    };
 
-    window.updateSettings = function() {
-        if (!window.rendition) return;
+    if (isContinuous) {
+        // Continuous mode: all chapters loaded, continuous scroll through all chapters
+        renditionConfig.manager = "continuous";
+        renditionConfig.flow = "scrolled";
+    } else {
+        // Single chapter mode: one chapter at a time, scroll only within current chapter
+        // User must use taskbar navigation to move between chapters
+        renditionConfig.manager = "default";
+        renditionConfig.flow = "scrolled-doc";
+    }
 
-        // --- SAVE SETTINGS SILENTLY ON CHANGE ---
+    window.rendition = window.book.renderTo(viewer, renditionConfig);
+
+    /**
+     * Update reader settings and apply theme.
+     * Uses brute-force CSS injection directly into iframe documents
+     * to bypass EPUB.js themes API which can be overpowered by internal CSS
+     */
+
+    // Cache for the CSS template
+    let cssTemplateCache = null;
+    
+    /**
+     * Load CSS template from file
+     */
+    async function loadCSSTemplate() {
+        if (cssTemplateCache) return cssTemplateCache;
         try {
-            const alignBtn = document.querySelector('.segment-btn.active');
-            const settings = {
-                theme: document.getElementById('set-reader-theme') ? document.getElementById('set-reader-theme').value : 'black',
-                fontSize: document.getElementById('set-font') ? document.getElementById('set-font').value : '18',
-                lineHeight: document.getElementById('set-line') ? document.getElementById('set-line').value : '1.5',
-                paraSpacing: document.getElementById('set-para-spacing') ? document.getElementById('set-para-spacing').value : '0',
-                indent: document.getElementById('set-indent') ? document.getElementById('set-indent').value : '0',
-                fontFamily: document.getElementById('set-font-family') ? document.getElementById('set-font-family').value : 'Inter',
-                textColor: document.getElementById('set-text-color') ? document.getElementById('set-text-color').value : '#e4e4e7',
-                readMode: document.getElementById('set-read-mode') ? document.getElementById('set-read-mode').value : 'paginated',
-                pinTaskbar: document.getElementById('set-pin-taskbar') ? document.getElementById('set-pin-taskbar').checked : false,
-                showFloatBtn: document.getElementById('set-show-float-btn') ? document.getElementById('set-show-float-btn').checked : true,
-                textAlign: alignBtn ? (alignBtn.id === 'align-center' ? 'center' : 'left') : 'left'
-            };
-            localStorage.setItem('reader-settings', JSON.stringify(settings));
-        } catch(e) {}
+            const response = await fetch('css/reader/epub-overrides.css');
+            cssTemplateCache = await response.text();
+            return cssTemplateCache;
+        } catch(e) {
+            console.warn('Failed to load CSS template, using fallback');
+            return null;
+        }
+    }
+
+    /**
+     * Brute-force CSS injection function
+     * Injects CSS file content directly into all active iframe documents
+     */
+    function injectCSSIntoIframes(cssString) {
+        if (!window.rendition) return;
+        
+        const contents = window.rendition.getContents();
+        if (!contents || contents.length === 0) return;
+        
+        contents.forEach(function(content) {
+            if (!content || !content.document || !content.document.head) return;
+            
+            // Find or create the style element
+            let styleEl = content.document.getElementById('custom-override-styles');
+            if (!styleEl) {
+                styleEl = content.document.createElement('style');
+                styleEl.id = 'custom-override-styles';
+                content.document.head.appendChild(styleEl);
+            }
+            
+            // Set the CSS content
+            styleEl.innerHTML = cssString;
+        });
+    }
+
+    /**
+     * Set CSS custom properties on iframe documents
+     * This sets variables that are used by the CSS file
+     */
+    function setCSSVariablesOnIframes(variables) {
+        if (!window.rendition) return;
+        
+        const contents = window.rendition.getContents();
+        if (!contents || contents.length === 0) return;
+        
+        contents.forEach(function(content) {
+            if (!content || !content.document || !content.document.documentElement) return;
+            
+            // Set CSS custom properties on the html element
+            const root = content.document.documentElement;
+            Object.keys(variables).forEach(function(varName) {
+                root.style.setProperty(varName, variables[varName]);
+            });
+        });
+    }
+
+    // Register content hook ONCE for injecting CSS into new chapters
+    // This ensures settings apply when user flips to a new chapter
+    // Using a flag to prevent memory leaks from multiple registrations
+    if (!window._contentHookRegistered) {
+        window.rendition.hooks.content.register(function() {
+            // Re-inject CSS when new content loads
+            if (window._engineUpdateSettings) {
+                window._engineUpdateSettings();
+            }
+        });
+        window._contentHookRegistered = true;
+    }
+
+    window._engineUpdateSettings = async function() {
+        if (!window.rendition) return;
 
         const theme = document.getElementById('set-reader-theme').value;
         const fontSize = document.getElementById('set-font').value + 'px';
@@ -89,31 +157,56 @@ window.launchEpubJsEngine = async function(bookId) {
         const paraSpacing = document.getElementById('set-para-spacing').value + 'em';
         const indent = document.getElementById('set-indent').value + 'em';
         const fontFamily = document.getElementById('set-font-family').value;
-        const textColor = document.getElementById('set-text-color').value;
-        const alignBtn = document.querySelector('.segment-btn.active');
-        const textAlign = alignBtn ? (alignBtn.id === 'align-center' ? 'center' : 'left') : 'left';
 
         if(document.getElementById('val-font')) document.getElementById('val-font').innerText = fontSize;
         if(document.getElementById('val-line')) document.getElementById('val-line').innerText = lineHeight;
         if(document.getElementById('val-para-spacing')) document.getElementById('val-para-spacing').innerText = paraSpacing;
         if(document.getElementById('val-indent')) document.getElementById('val-indent').innerText = indent;
 
-        // Dynamic Background Theming 
-        let bgColor = '#18181b'; let color = textColor;
-        if (theme === 'light') { bgColor = '#ffffff'; color = textColor === '#e4e4e7' ? '#000000' : textColor; }
-        else if (theme === 'paper') { bgColor = '#f4ecd8'; color = textColor === '#e4e4e7' ? '#333333' : textColor; }
-        else if (theme === 'blue' || theme === 'light-blue') { bgColor = '#e8f4f8'; color = textColor === '#e4e4e7' ? '#1a365d' : textColor; }
-        else if (theme === 'black') { bgColor = '#000000'; color = textColor; } 
-        else if (theme === 'dark') { bgColor = '#18181b'; color = textColor; } 
-        
-        document.getElementById('reader-container').style.backgroundColor = bgColor;
-        viewer.style.backgroundColor = bgColor;
+        // Dynamic Background Theming using shared helper
+        const { bgColor, color } = window.getThemeColors(theme);
 
-        window.rendition.themes.register("custom", {
-            "body": { "background": bgColor + " !important", "color": color + " !important", "font-family": fontFamily + " !important", "font-size": fontSize + " !important", "line-height": lineHeight + " !important", "text-align": textAlign + " !important" },
-            "p": { "margin-bottom": paraSpacing + " !important", "text-indent": indent + " !important" }
-        });
-        window.rendition.themes.select("custom");
+        // Set container background - this will show through the transparent iframe
+        document.getElementById('reader-container').style.backgroundColor = bgColor;
+        // Make viewer transparent so the container background shows through
+        viewer.style.backgroundColor = 'transparent';
+
+        // Get text align from active button - support ALL options (left, center, right, justify)
+        const activeAlignBtn = document.querySelector('.segment-btn.active');
+        let textAlign = 'left'; // default
+        
+        if (activeAlignBtn) {
+            // First try data-align attribute, then fallback to ID-based detection
+            if (activeAlignBtn.dataset && activeAlignBtn.dataset.align) {
+                textAlign = activeAlignBtn.dataset.align;
+            } else if (activeAlignBtn.id) {
+                // Fallback: extract from ID (e.g., "align-center" -> "center")
+                const match = activeAlignBtn.id.match(/align-(.+)/);
+                if (match) textAlign = match[1];
+            }
+        }
+
+        // Load CSS template from external file (only need to inject once)
+        const cssTemplate = await loadCSSTemplate();
+        
+        if (cssTemplate) {
+            // Inject the base CSS file (with CSS variables) into iframes
+            injectCSSIntoIframes(cssTemplate);
+        }
+        
+        // Set CSS custom properties on all iframe documents
+        const cssVariables = {
+            '--bg-color': bgColor,
+            '--text-color': color,
+            '--font-family': fontFamily,
+            '--font-size': fontSize,
+            '--line-height': lineHeight,
+            '--text-align': textAlign,
+            '--para-spacing': paraSpacing,
+            '--indent': indent
+        };
+        
+        setCSSVariablesOnIframes(cssVariables);
 
         // Sync Floating Button Settings
         const showFloatCheckbox = document.getElementById('set-show-float-btn');
@@ -134,7 +227,7 @@ window.launchEpubJsEngine = async function(bookId) {
         }
     };
 
-    window.updateSettings(); 
+    window._engineUpdateSettings();
 
     // Bulletproof Load Sequence
     const savedLocation = localStorage.getItem('bookmark-' + bookId);
@@ -222,6 +315,7 @@ window.launchEpubJsEngine = async function(bookId) {
         });
     });
 
+    // EPUB.js: builds TOC from book.loaded.navigation
     window.book.ready.then(() => {
         return window.book.locations.generate(1600);
     }).catch(err => {});
@@ -245,7 +339,6 @@ window.launchEpubJsEngine = async function(bookId) {
                 li.style.paddingLeft = padding;
                 li.dataset.originalPadding = padding; 
                 
-                // 3-TIER SMART ROUTER
                 li.onclick = () => { 
                     const targetHref = chapter.href;
                     window.rendition.display(targetHref).catch(() => {
@@ -278,6 +371,7 @@ window.launchEpubJsEngine = async function(bookId) {
         }
     }).catch(err => console.warn("TOC loading failed", err));
 
+    // Create floating taskbar toggle button
     if (document.getElementById('taskbar-toggle-btn')) document.getElementById('taskbar-toggle-btn').remove();
     
     const btn = document.createElement('button');
@@ -337,11 +431,12 @@ window.launchEpubJsEngine = async function(bookId) {
             const deltaY = endY - startY;
             
             const currentReadMode = document.getElementById('set-read-mode').value;
-            const isPaginated = (currentReadMode === 'paginated');
+            const isContinuous = (currentReadMode === 'continuous');
 
-            if (isPaginated && timeTaken < 300 && Math.abs(deltaX) > 40 && Math.abs(deltaY) < 40) {
+            // Swipe navigation for non-continuous modes (single chapter mode)
+            if (!isContinuous && timeTaken < 300 && Math.abs(deltaX) > 40 && Math.abs(deltaY) < 40) {
                 if (deltaX > 0) window.rendition.prev(); else window.rendition.next();
-            } 
+            }
             else if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
                 if (event.target && event.target.tagName && event.target.tagName.toLowerCase() !== 'a') {
                     try { if (contents.window.getSelection().toString().length > 0) return; } catch(err) {}
@@ -357,72 +452,77 @@ window.launchEpubJsEngine = async function(bookId) {
     });
 };
 
+/**
+ * Destroy EPUB.js engine and clean up resources
+ */
 window.destroyEpubJsEngine = function() {
     if (window.book) { window.book.destroy(); window.book = null; window.rendition = null; }
     if (window.taskbarToggleBtn) { window.taskbarToggleBtn.remove(); window.taskbarToggleBtn = null; }
     if (window.taskbarObserver) { window.taskbarObserver.disconnect(); }
+    // Clean up variables
+    window._contentHookRegistered = false;
 };
 
-// --- FIX: ULTRA-FAST SEARCH WITH BULLETPROOF JUMPING ---
+/**
+ * Search across all chapters using EPUB.js native find()
+ */
 window.runGlobalSearch = async function() {
-    if (!window.book) return alert("Search is currently only available when a book is loaded.");
+    if (!window.book || !window.book.spine) return alert("Search is currently not available.");
+    
     const query = document.getElementById('global-search-input').value;
     if (!query) return;
+    
     const resultsContainer = document.getElementById('search-results');
     resultsContainer.innerHTML = '<div style="padding:10px;">Searching...</div>';
     
     try {
-        // FIX 1: Ensures the book is fully unpacked before reading files. 
-        // If you hit search too quickly, JSZip gets locked and hangs forever!
         await window.book.ready;
+        
+        if (!window.book.spine || !window.book.spine.spineItems) {
+             return resultsContainer.innerHTML = '<div style="padding:10px;">Error: Book structure not readable.</div>';
+        }
 
-        // Runs all chapters simultaneously (Lightning Fast)
-        const searchPromises = window.book.spine.spineItems.map(async (item) => {
+        let allMatches = [];
+
+        for (const item of window.book.spine.spineItems) {
             try {
-                const doc = await item.load(window.book.load.bind(window.book));
-                const text = doc.body ? doc.body.textContent : "";
+                await item.load(window.book.load.bind(window.book));
                 
-                const rawHref = item.href || "Unknown File";
-                const fileName = decodeURIComponent(rawHref.split('/').pop().split('#')[0]);
-                let chapterLabel = fileName !== "Unknown File" ? fileName : "Unknown Chapter";
+                const matches = item.find(query) || [];
                 
-                if (window.book.navigation && window.book.navigation.toc) {
-                    const findInToc = (items) => {
-                        for (let t of items) {
-                            if (t.href && decodeURIComponent(t.href).includes(fileName)) return t.label ? t.label.trim() : null;
-                            if (t.subitems) { let sub = findInToc(t.subitems); if (sub) return sub; }
-                        }
-                        return null;
-                    };
-                    let foundLabel = findInToc(window.book.navigation.toc);
-                    if (foundLabel) chapterLabel = foundLabel;
-                }
+                item.unload(); 
+                
+                if (matches.length > 0) {
+                    const rawHref = item.href || "Unknown File";
+                    const fileName = decodeURIComponent(rawHref.split('/').pop().split('#')[0]);
+                    let chapterLabel = fileName !== "Unknown File" ? fileName : "Unknown Chapter";
+                    
+                    if (window.book.navigation && window.book.navigation.toc) {
+                        const findInToc = (items) => {
+                            for (let t of items) {
+                                if (t.href && decodeURIComponent(t.href).includes(fileName)) return t.label ? t.label.trim() : null;
+                                if (t.subitems) { let sub = findInToc(t.subitems); if (sub) return sub; }
+                            }
+                            return null;
+                        };
+                        let foundLabel = findInToc(window.book.navigation.toc);
+                        if (foundLabel) chapterLabel = foundLabel;
+                    }
 
-                const sectionMatches = [];
-                if (text) {
-                    let regex = new RegExp(query, "gi");
-                    let match;
-                    while ((match = regex.exec(text)) !== null) {
-                        const snippet = text.substring(Math.max(0, match.index - 30), match.index + query.length + 30);
-                        sectionMatches.push({ 
+                    matches.forEach(match => {
+                        allMatches.push({
+                            cfi: match.cfi, 
                             href: item.href, 
-                            cfiBase: item.cfiBase, // Capture the secure exact chapter ID
-                            snippet: snippet,
+                            snippet: match.excerpt || "", 
                             chapter: chapterLabel,
                             file: fileName
                         });
-                    }
+                    });
                 }
-                item.unload();
-                return sectionMatches;
             } catch(e) {
                 console.warn("Skipped section during search", e);
-                return [];
             }
-        });
-
-        const results = await Promise.all(searchPromises);
-        const allMatches = results.flat();
+        }
         
         resultsContainer.innerHTML = '';
         if (allMatches.length === 0) return resultsContainer.innerHTML = '<div style="padding:10px;">No results found.</div>';
@@ -430,23 +530,23 @@ window.runGlobalSearch = async function() {
         allMatches.forEach(match => {
             const li = document.createElement('li');
             li.className = 'list-item';
+            
+            let safeSnippet = match.snippet;
+            if (safeSnippet.length > 80) safeSnippet = safeSnippet.substring(0, 80) + "...";
+            
             li.innerHTML = `
                 <div style="font-weight: 600; color: var(--accent); margin-bottom: 4px; font-size: 13px;">
                     ${match.chapter} <span style="color:var(--text-muted); font-weight:normal; font-size:11px;">(${match.file})</span>
                 </div>
-                <span style="font-size: 13px;">...${match.snippet.replace(new RegExp(query, 'gi'), m => `<strong style="color:var(--accent); background:rgba(59,130,246,0.2); padding:0 2px; border-radius:3px;">${m}</strong>`)}...</span>
+                <span style="font-size: 13px;">...${safeSnippet.replace(new RegExp(query, 'gi'), m => `<strong style="color:var(--accent); background:rgba(59,130,246,0.2); padding:0 2px; border-radius:3px;">${m}</strong>`)}...</span>
             `;
+            
             li.onclick = () => { 
-                // FIX 2: 3-Tier Navigation Router. Tries the secure CFI first, then falls back to file paths
-                const target = match.cfiBase || match.href;
-                window.rendition.display(target).catch(() => {
-                    window.rendition.display(match.href).catch(() => {
-                        if (window.book && window.book.spine && window.book.spine.spineItems) {
-                            const spineItem = window.book.spine.spineItems.find(item => decodeURIComponent(item.href.split('/').pop()) === decodeURIComponent(match.file));
-                            if (spineItem) window.rendition.display(spineItem.href);
-                        }
-                    });
-                });
+                if (match.cfi) {
+                    window.rendition.display(match.cfi).catch(() => window.rendition.display(match.href));
+                } else if (match.href) {
+                    window.rendition.display(match.href);
+                }
                 if (window.closeAllModals) window.closeAllModals(); 
             };
             resultsContainer.appendChild(li);

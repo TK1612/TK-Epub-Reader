@@ -1,0 +1,7 @@
+node_modules/
+.gradle/
+build/
+captures/
+android/.gradle/
+android/app/build/
+android/app/src/main/assets/public/

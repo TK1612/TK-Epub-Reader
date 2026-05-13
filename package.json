@@ -1,0 +1,26 @@
+{
+  "name": "tk-epub-reader",
+  "version": "1.0.0",
+  "description": "<div align=\"center\">   <table>     <tr>       <td><h1 style=\"margin:0;\">TK EPUB Reader & Editor 📖✨</h1></td>       <td><img src=\"https://github.com/user-attachments/assets/6f7abce4-5bd4-434f-8828-5a20f86740b7\" alt=\"TK EPUB Reader\" height=\"100\"></td>     </tr>   </table> </div>",
+  "main": "sw.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TK1612/TK-Epub-Reader.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/TK1612/TK-Epub-Reader/issues"
+  },
+  "homepage": "https://github.com/TK1612/TK-Epub-Reader#readme",
+  "dependencies": {
+    "@capacitor/android": "^8.3.4",
+    "@capacitor/cli": "^8.3.4",
+    "@capacitor/core": "^8.3.4"
+  }
+}
